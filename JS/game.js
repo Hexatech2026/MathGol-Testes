@@ -45,23 +45,23 @@ const ALCANCE_MAOS = 0.95; // do centro do tronco até as mãos, com braços par
 // Serve pra você conferir NA HORA se o navegador pegou o arquivo que você
 // editou ou uma cópia velha do cache. Se o número que aparece no Console
 // não bater com o TEMPO abaixo, é cache (Ctrl+Shift+R) ou pasta errada.
-const VERSAO_GAME_JS = 'v4 — 2026-09-22';
+const VERSAO_GAME_JS = 'v5 — 2026-09-22 (fluido)';
 
 const TEMPO = {
-  CORRIDA: 760,           // batedor caminha até a marca
-  PERNA_TRAS: 300,        // batedor arma o chute
-  PERNA_FRENTE: 280,      // perna desce até encostar na bola
-  PERNA_VOLTA: 350,       // pé volta à posição de descanso
-  VOO_BOLA: 1200,         // bola voa até a zona
-  GIRO_BOLA: 4 * Math.PI,
-  MERGULHO_GOLEIRO: 1000, // goleiro mergulha acompanhando a bola
-  IMPACTO_DEFESA: 250,    // impacto da defesa (visual)
-  BOLA_NA_REDE: 400,      // a bola afunda na rede depois do gol
-  REBOTE: 400,            // rebote na defesa
-  VIBRACAO_REDE: 300,     // rede balança
-  COMEMORA_TORCIDA: 1600, // torcida vibra no gol
-  LAMENTA_TORCIDA: 600,   // torcida lamenta na defesa
-  ANTES_DE_RESETAR: 1800  // pausa antes de resetar
+  CORRIDA: 1100,          // batedor caminha ate a marca — corrida visivel
+  PERNA_TRAS: 420,        // batedor arma o chute — da pra ver a perna subir
+  PERNA_FRENTE: 340,      // perna desce ate encostar na bola
+  PERNA_VOLTA: 420,       // pe volta a posicao de descanso
+  VOO_BOLA: 1500,         // voo da bola — o momento que a crianca acompanha
+  GIRO_BOLA: 5 * Math.PI,
+  MERGULHO_GOLEIRO: 1250, // OBRIGATORIO ser menor que VOO_BOLA (~250ms antes)
+  IMPACTO_DEFESA: 300,    // impacto da defesa (visual)
+  BOLA_NA_REDE: 550,      // a bola afunda na rede depois do gol
+  REBOTE: 550,            // rebote na defesa
+  VIBRACAO_REDE: 400,     // rede balanca
+  COMEMORA_TORCIDA: 1800, // torcida vibra no gol
+  LAMENTA_TORCIDA: 700,   // torcida lamenta na defesa
+  ANTES_DE_RESETAR: 2000  // pausa antes de resetar
 };
 
 console.log(

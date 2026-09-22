@@ -41,7 +41,7 @@ var TIMER_MAX = 15;
 // antes de carregar a proxima pergunta. Acompanha o ritmo mais lento da
 // animacao do penalti (ver TEMPO em game.js): tem que ser maior que
 // TEMPO.ANTES_DE_RESETAR pra bola ja estar de volta na marca.
-var PAUSA_ENTRE_COBRANCAS = 2200;
+var PAUSA_ENTRE_COBRANCAS = 2400;
 var categoriaAvatarAtiva = CATEGORIAS_AVATAR[0].id;
 
 // Rotulos amigaveis das zonas do gol, usados no resumo de cobrancas da
