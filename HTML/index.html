@@ -12,12 +12,12 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
 
-<link rel="stylesheet" href="../CSS/styles.css?v=4">
+<link rel="stylesheet" href="../CSS/styles.css">
 </head>
 <body>
 
 <div class="campo-animado" aria-hidden="true">
-  <svg class="cena-gol" viewBox="0 0 400 900" preserveAspectRatio="xMidYMid slice">
+  <svg class="cena-gol" viewBox="0 0 400 900" preserveAspectRatio="xMidYMax slice">
     <defs>
       <linearGradient id="ceuGrad" x1="0" y1="0" x2="0" y2="1">
         <stop offset="0%" stop-color="#0B1E3D"/>
@@ -356,15 +356,26 @@
       </li>
 
     </ul>
-    <figure class="foto-equipe">
-      <img src="../Imagens/Nos.jpg" alt="Foto da equipe HexaTech" class="foto-equipe-img">
-      <figcaption class="foto-equipe-legenda">A equipe HexaTech 👋</figcaption>
-    </figure>
+
+    <button id="botao-ver-equipe" class="botao-ver-equipe" type="button"
+            aria-expanded="false" aria-controls="bloco-foto-equipe">
+      <svg class="icone-sobre-mim" viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="8.2" r="3.2" fill="none" stroke="currentColor" stroke-width="2"/>
+        <path d="M5 20c0-3.6 3.1-6.2 7-6.2s7 2.6 7 6.2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      <span class="rotulo-ver-equipe">Ver equipe</span>
+    </button>
+    <div id="bloco-foto-equipe" class="bloco-foto-equipe" hidden>
+      <figure class="foto-equipe">
+        <img src="../Imagens/Nos.jpg" alt="Foto da equipe HexaTech" class="foto-equipe-img">
+        <figcaption class="foto-equipe-legenda">A equipe HexaTech 👋</figcaption>
+      </figure>
+    </div>
+
     <div class="creditos-instituicao">
       <span class="inst-icone">🎓</span>
       <span class="inst-nome">Faculdade Cruzeiro Do Sul<br>Unidade Paulista</span>
     </div>
-    <p class="creditos-equipe">Equipe <strong>HexaTech</strong></p>
     <div class="pilha-botoes" style="margin-top: 18px;">
       <button id="botao-fechar-creditos" class="botao" type="button">Fechar</button>
     </div>
@@ -390,20 +401,36 @@
 </div>
 
 <!-- Firebase (módulo ES — carrega antes dos scripts do jogo) -->
-<script type="module" src="../JS/firebase-config.js?v=4"></script>
+<script type="module" src="../JS/firebase-config.js"></script>
 
 <!-- Three.js r149 (CDN, build UMD — degrada graciosamente se falhar) -->
 <script src="https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js"></script>
 
 <!-- Scripts do jogo (ordem importa) -->
-<script src="../JS/data.js?v=4"></script>
-<script src="../JS/avatar-data.js?v=4"></script>
-<script src="../JS/questions.js?v=4"></script>
-<script src="../JS/banco-questoes.js?v=4"></script>
-<script src="../JS/narration.js?v=4"></script>
-<script src="../JS/sfx.js?v=4"></script>
-<script src="../JS/game.js?v=4"></script>
-<script src="../JS/progressao.js?v=4"></script>
-<script src="../JS/main.js?v=4"></script>
+<script src="../JS/data.js"></script>
+<script src="../JS/avatar-data.js"></script>
+<script src="../JS/questions.js"></script>
+<script src="../JS/banco-questoes.js"></script>
+<script src="../JS/narration.js"></script>
+<script src="../JS/sfx.js"></script>
+<script src="../JS/game.js"></script>
+<script src="../JS/progressao.js"></script>
+<script src="../JS/main.js"></script>
+
+<!-- Alterna a foto da equipe no modal de créditos (sem depender do main.js) -->
+<script>
+(function () {
+  var botao = document.getElementById('botao-ver-equipe');
+  var bloco = document.getElementById('bloco-foto-equipe');
+  var rotulo = botao ? botao.querySelector('.rotulo-ver-equipe') : null;
+  if (!botao || !bloco) return;
+  botao.addEventListener('click', function () {
+    var aberto = botao.getAttribute('aria-expanded') === 'true';
+    botao.setAttribute('aria-expanded', String(!aberto));
+    bloco.hidden = aberto;
+    if (rotulo) rotulo.textContent = aberto ? 'Ver equipe' : 'Ocultar equipe';
+  });
+})();
+</script>
 </body>
 </html>
