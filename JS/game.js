@@ -48,11 +48,11 @@ const ALCANCE_MAOS = 0.95; // do centro do tronco até as mãos, com braços par
 const VERSAO_GAME_JS = 'v5 — 2026-09-22 (fluido)';
 
 const TEMPO = {
-  CORRIDA: 1100,          // batedor caminha ate a marca — corrida visivel
+  CORRIDA: 2100,          // batedor caminha ate a marca — corrida visivel
   PERNA_TRAS: 420,        // batedor arma o chute — da pra ver a perna subir
   PERNA_FRENTE: 340,      // perna desce ate encostar na bola
   PERNA_VOLTA: 420,       // pe volta a posicao de descanso
-  VOO_BOLA: 1500,         // voo da bola — o momento que a crianca acompanha
+  VOO_BOLA: 2500,         // voo da bola — o momento que a crianca acompanha
   GIRO_BOLA: 5 * Math.PI,
   MERGULHO_GOLEIRO: 1250, // OBRIGATORIO ser menor que VOO_BOLA (~250ms antes)
   IMPACTO_DEFESA: 300,    // impacto da defesa (visual)
