@@ -1266,7 +1266,7 @@ body.alto-contraste .avatar-selecionado {
   }
 }
 
-/* ---------- Botao secundario (creditos, backup no menu) ---------- */
+/* ---------- Botao secundario (backup no menu) ---------- */
 
 .botao-secundario {
   background: transparent;
@@ -1282,6 +1282,31 @@ body.alto-contraste .avatar-selecionado {
 }
 body.alto-contraste .botao-secundario {
   border-width: 3px;
+}
+
+/* ---------- Botao "Creditos" do menu (mais visivel que o secundario padrao) ---------- */
+
+#botao-creditos {
+  background: linear-gradient(180deg, #4FC0EB 0%, var(--azul-ceu) 60%, var(--azul-ceu-escuro) 100%);
+  color: var(--branco-giz);
+  border: 3px solid var(--grafite);
+  font-size: 1rem;
+  font-weight: 700;
+  padding: 12px 28px;
+  box-shadow: 0 5px 0 rgba(0,0,0,0.2), 0 5px 12px rgba(58,169,214,0.4);
+}
+#botao-creditos:hover {
+  background: linear-gradient(180deg, var(--azul-ceu) 0%, var(--azul-ceu-escuro) 100%);
+  color: var(--branco-giz);
+}
+#botao-creditos:active {
+  transform: translateY(3px);
+  box-shadow: 0 2px 0 rgba(0,0,0,0.18);
+}
+body.alto-contraste #botao-creditos {
+  background-color: var(--azul-ceu) !important;
+  color: var(--branco-giz) !important;
+  border-width: 4px !important;
 }
 
 /* ---------- Modal de creditos ---------- */
@@ -1371,23 +1396,29 @@ body.alto-contraste .botao-secundario {
 .botao-sobre-mim {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   flex-shrink: 0;
-  padding: 5px 10px;
-  border: 2px solid var(--grafite);
+  padding: 8px 14px;
+  border: 2px solid var(--azul-texto);
   border-radius: 999px;
-  background: var(--branco-giz);
-  color: var(--grafite);
+  background: linear-gradient(180deg, #E9F6FC 0%, #D6EEF8 100%);
+  color: var(--azul-texto);
   font-family: var(--fonte-titulo);
-  font-weight: 600;
-  font-size: 0.68rem;
+  font-weight: 700;
+  font-size: 0.78rem;
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
+  box-shadow: 0 3px 0 rgba(0,0,0,0.12);
+  transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
 }
 .botao-sobre-mim:hover {
-  background: var(--grafite);
+  background: var(--azul-texto);
   color: var(--branco-giz);
   transform: translateY(-1px);
+  box-shadow: 0 4px 0 rgba(0,0,0,0.16);
+}
+.botao-sobre-mim:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 rgba(0,0,0,0.14);
 }
 .botao-sobre-mim:focus-visible {
   outline: 3px solid var(--amarelo-sol);
@@ -1397,11 +1428,12 @@ body.alto-contraste .botao-secundario {
   background: var(--verde-grama-escuro);
   border-color: var(--verde-grama-escuro);
   color: var(--branco-giz);
+  box-shadow: 0 3px 0 rgba(0,0,0,0.18);
 }
 
 .icone-sobre-mim {
-  width: 15px;
-  height: 15px;
+  width: 17px;
+  height: 17px;
   flex-shrink: 0;
   transition: transform 0.2s ease;
 }
@@ -1412,8 +1444,20 @@ body.alto-contraste .botao-secundario {
 /* Em telas bem estreitas some o texto e fica so o icone (i) */
 @media (max-width: 400px) {
   .rotulo-sobre-mim { display: none; }
-  .botao-sobre-mim { padding: 6px; }
-  .icone-sobre-mim { width: 18px; height: 18px; }
+  .botao-sobre-mim { padding: 8px; }
+  .icone-sobre-mim { width: 19px; height: 19px; }
+}
+
+body.alto-contraste .botao-sobre-mim {
+  border-width: 3px;
+  background: var(--branco-giz);
+  color: var(--grafite);
+  border-color: var(--grafite);
+}
+body.alto-contraste .botao-sobre-mim[aria-expanded="true"] {
+  background: var(--grafite);
+  border-color: var(--grafite);
+  color: var(--branco-giz);
 }
 
 /* ---------- Bio expansivel ---------- */
@@ -1451,6 +1495,40 @@ body.alto-contraste .botao-secundario {
 @keyframes abrirBio {
   from { opacity: 0; transform: translateY(-6px); }
   to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ---------- Foto da equipe (créditos) ---------- */
+
+.foto-equipe {
+  margin: 4px 0 16px;
+  padding: 0;
+}
+
+.foto-equipe-img {
+  display: block;
+  width: 100%;
+  max-width: 320px;
+  margin: 0 auto;
+  border-radius: var(--raio-medio);
+  border: 3px solid var(--grafite);
+  box-shadow: 0 5px 14px rgba(11,30,61,0.22);
+  object-fit: cover;
+}
+
+.foto-equipe-legenda {
+  font-family: var(--fonte-titulo);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--grafite-suave);
+  text-align: center;
+  margin-top: 8px;
+}
+
+body.alto-contraste .foto-equipe-img {
+  border-width: 4px;
+}
+body.alto-contraste .foto-equipe-legenda {
+  color: var(--grafite);
 }
 
 .creditos-instituicao {
@@ -1503,16 +1581,6 @@ body.alto-contraste .creditos-instituicao {
 }
 body.alto-contraste .dev-papel {
   color: var(--grafite);
-}
-body.alto-contraste .botao-sobre-mim {
-  border-width: 3px;
-  background: var(--branco-giz);
-  color: var(--grafite);
-}
-body.alto-contraste .botao-sobre-mim[aria-expanded="true"] {
-  background: var(--grafite);
-  border-color: var(--grafite);
-  color: var(--branco-giz);
 }
 body.alto-contraste .dev-bio p {
   color: var(--grafite);
