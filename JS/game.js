@@ -52,7 +52,7 @@ const TEMPO = {
   PERNA_TRAS: 300,        // batedor arma o chute
   PERNA_FRENTE: 280,      // perna desce até encostar na bola
   PERNA_VOLTA: 350,       // pé volta à posição de descanso
-  VOO_BOLA: 1200,         // bola voa até a zona
+  VOO_BOLA: 650,         // bola voa até a zona
   GIRO_BOLA: 4 * Math.PI,
   MERGULHO_GOLEIRO: 1000, // goleiro mergulha acompanhando a bola
   IMPACTO_DEFESA: 250,    // impacto da defesa (visual)
