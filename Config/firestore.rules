@@ -1,0 +1,61 @@
+rules_version = '2';
+
+// Regras do MathGol — permitem leitura e escrita apenas em documentos cuja
+// chave (token) o cliente conheça. Sem autenticação Firebase Auth, porque
+// o jogo é anônimo de propósito (crianças do fundamental, sem cadastro).
+//
+// ATENÇÃO: esse modelo é adequado para o MVP (sem dados sensíveis, sem
+// ranking público). Para funcionalidades futuras com dados mais críticos,
+// considere migrar para Firebase Auth anônimo + regras baseadas em UID.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Documento do jogador (conta / progresso matemático): qualquer um pode
+    // criar (é anônimo) e ler/atualizar o próprio documento se souber o
+    // token (que é um UUID aleatório).
+    match /jogadores/{token} {
+      allow read, write: if true;
+
+      // Subcoleção de resultados (histórico das partidas): mesma regra.
+      match /resultados/{resultadoId} {
+        allow read, write: if true;
+      }
+    }
+
+    // Coleção própria só com apelido + avatar escolhidos na tela de
+    // personalizar (separada de "jogadores" de propósito, ver
+    // public/firebase-config.js → salvarPerfil()).
+    match /apelidos/{token} {
+      allow read, write: if true;
+    }
+
+    // Coleções de configuração (uma por lista, pra não misturar tudo numa
+    // coleção só): personagens/animais viram os "nomes engraçados" do
+    // apelido sorteado; selecoes/dificuldades são as opções das telas de
+    // time e nível. O jogo só LÊ essas coleções — quem escreve é o script
+    // scripts/seed-firestore.js, usando o Admin SDK (que não passa pelas
+    // regras abaixo), então não precisa liberar escrita pro cliente.
+    match /personagens/{itemId} {
+      allow read: if true;
+      allow write: if false;
+    }
+    match /animais/{itemId} {
+      allow read: if true;
+      allow write: if false;
+    }
+    match /selecoes/{itemId} {
+      allow read: if true;
+      allow write: if false;
+    }
+    match /dificuldades/{itemId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Nega tudo mais por padrão.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

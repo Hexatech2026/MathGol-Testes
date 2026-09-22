@@ -1,0 +1,13 @@
+{
+  "name": "mathgol",
+  "version": "1.1.0",
+  "private": true,
+  "description": "MathGol — jogo de pênaltis com matemática para crianças do fundamental. Site 100% estático + Firebase (Firestore direto do navegador).",
+  "scripts": {
+    "seed": "node JS/seed-firestore.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "firebase-admin": "^12.6.0"
+  }
+}
