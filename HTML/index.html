@@ -128,7 +128,10 @@
         <img id="logo-mini" class="marca-logo" src="../Imagens/hexatech-logo.png" alt="HexaTech">
       </button>
     </div>
-    <button id="botao-acessibilidade" class="botao-icone" type="button" aria-label="Abrir opções de acessibilidade">♿</button>
+    <div class="topo-direita">
+      <button id="botao-tela-cheia" class="botao-icone" type="button" aria-label="Entrar em tela cheia" aria-pressed="false">⛶</button>
+      <button id="botao-acessibilidade" class="botao-icone" type="button" aria-label="Abrir opções de acessibilidade">♿</button>
+    </div>
   </div>
 
   <section id="tela-menu" class="tela tela-menu">
@@ -199,7 +202,7 @@
     </div>
   </section>
 
-  <section id="tela-fase1" class="tela">
+  <section id="tela-fase1" class="tela tela-fase1">
     <div class="barra-fase">
       <span id="titulo-fase" class="titulo-fase">⚽ Pênaltis</span>
       <div id="cabecalho-fase" class="cabecalho-fase"></div>
@@ -212,14 +215,37 @@
     </div>
     <div class="palco-penalti">
       <div id="jogo-penalti"></div>
-      <div id="zonas-gol" class="zonas-gol">
-        <button class="botao-zona zona-topo-esquerda" type="button" data-zona="topo-esquerda">--</button>
-        <button class="botao-zona zona-topo-direita" type="button" data-zona="topo-direita">--</button>
-        <button class="botao-zona zona-meio" type="button" data-zona="meio">--</button>
-        <button class="botao-zona zona-baixo-esquerda" type="button" data-zona="baixo-esquerda">--</button>
-        <button class="botao-zona zona-baixo-direita" type="button" data-zona="baixo-direita">--</button>
+      <div id="camada-mira" class="camada-mira" hidden>
+        <div id="alvo-mira" class="alvo-mira" aria-hidden="true"></div>
       </div>
     </div>
+
+    <p id="mensagem-etapa" class="mensagem-etapa" aria-live="polite" aria-atomic="true" hidden>--</p>
+
+    <div class="bloco-forca" id="bloco-forca" hidden>
+      <span class="rotulo-forca">Força</span>
+      <div class="trilho-forca">
+        <div id="preenchimento-forca" class="preenchimento-forca"></div>
+      </div>
+      <span class="dica-forca">Toque para travar!</span>
+    </div>
+
+    <div class="bloco-altura" id="bloco-altura" hidden>
+      <span class="rotulo-forca">Altura</span>
+      <div class="coluna-altura">
+        <span class="extremo-altura" aria-hidden="true">☁️</span>
+        <div class="trilho-altura">
+          <div id="preenchimento-altura" class="preenchimento-altura"></div>
+        </div>
+        <span class="extremo-altura" aria-hidden="true">⬇️</span>
+      </div>
+      <span class="dica-forca">Toque para travar!</span>
+    </div>
+
+    <div id="area-respostas" class="area-respostas">
+      <div id="respostas-alternativas" class="respostas-alternativas"></div>
+    </div>
+
     <p id="mensagem-feedback" class="mensagem-feedback" aria-live="polite" aria-atomic="true"></p>
   </section>
 

@@ -189,6 +189,7 @@ body.alto-contraste #jogo-penalti {
    cobranças e das zonas continua visível e com contraste garantido. */
 body.alto-contraste .item-cobranca-gol .item-cobranca-icone { color: var(--verde-grama); }
 body.alto-contraste .item-cobranca-defesa .item-cobranca-icone { color: #7A0000; }
+body.alto-contraste .item-cobranca-fora .item-cobranca-icone { color: var(--amarelo-sol-escuro); }
 
 /* Timer e mensagem de desbloqueio: mantém o significado por texto e cor
    sólida, sem pulsar (menos ruído visual em alto contraste). */
@@ -219,6 +220,7 @@ body.alto-contraste .bolinha-cobranca { border-color: var(--grafite); background
 body.alto-contraste .bolinha-cobranca.acerto { background: var(--verde-grama); border-color: var(--grafite); }
 body.alto-contraste .bolinha-cobranca.erro { background: #7A0000; border-color: var(--grafite); }
 body.alto-contraste .bolinha-cobranca.atual { background: var(--amarelo-sol-escuro); border-color: var(--grafite); }
+body.alto-contraste .bolinha-cobranca.fora { background: var(--amarelo-sol-escuro); border-color: var(--grafite); }
 
 /* Modal de acessibilidade: fundo opaco atrás e trilho do alternador com
    contorno reforçado. */
@@ -344,6 +346,12 @@ body {
 }
 
 .topo-esquerda {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.topo-direita {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -967,6 +975,7 @@ body.alto-contraste .avatar-selecionado {
 .bolinha-cobranca.acerto { background: var(--verde-texto); border-color: var(--verde-texto); }
 .bolinha-cobranca.erro   { background: var(--vermelho-texto); border-color: var(--vermelho-texto); }
 .bolinha-cobranca.atual  { background: var(--amarelo-sol); border-color: var(--amarelo-sol); }
+.bolinha-cobranca.fora   { background: var(--amarelo-sol-escuro); border-color: var(--amarelo-sol-escuro); }
 
 .caixa-pergunta {
   width: 100%;
@@ -989,7 +998,7 @@ body.alto-contraste .avatar-selecionado {
   display: none; /* mantido apenas por compatibilidade; nao e mais usado na Fase 1 */
 }
 
-/* ---------- Fase 1: palco do penalti com as 5 zonas do gol ---------- */
+/* ---------- Fase 1: palco do penalti (gol 100% livre, sem botoes por cima) ---------- */
 
 .palco-penalti {
   position: relative;
@@ -1011,65 +1020,181 @@ body.alto-contraste .avatar-selecionado {
   height: 100% !important;
 }
 
-.zonas-gol {
+/* ---------- Mira (etapa 2): mira livre controlada por mouse/toque ---------- */
+
+.camada-mira {
   position: absolute;
   inset: 0;
   pointer-events: none;
 }
-
-.botao-zona {
+.alvo-mira {
   position: absolute;
+  width: 34px;
+  height: 34px;
   transform: translate(-50%, -50%);
-  pointer-events: auto;
-  width: auto;
-  min-width: 34px;
-  padding: 4px 8px;
-  border-radius: 10px;
-  border: 2px solid var(--grafite);
-  background: linear-gradient(180deg, rgba(255,227,138,0.72) 0%, rgba(255,198,59,0.72) 100%);
+  border: 3px solid var(--amarelo-sol);
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px rgba(33,48,59,0.55), 0 0 12px rgba(255,198,59,0.7);
+  pointer-events: none;
+}
+.alvo-mira::before, .alvo-mira::after {
+  content: '';
+  position: absolute;
+  background: var(--amarelo-sol);
+}
+.alvo-mira::before { left: 50%; top: -8px; width: 2px; height: 8px; transform: translateX(-50%); }
+.alvo-mira::after { left: -8px; top: 50%; width: 8px; height: 2px; transform: translateY(-50%); }
+
+body.alto-contraste .alvo-mira {
+  border-color: #FFFFFF;
+  box-shadow: 0 0 0 3px #000000;
+}
+body.alto-contraste .alvo-mira::before,
+body.alto-contraste .alvo-mira::after {
+  background: #FFFFFF;
+}
+
+/* ---------- Mensagem de etapa (mira / forca) ---------- */
+
+.mensagem-etapa {
+  font-family: var(--fonte-titulo);
+  font-size: 1.05rem;
+  font-weight: 700;
+  text-align: center;
   color: var(--grafite);
+  background: rgba(255,253,246,0.94);
+  padding: 8px 18px;
+  border-radius: 999px;
+  margin: 10px auto 0;
+  display: inline-block;
+  box-shadow: 0 4px 12px rgba(11,30,61,0.2);
+}
+
+/* ---------- Barra de forca (etapa 3) ---------- */
+
+.bloco-forca {
+  width: 100%;
+  max-width: 380px;
+  margin: 12px auto 0;
+  text-align: center;
+}
+.rotulo-forca {
   font-family: var(--fonte-titulo);
   font-weight: 700;
-  font-size: clamp(0.7rem, 3vw, 0.9rem);
-  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.18);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
+  font-size: 0.85rem;
+  color: var(--grafite);
+  display: block;
+  margin-bottom: 4px;
 }
-.botao-zona:hover { background: var(--amarelo-sol-escuro); }
-.botao-zona:active { transform: translate(-50%, -50%) translateY(3px); box-shadow: 0 1px 0 rgba(0,0,0,0.25); }
-.botao-zona:disabled { opacity: 0.55; cursor: not-allowed; }
+.trilho-forca {
+  width: 100%;
+  height: 22px;
+  background: #E3EAE5;
+  border: 2px solid var(--grafite);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.preenchimento-forca {
+  height: 100%;
+  width: 6%;
+  background: linear-gradient(90deg, var(--verde-grama) 0%, var(--amarelo-sol) 60%, var(--vermelho-texto) 100%);
+}
+.dica-forca {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--grafite-suave);
+  margin-top: 4px;
+}
+body.alto-contraste .preenchimento-forca {
+  background: var(--grafite);
+}
+body.alto-contraste .trilho-forca {
+  border-width: 3px;
+}
 
-/* Acerto/erro nunca dependem só da cor de fundo: um ícone de texto (✓/✗)
-   e uma borda de espessura diferente reforçam o significado (CA-08.2 e
-   secao 5 do documento de melhorias). */
-.botao-zona.acertou,
-.botao-zona.errou {
-  border-width: 4px;
+/* ---------- Barra de altura (etapa 4) — vertical, faz mais sentido:
+   "barra sobe" = "chute mais alto". ---------- */
+.bloco-altura {
+  width: 100%;
+  max-width: 380px;
+  margin: 12px auto 0;
+  text-align: center;
 }
-.botao-zona.acertou {
+.coluna-altura {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.extremo-altura {
+  font-size: 1rem;
+  line-height: 1;
+}
+.trilho-altura {
+  width: 30px;
+  height: 120px;
+  background: #E3EAE5;
+  border: 2px solid var(--grafite);
+  border-radius: 14px;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+}
+.preenchimento-altura {
+  width: 100%;
+  height: 6%;
+  background: linear-gradient(0deg, var(--verde-grama-escuro) 0%, var(--azul-ceu) 55%, var(--amarelo-sol) 100%);
+}
+body.alto-contraste .preenchimento-altura {
+  background: var(--grafite);
+}
+body.alto-contraste .trilho-altura {
+  border-width: 3px;
+}
+
+/* ---------- Etapa 1: respostas SEMPRE fora da area do gol ---------- */
+
+.area-respostas {
+  width: 100%;
+  margin-top: 14px;
+}
+.respostas-alternativas {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+.botao-resposta {
+  font-family: var(--fonte-titulo);
+  font-weight: 700;
+  font-size: 1.1rem;
+  min-width: 52px;
+  padding: 10px 14px;
+  border: 3px solid var(--grafite);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(255,227,138,0.9) 0%, rgba(255,198,59,0.9) 100%);
+  color: var(--grafite);
+  cursor: pointer;
+  box-shadow: 0 4px 0 rgba(0,0,0,0.18);
+}
+.botao-resposta:hover { background: var(--amarelo-sol-escuro); }
+.botao-resposta:active { transform: translateY(3px); box-shadow: 0 1px 0 rgba(0,0,0,0.2); }
+.botao-resposta:disabled { opacity: 0.55; cursor: not-allowed; }
+.botao-resposta.acertou {
   background: var(--verde-texto);
   color: var(--branco-giz);
+  border-width: 4px;
 }
-.botao-zona.acertou::after {
-  content: ' ✓';
-}
-.botao-zona.errou {
+.botao-resposta.acertou::after { content: ' ✓'; }
+.botao-resposta.errou {
   background: var(--azul-texto);
   color: var(--branco-giz);
+  border-width: 4px;
 }
-.botao-zona.errou::after {
-  content: ' ✗';
+.botao-resposta.errou::after { content: ' ✗'; }
+body.alto-contraste .botao-resposta {
+  border-width: 4px;
 }
-
-.zona-topo-esquerda  { left: 35.94%; top: 15.28%; }
-.zona-topo-direita   { left: 64.06%; top: 15.28%; }
-.zona-meio           { left: 50%;    top: 22.22%; }
-.zona-baixo-esquerda { left: 35.94%; top: 30.56%; }
-.zona-baixo-direita  { left: 64.06%; top: 30.56%; }
 
 .mensagem-feedback {
   font-family: var(--fonte-titulo);
@@ -1150,6 +1275,11 @@ body.alto-contraste .avatar-selecionado {
   border-color: #A3282C;
 }
 .item-cobranca-defesa .item-cobranca-icone { color: #A3282C; }
+
+.item-cobranca-fora {
+  border-color: var(--amarelo-sol-escuro);
+}
+.item-cobranca-fora .item-cobranca-icone { color: var(--amarelo-sol-escuro); }
 
 .item-cobranca-texto {
   color: var(--grafite);
@@ -1766,6 +1896,70 @@ body.alto-contraste .painel-backup {
 
 @media (max-width: 380px) {
   .grade-alternativas { grid-template-columns: 1fr; }
+}
+
+/* ---------- Tela cheia: foco na area de penaltis ----------
+   O objetivo principal e evitar que a crianca precise rolar a tela pra ver
+   a barra de forca/altura: a tela-fase1 fica mais compacta sempre, e ganha
+   ainda mais espaco quando o jogo esta em tela cheia. */
+html:fullscreen .tela,
+html:-webkit-full-screen .tela {
+  padding-top: 14px;
+}
+
+.tela-fase1 {
+  padding-top: 10px;
+  padding-bottom: 10px;
+  justify-content: flex-start;
+}
+.tela-fase1 .barra-fase {
+  margin-bottom: 6px;
+}
+.tela-fase1 .caixa-pergunta {
+  padding: 10px 18px;
+  margin-bottom: 8px;
+}
+.tela-fase1 .pergunta-texto {
+  font-size: clamp(1.6rem, 8vw, 2.2rem);
+}
+.tela-fase1 .palco-penalti {
+  margin: 0 auto 4px;
+}
+.tela-fase1 .mensagem-etapa {
+  margin: 6px auto 0;
+  padding: 5px 14px;
+  font-size: 0.92rem;
+}
+.tela-fase1 .bloco-forca,
+.tela-fase1 .bloco-altura {
+  margin-top: 8px;
+}
+.tela-fase1 .area-respostas {
+  margin-top: 8px;
+}
+.tela-fase1 .mensagem-feedback {
+  margin-top: 6px;
+}
+
+/* Em tela cheia, o palco (gol/animacao) pode crescer bem mais — e o resto
+   encolhe um pouco mais ainda, pra sobrar espaco vertical de verdade. */
+html:fullscreen .tela-fase1,
+html:-webkit-full-screen .tela-fase1 {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+html:fullscreen .tela-fase1 .palco-penalti,
+html:-webkit-full-screen .tela-fase1 .palco-penalti {
+  max-width: min(760px, 92vw);
+}
+html:fullscreen .tela-fase1 .caixa-pergunta,
+html:-webkit-full-screen .tela-fase1 .caixa-pergunta {
+  padding: 8px 18px;
+  margin-bottom: 6px;
+}
+html:fullscreen .tela-fase1 .pergunta-texto,
+html:-webkit-full-screen .tela-fase1 .pergunta-texto {
+  font-size: clamp(1.7rem, 5.5vw, 2.4rem);
 }
 
 /* ---------- Chips de escolha (personagem + animal) ---------- */
