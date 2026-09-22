@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+<title>MathGol — Futebol com matemática</title>
+<meta name="description" content="MathGol: fase de pênaltis com perguntas de matemática, para crianças.">
+
+<link rel="icon" type="image/x-icon" href="../Imagens/favicon.ico">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="../CSS/styles.css?v=4">
+</head>
+<body>
+
+<div class="campo-animado" aria-hidden="true">
+  <svg class="cena-gol" viewBox="0 0 400 900" preserveAspectRatio="xMidYMid slice">
+    <defs>
+      <linearGradient id="ceuGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#0B1E3D"/>
+        <stop offset="100%" stop-color="#1E5B96"/>
+      </linearGradient>
+      <linearGradient id="gramaGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#1F7A45"/>
+        <stop offset="100%" stop-color="#39B26A"/>
+      </linearGradient>
+      <radialGradient id="brilhoBola" cx="50%" cy="50%" r="50%">
+        <stop offset="0%" stop-color="#FFE38A" stop-opacity="0.9"/>
+        <stop offset="100%" stop-color="#FFE38A" stop-opacity="0"/>
+      </radialGradient>
+    </defs>
+
+    <rect x="0" y="0" width="400" height="808" fill="url(#ceuGrad)"/>
+    <polygon points="0,0 90,0 10,420 -60,420" fill="#FFFFFF" opacity="0.035"/>
+    <polygon points="400,0 320,0 380,460 460,460" fill="#FFFFFF" opacity="0.035"/>
+    <circle cx="55" cy="70" r="18" fill="#FFFFFF" opacity="0.06"/>
+    <circle cx="340" cy="120" r="24" fill="#FFFFFF" opacity="0.05"/>
+    <circle cx="200" cy="60" r="14" fill="#FFFFFF" opacity="0.05"/>
+    <circle cx="90" cy="260" r="26" fill="#FFFFFF" opacity="0.04"/>
+    <circle cx="320" cy="340" r="18" fill="#FFFFFF" opacity="0.04"/>
+    <circle cx="160" cy="440" r="30" fill="#FFFFFF" opacity="0.035"/>
+    <circle cx="280" cy="560" r="20" fill="#FFFFFF" opacity="0.04"/>
+    <circle cx="70" cy="620" r="16" fill="#FFFFFF" opacity="0.04"/>
+    <circle cx="230" cy="700" r="22" fill="#FFFFFF" opacity="0.045"/>
+
+    <rect x="0" y="808" width="400" height="92" fill="url(#gramaGrad)"/>
+    <rect x="0" y="808" width="400" height="14" fill="#FFFFFF" opacity="0.04"/>
+    <rect x="0" y="836" width="400" height="14" fill="#FFFFFF" opacity="0.05"/>
+    <rect x="0" y="864" width="400" height="16" fill="#FFFFFF" opacity="0.06"/>
+    <path d="M 150 900 Q 200 860 250 900" fill="none" stroke="#FFFDF6" stroke-width="2" opacity="0.35"/>
+
+    <g class="gol">
+      <rect x="296" y="760" width="82" height="48" fill="#FFFFFF" opacity="0.12"/>
+      <g stroke="#FFFDF6" stroke-width="1" opacity="0.45">
+        <line x1="302" y1="762" x2="302" y2="808"/><line x1="312" y1="762" x2="312" y2="808"/>
+        <line x1="322" y1="762" x2="322" y2="808"/><line x1="332" y1="762" x2="332" y2="808"/>
+        <line x1="342" y1="762" x2="342" y2="808"/><line x1="352" y1="762" x2="352" y2="808"/>
+        <line x1="362" y1="762" x2="362" y2="808"/><line x1="372" y1="762" x2="372" y2="808"/>
+        <line x1="296" y1="770" x2="378" y2="770"/><line x1="296" y1="780" x2="378" y2="780"/>
+        <line x1="296" y1="790" x2="378" y2="790"/><line x1="296" y1="800" x2="378" y2="800"/>
+      </g>
+      <rect x="294" y="758" width="5" height="50" fill="#FFFDF6"/>
+      <rect x="375" y="758" width="5" height="50" fill="#FFFDF6"/>
+      <rect x="294" y="758" width="86" height="5" fill="#FFFDF6"/>
+    </g>
+
+    <g class="goleiro-base" transform="translate(337,803)">
+      <g class="goleiro">
+        <circle cx="0" cy="-32" r="7" fill="#E8B98C"/>
+        <rect x="-9" y="-25" width="18" height="23" rx="4" fill="#6CACE4"/>
+        <rect x="-3" y="-25" width="2" height="23" fill="#FFFDF6" opacity="0.85"/>
+        <rect x="1" y="-25" width="2" height="23" fill="#FFFDF6" opacity="0.85"/>
+        <rect x="-16" y="-24" width="8" height="5" rx="2" fill="#FFFDF6"/>
+        <rect x="8" y="-24" width="8" height="5" rx="2" fill="#FFFDF6"/>
+        <circle cx="-17" cy="-21" r="3.5" fill="#FFFDF6"/>
+        <circle cx="17" cy="-21" r="3.5" fill="#FFFDF6"/>
+        <rect x="-8" y="-3" width="6" height="15" rx="2" fill="#21303B"/>
+        <rect x="2" y="-3" width="6" height="15" rx="2" fill="#21303B"/>
+      </g>
+    </g>
+
+    <text class="texto-gol" x="336" y="748" text-anchor="middle">GOL!</text>
+
+    <circle class="bola-eco bola-eco-1" r="9" fill="url(#brilhoBola)"/>
+    <circle class="bola-eco bola-eco-2" r="7" fill="url(#brilhoBola)"/>
+    <circle class="bola-eco bola-eco-3" r="5" fill="url(#brilhoBola)"/>
+
+    <g class="jogador" transform="translate(58,890)">
+      <circle cx="0" cy="-46" r="9" fill="#E8B98C"/>
+      <rect x="-10" y="-37" width="20" height="26" rx="5" fill="#F7CF3D"/>
+      <text x="0" y="-21" text-anchor="middle" font-size="9" font-weight="700" fill="#1E7A46" font-family="Fredoka, sans-serif">7</text>
+      <rect x="-9" y="-11" width="8" height="12" rx="2" fill="#1D3E8C"/>
+      <rect x="-9" y="-1" width="8" height="4" rx="1" fill="#FFFDF6"/>
+      <g class="perna-chute">
+        <rect x="1" y="-11" width="8" height="12" rx="2" fill="#1D3E8C"/>
+        <rect x="1" y="-1" width="8" height="4" rx="1" fill="#FFFDF6"/>
+      </g>
+    </g>
+
+    <g class="bola">
+      <circle r="7" fill="#FFFDF6" stroke="#21303B" stroke-width="1.3"/>
+      <path d="M0,-4 3,-1 2,3 -2,3 -3,-1 Z" fill="#21303B" opacity="0.85"/>
+    </g>
+  </svg>
+</div>
+
+<div class="fundo-tematico" aria-hidden="true">
+  <span class="item-flutuante item-1">5+5</span>
+  <span class="item-flutuante item-3">7−2</span>
+  <span class="item-flutuante item-5">3×2</span>
+  <span class="item-flutuante item-6">9÷3</span>
+  <span class="item-flutuante item-7">6+4</span>
+  <span class="item-flutuante item-9">8−3</span>
+  <span class="item-flutuante item-10">4×2</span>
+  <span class="item-flutuante item-13">2+6</span>
+  <span class="item-flutuante item-14">10−1</span>
+</div>
+
+<div id="app">
+
+  <div class="topo">
+    <div class="topo-esquerda">
+      <button id="botao-voltar" class="botao-icone botao-voltar" type="button" aria-label="Voltar para a tela anterior">←</button>
+      <button id="botao-logo" class="botao-logo" type="button" aria-label="Voltar ao menu inicial">
+        <img id="logo-mini" class="marca-logo" src="../Imagens/hexatech-logo.png" alt="HexaTech">
+      </button>
+    </div>
+    <button id="botao-acessibilidade" class="botao-icone" type="button" aria-label="Abrir opções de acessibilidade">♿</button>
+  </div>
+
+  <section id="tela-menu" class="tela tela-menu">
+    <img class="logo-hero" src="../Imagens/hexatech-logo-hero.png" alt="HexaTech">
+    <svg class="mascote mascote-grande" viewBox="0 0 100 100" aria-hidden="true">
+      <circle cx="50" cy="50" r="46" fill="#FFFDF6" stroke="#21303B" stroke-width="5"/>
+      <polygon points="50,28 63,38 58,54 42,54 37,38" fill="#21303B"/>
+      <circle cx="34" cy="40" r="4.5" fill="#21303B"/>
+      <circle cx="66" cy="40" r="4.5" fill="#21303B"/>
+      <path d="M35 60 Q50 74 65 60" stroke="#21303B" stroke-width="5" fill="none" stroke-linecap="round"/>
+    </svg>
+    <h1>MathGol</h1>
+    <p class="subtitulo subtitulo-curto">Chuta, acerta e faz o gol! ⚽</p>
+    <div class="pilha-botoes">
+      <button id="botao-jogar" class="botao botao-cta" type="button">Jogar</button>
+      <button id="botao-creditos" class="botao botao-secundario" type="button">Créditos</button>
+      <button id="botao-backup" class="botao botao-secundario" type="button">💾 Backup</button>
+    </div>
+  </section>
+
+  <section id="tela-apelido" class="tela tela-personalizar">
+    <h2>Monte seu craque</h2>
+    <span class="selo">Sem texto livre</span>
+
+    <div class="preview-personalizar">
+      <div class="avatar-apelido" id="avatar-apelido" aria-hidden="true">
+        <img id="avatar-img" class="avatar-img" alt="">
+      </div>
+      <p id="texto-apelido" class="caixa-apelido">Escolha acima</p>
+    </div>
+
+    <h3 class="subtitulo-secao">Personagem</h3>
+    <div id="lista-personagens" class="lista-chips"></div>
+
+    <h3 class="subtitulo-secao">Animal</h3>
+    <div id="lista-animais" class="lista-chips"></div>
+
+    <h3 class="subtitulo-secao">Avatar</h3>
+    <div id="abas-avatar" class="abas-avatar"></div>
+    <div id="grade-avatares" class="grade-avatares"></div>
+
+    <div class="pilha-botoes" style="margin-top: 20px;">
+      <button id="botao-confirmar-apelido" class="botao" type="button" disabled>Confirmar</button>
+    </div>
+  </section>
+
+  <section id="tela-selecao" class="tela">
+    <h2>Escolha seu time</h2>
+    <div id="grade-selecoes" class="grade-cartoes"></div>
+    <div class="pilha-botoes" style="margin-top: 24px;">
+      <button id="botao-confirmar-selecao" class="botao" type="button" disabled>Confirmar ✅</button>
+    </div>
+  </section>
+
+  <section id="tela-dificuldade" class="tela">
+    <h2>Nível do desafio</h2>
+    <div id="grade-dificuldades" class="grade-cartoes"></div>
+    <div class="pilha-botoes" style="margin-top: 24px;">
+      <button id="botao-confirmar-dificuldade" class="botao" type="button" disabled>Bora jogar! ⚽</button>
+    </div>
+  </section>
+
+  <section id="tela-fases" class="tela">
+    <h2>Escolha a Fase</h2>
+    <div id="grade-fases" class="grade-cartoes"></div>
+    <div class="pilha-botoes" style="margin-top: 24px;">
+      <button id="botao-confirmar-fase" class="botao" type="button" disabled>Começar! 🏟️</button>
+    </div>
+  </section>
+
+  <section id="tela-fase1" class="tela">
+    <div class="barra-fase">
+      <span id="titulo-fase" class="titulo-fase">⚽ Pênaltis</span>
+      <div id="cabecalho-fase" class="cabecalho-fase"></div>
+      <span id="timer-display" class="timer-display timer-verde">15s</span>
+      <span id="pontuacao-display" class="pontuacao-display">0 <img class="icone-cruzeiro" src="../Imagens/estrela-cruzeiro.png" alt="estrelinhas Cruzeiro"></span>
+    </div>
+    <div class="caixa-pergunta">
+      <p id="pergunta-texto" class="pergunta-texto" aria-live="polite" aria-atomic="true">--</p>
+      <button id="botao-ouvir-novamente" class="botao-ouvir-novamente" type="button" aria-label="Ouvir a pergunta novamente" hidden>🔊 Ouvir novamente</button>
+    </div>
+    <div class="palco-penalti">
+      <div id="jogo-penalti"></div>
+      <div id="zonas-gol" class="zonas-gol">
+        <button class="botao-zona zona-topo-esquerda" type="button" data-zona="topo-esquerda">--</button>
+        <button class="botao-zona zona-topo-direita" type="button" data-zona="topo-direita">--</button>
+        <button class="botao-zona zona-meio" type="button" data-zona="meio">--</button>
+        <button class="botao-zona zona-baixo-esquerda" type="button" data-zona="baixo-esquerda">--</button>
+        <button class="botao-zona zona-baixo-direita" type="button" data-zona="baixo-direita">--</button>
+      </div>
+    </div>
+    <p id="mensagem-feedback" class="mensagem-feedback" aria-live="polite" aria-atomic="true"></p>
+  </section>
+
+  <section id="tela-resultado" class="tela">
+    <h2>Fim da Fase 1!</h2>
+    <p id="placar-final" class="placar-grande">0 / 3</p>
+    <p id="pontuacao-final" class="pontuacao-resultado">0 <img class="icone-cruzeiro" src="../Imagens/estrela-cruzeiro.png" alt="">Cruzeiro</p>
+    <p id="resumo-resultado" class="resumo-resultado" aria-live="polite" aria-atomic="true">--</p>
+    <ul id="lista-cobrancas" class="lista-cobrancas" aria-label="Resumo de cada cobrança"></ul>
+    <p id="mensagem-desbloqueio" class="mensagem-desbloqueio" aria-live="polite" aria-atomic="true"></p>
+    <div class="pilha-botoes">
+      <button id="botao-proxima-fase" class="botao botao-cta" type="button">Escolher fase 🏟️</button>
+      <button id="botao-voltar-menu" class="botao" type="button">Voltar ao menu</button>
+    </div>
+  </section>
+
+</div>
+
+<footer class="rodape">
+  <span class="rodape-texto">Um jogo</span>
+  <img class="rodape-logo" src="../Imagens/hexatech-logo.png" alt="HexaTech">
+</footer>
+
+<div id="sobreposicao-acessibilidade" class="sobreposicao">
+  <div class="painel-acessibilidade">
+    <h2 style="text-align:left; margin-bottom:16px;">Acessibilidade</h2>
+    <div class="linha-opcao">
+      <label for="opcao-alto-contraste">Alto contraste</label>
+      <span class="alternador"><input type="checkbox" id="opcao-alto-contraste"><span class="trilho-alternador"></span></span>
+    </div>
+    <div class="linha-opcao">
+      <label for="opcao-espaco-dislexia">Espaçamento para dislexia</label>
+      <span class="alternador"><input type="checkbox" id="opcao-espaco-dislexia"><span class="trilho-alternador"></span></span>
+    </div>
+    <div class="linha-opcao">
+      <label for="opcao-narracao">Narração em áudio</label>
+      <span class="alternador"><input type="checkbox" id="opcao-narracao"><span class="trilho-alternador"></span></span>
+    </div>
+    <div class="linha-opcao">
+      <label for="opcao-sfx">Efeitos sonoros</label>
+      <span class="alternador"><input type="checkbox" id="opcao-sfx" checked><span class="trilho-alternador"></span></span>
+    </div>
+    <div class="pilha-botoes" style="margin-top: 20px;">
+      <button id="botao-fechar-acessibilidade" class="botao" type="button">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal de créditos -->
+<div id="sobreposicao-creditos" class="sobreposicao">
+  <div class="painel-creditos">
+    <h2 style="text-align:center; margin-bottom:6px;">🏆 Créditos</h2>
+    <p class="creditos-subtitulo">Desenvolvido por</p>
+    <ul class="lista-devs">
+
+      <li class="dev-card">
+        <div class="dev-linha">
+          <span class="dev-icone">💻</span>
+          <span class="dev-info">
+            <span class="dev-nome">Danillo Fernandes Gomes</span>
+            <span class="dev-papel">Full Stack ⚽</span>
+          </span>
+          <button class="botao-sobre-mim" type="button"
+                  aria-expanded="false" aria-controls="bio-danillo"
+                  aria-label="Sobre mim: Danillo Fernandes Gomes">
+            <svg class="icone-sobre-mim" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2.2"/>
+              <circle cx="12" cy="7.4" r="1.5" fill="currentColor"/>
+              <path d="M12 11v6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+            </svg>
+            <span class="rotulo-sobre-mim">Sobre mim</span>
+          </button>
+        </div>
+        <div id="bio-danillo" class="dev-bio" hidden>
+          <p>E aí, pequenos craques! Tudo certo? 😄</p>
+          <p>Eu sou o <strong>Danillo</strong>, tenho 22 anos e meus amigos me chamam de <strong>D</strong>! Sou apaixonado por tecnologia, futebol, jogos e por transformar ideias em coisas de verdade. 🚀</p>
+          <p>No MathGol, minha missão como Full Stack foi ajudar a construir o jogo por dentro e por fora! 👨🏻‍💻 Cuidei de partes que vocês conseguem ver na tela e também daquelas que ficam escondidas nos bastidores, fazendo tudo funcionar quando vocês jogam. É quase como ser um jogador que ajuda no ataque e na defesa! ⚽😂</p>
+          <p>Foi muito legal transformar as ideias da nossa equipe em um jogo de verdade. Agora o código fica com a gente… mas a bola está com vocês! 🏟️🎮</p>
+          <p class="dev-recado">🏆 Recado do D: não tenha medo de errar uma jogada! Tente, aprenda e tente de novo. Todo grande craque começou dando o primeiro chute — e quem sabe a próxima grande ideia não começa com você? 🚀⭐</p>
+        </div>
+      </li>
+
+      <li class="dev-card">
+        <div class="dev-linha">
+          <span class="dev-icone">⚽</span>
+          <span class="dev-info">
+            <span class="dev-nome">Pablo Neris Santiago</span>
+            <span class="dev-papel">Product Owner ⚽</span>
+          </span>
+          <button class="botao-sobre-mim" type="button"
+                  aria-expanded="false" aria-controls="bio-pablo"
+                  aria-label="Sobre mim: Pablo Neris Santiago">
+            <svg class="icone-sobre-mim" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2.2"/>
+              <circle cx="12" cy="7.4" r="1.5" fill="currentColor"/>
+              <path d="M12 11v6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+            </svg>
+            <span class="rotulo-sobre-mim">Sobre mim</span>
+          </button>
+        </div>
+        <div id="bio-pablo" class="dev-bio" hidden>
+          <p>Olá! Tudo bem com vocês? Meu nome é <strong>Pablo Neris Santiago</strong>, tenho 22 anos e meus amigos me chamam de <strong>Pablinho</strong>. 😄</p>
+          <p>Gosto muito de jogar bola, ir à academia e jogar videogame. Neste projeto, fui o capitão do time: ajudei a organizar as ideias para que o jogo ficasse do jeitinho que vocês merecem!</p>
+          <p>Espero que vocês aprendam e se divirtam muito jogando.</p>
+          <p class="dev-recado">🏆 Lembre-se: todo craque um dia errou um chute. Quem treina, aprende. E quem aprende, vira campeão!</p>
+        </div>
+      </li>
+
+      <li class="dev-card">
+        <div class="dev-linha">
+          <span class="dev-icone">🎮</span>
+          <span class="dev-info">
+            <span class="dev-nome">Daniel Bandeira Baldini</span>
+            <span class="dev-papel">Scrum + QA 🏃🏻‍♂️</span>
+          </span>
+          <button class="botao-sobre-mim" type="button"
+                  aria-expanded="false" aria-controls="bio-daniel"
+                  aria-label="Sobre mim: Daniel Bandeira Baldini">
+            <svg class="icone-sobre-mim" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2.2"/>
+              <circle cx="12" cy="7.4" r="1.5" fill="currentColor"/>
+              <path d="M12 11v6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+            </svg>
+            <span class="rotulo-sobre-mim">Sobre mim</span>
+          </button>
+        </div>
+        <div id="bio-daniel" class="dev-bio" hidden>
+          <p>Olá, pequenos jogadores! 😄</p>
+          <p>Como vocês viram, me chamo Daniel e tenho <strong>20 anos</strong>, mas meus amigos me chamam de <strong>Bal</strong>! Sou fã de tecnologia, jogos e de inventar coisas novas.</p>
+          <p>Neste projeto, minha missão foi ajudar a equipe a organizar as ideias e testar o jogo. Afinal, alguém precisava descobrir se os bugs eram inimigos secretos ou só problemas mesmo! 🐛😂</p>
+          <p>Foi muito divertido criar essa aventura com meus amigos, mas agora chegou a vez de vocês jogarem!</p>
+          <p class="dev-recado">🏆 Aventureiros: usem a imaginação, apertem os botões e preparem-se para se divertir! Quem sabe o próximo grande criador de jogos não está jogando agora? 🎮⭐</p>
+        </div>
+      </li>
+
+    </ul>
+    <figure class="foto-equipe">
+      <img src="../Imagens/Nos.jpg" alt="Foto da equipe HexaTech" class="foto-equipe-img">
+      <figcaption class="foto-equipe-legenda">A equipe HexaTech 👋</figcaption>
+    </figure>
+    <div class="creditos-instituicao">
+      <span class="inst-icone">🎓</span>
+      <span class="inst-nome">Faculdade Cruzeiro Do Sul<br>Unidade Paulista</span>
+    </div>
+    <p class="creditos-equipe">Equipe <strong>HexaTech</strong></p>
+    <div class="pilha-botoes" style="margin-top: 18px;">
+      <button id="botao-fechar-creditos" class="botao" type="button">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal de backup -->
+<div id="sobreposicao-backup" class="sobreposicao">
+  <div class="painel-backup">
+    <h2 style="text-align:center; margin-bottom:12px;">💾 Backup</h2>
+    <p class="backup-descricao">Exporte seus dados do jogo ou faça backup do banco de dados.</p>
+    <div class="pilha-botoes-backup">
+      <button id="botao-backup-local" class="botao botao-cta" type="button">📥 Exportar Progresso Local</button>
+      <button id="botao-backup-firebase" class="botao" type="button">☁️ Exportar Dados do Firebase</button>
+      <button id="botao-restaurar-backup" class="botao" type="button">📤 Restaurar Backup</button>
+    </div>
+    <input type="file" id="input-restaurar" accept=".json" style="display:none">
+    <p id="backup-status" class="backup-status" aria-live="polite"></p>
+    <div class="pilha-botoes" style="margin-top: 14px;">
+      <button id="botao-fechar-backup" class="botao" type="button">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Firebase (módulo ES — carrega antes dos scripts do jogo) -->
+<script type="module" src="../JS/firebase-config.js?v=4"></script>
+
+<!-- Three.js r149 (CDN, build UMD — degrada graciosamente se falhar) -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js"></script>
+
+<!-- Scripts do jogo (ordem importa) -->
+<script src="../JS/data.js?v=4"></script>
+<script src="../JS/avatar-data.js?v=4"></script>
+<script src="../JS/questions.js?v=4"></script>
+<script src="../JS/banco-questoes.js?v=4"></script>
+<script src="../JS/narration.js?v=4"></script>
+<script src="../JS/sfx.js?v=4"></script>
+<script src="../JS/game.js?v=4"></script>
+<script src="../JS/progressao.js?v=4"></script>
+<script src="../JS/main.js?v=4"></script>
+</body>
+</html>

@@ -1,0 +1,1884 @@
+/* ==========================================================================
+   MathGol - tokens de design
+   Paleta pensada pro tema (matematica + futebol infantil), nao um SaaS:
+   verde-grama, amarelo-sol, azul-ceu, branco-giz, grafite.
+   ========================================================================== */
+
+:root {
+  --verde-grama: #2E9E5B;
+  --verde-grama-escuro: #237C48;
+  --amarelo-sol: #FFC63B;
+  --amarelo-sol-escuro: #E8AC1D;
+  --azul-ceu: #3AA9D6;
+  --azul-ceu-escuro: #2C87AC;
+  --branco-giz: #FFFDF6;
+  --grafite: #21303B;
+  --grafite-suave: #4A5A66;
+
+  /* ---- Variantes acessiveis (WCAG AA) ----------------------------------
+     As cores acima sao as da identidade visual e continuam valendo para
+     areas decorativas grandes. Mas verde/azul/vermelho "vivos" NAO tem
+     contraste suficiente para carregar texto branco por cima:
+       texto branco sobre --verde-grama  = 3.35:1  (AA pede 4.5:1)
+       texto branco sobre --azul-ceu     = 2.64:1
+       texto branco sobre #E0343B        = 4.37:1
+     Entao todo lugar que combina TEXTO com um desses fundos usa as
+     variantes escuras abaixo, medidas contra --branco-giz:
+       --verde-texto     6.70:1
+       --azul-texto      7.04:1
+       --vermelho-texto  6.42:1
+       --amarelo-texto   5.82:1 (texto escuro sobre fundo claro)
+     --borda-sutil (3.95:1) e para contornos de componentes de UI, que
+     pela WCAG precisam de 3:1 contra o fundo da pagina. */
+  --verde-texto: #17683A;
+  --azul-texto: #0F5C8C;
+  --vermelho-texto: #B4232A;
+  --amarelo-texto: #8A5A00;
+  --borda-sutil: #6C828F;
+
+  --fonte-titulo: 'Fredoka', system-ui, sans-serif;
+  --fonte-corpo: 'Atkinson Hyperlegible', system-ui, sans-serif;
+
+  --raio-grande: 28px;
+  --raio-medio: 18px;
+  --espaco-letra: 0em;
+  --interlinha: 1.5;
+
+  --sombra-botao: 0 6px 0 rgba(0, 0, 0, 0.18);
+}
+
+/* ==========================================================================
+   HU-08 / CA-08.2 — Alto contraste
+   Não é só troca de variáveis: cobre todas as telas e estados (menu,
+   cartões, botões, zonas do gol, pergunta, timer, feedback, resultado,
+   modal, foco por teclado, desabilitado, acerto/erro e desbloqueio),
+   garante WCAG AA (4.5:1 texto normal, 3:1 texto grande/UI) e remove
+   transparências/sombras/gradientes que atrapalhem a leitura — inclusive
+   por cima do canvas do Phaser. O modo normal mantém a identidade infantil
+   intacta: nada aqui vaza pra fora de `body.alto-contraste`.
+   ========================================================================== */
+
+body.alto-contraste {
+  --branco-giz: #FFFFFF;
+  --grafite: #000000;
+  --grafite-suave: #000000;
+  --verde-grama: #0B6B34;
+  --verde-grama-escuro: #0B6B34;
+  --amarelo-sol: #B45400;
+  --amarelo-sol-escuro: #7A3900;
+  --azul-ceu: #0B4C8C;
+  --azul-ceu-escuro: #063463;
+  /* As variantes acessiveis tambem escurecem no alto contraste, senao
+     ficariam mais claras que a paleta base do modo. */
+  --verde-texto: #0B6B34;
+  --azul-texto: #063463;
+  --vermelho-texto: #7A0000;
+  --amarelo-texto: #000000;
+  --borda-sutil: #000000;
+}
+
+/* Fundo sólido e opaco — sem textura sutil nem cenário animado atrás do
+   conteúdo, que reduzem contraste e distraem a leitura. */
+body.alto-contraste { background-image: none; }
+body.alto-contraste .campo-animado,
+body.alto-contraste .fundo-tematico { display: none; }
+
+/* Remove sombras, gradientes e transparências que reduzem legibilidade;
+   troca por preenchimentos sólidos e bordas grossas em todo lugar. */
+body.alto-contraste * {
+  text-shadow: none !important;
+  box-shadow: none !important;
+}
+body.alto-contraste .botao,
+body.alto-contraste .botao-cta,
+body.alto-contraste .botao-secundario,
+body.alto-contraste .botao-azul,
+body.alto-contraste .cartao,
+body.alto-contraste .botao-icone,
+body.alto-contraste .botao-zona,
+body.alto-contraste .caixa-pergunta,
+body.alto-contraste .painel-acessibilidade,
+body.alto-contraste h1, body.alto-contraste h2,
+body.alto-contraste .subtitulo,
+body.alto-contraste .mensagem-feedback,
+body.alto-contraste .resumo-resultado,
+body.alto-contraste .placar-grande,
+body.alto-contraste .pontuacao-display,
+body.alto-contraste .pontuacao-resultado,
+body.alto-contraste .caixa-apelido,
+body.alto-contraste .timer-display,
+body.alto-contraste .rodape {
+  background-image: none !important;
+  background-color: var(--branco-giz);
+  color: var(--grafite);
+}
+body.alto-contraste .botao,
+body.alto-contraste .cartao,
+body.alto-contraste .botao-icone,
+body.alto-contraste .botao-zona {
+  border-width: 4px !important;
+  border-color: var(--grafite) !important;
+}
+
+/* Botões de ação principais (CTA) continuam se destacando, mas com cor
+   sólida de alto contraste em vez do gradiente amarelo. */
+body.alto-contraste .botao-cta,
+body.alto-contraste .botao-cta:hover {
+  background-color: var(--amarelo-sol-escuro);
+  color: var(--branco-giz);
+  animation: none;
+}
+body.alto-contraste .botao:hover,
+body.alto-contraste .botao-secundario:hover,
+body.alto-contraste .botao-azul:hover {
+  background-color: var(--grafite);
+  color: var(--branco-giz);
+}
+body.alto-contraste .botao-azul {
+  background-color: var(--azul-ceu);
+  color: var(--branco-giz);
+  border-color: var(--branco-giz) !important;
+}
+
+/* Cartões selecionados/bloqueados: contorno grosso + espessura maior no
+   lugar de sombra colorida. */
+body.alto-contraste .cartao-selecionado {
+  background-color: var(--grafite);
+  color: var(--branco-giz);
+  border-color: var(--branco-giz) !important;
+}
+body.alto-contraste .cartao-bloqueado { opacity: 0.7; filter: none; }
+
+/* Zonas do gol precisam continuar legíveis por cima do canvas do Phaser,
+   então ganham fundo sólido (não translúcido) e contorno bem grosso. */
+body.alto-contraste .botao-zona {
+  background: var(--branco-giz) !important;
+  color: var(--grafite) !important;
+  border-width: 4px !important;
+  border-color: var(--grafite) !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  font-size: clamp(0.8rem, 3.5vw, 1rem) !important;
+  padding: 6px 12px !important;
+  min-width: 40px !important;
+  opacity: 1 !important;
+}
+body.alto-contraste .botao-zona:hover {
+  background: var(--grafite) !important;
+  color: var(--branco-giz) !important;
+}
+body.alto-contraste .botao-zona.acertou {
+  background: var(--verde-grama) !important;
+  color: var(--branco-giz) !important;
+  border-color: var(--branco-giz) !important;
+}
+body.alto-contraste .botao-zona.errou {
+  background: #7A0000 !important;
+  color: var(--branco-giz) !important;
+  border-color: var(--branco-giz) !important;
+}
+body.alto-contraste .botao-zona:disabled { opacity: 0.75 !important; }
+
+/* Container do canvas 3D: borda mais grossa e visível */
+body.alto-contraste #jogo-penalti {
+  border: 4px solid var(--grafite) !important;
+}
+
+/* Acerto/erro nunca dependem só de cor: o ícone (✓ / ✗) do resumo de
+   cobranças e das zonas continua visível e com contraste garantido. */
+body.alto-contraste .item-cobranca-gol .item-cobranca-icone { color: var(--verde-grama); }
+body.alto-contraste .item-cobranca-defesa .item-cobranca-icone { color: #7A0000; }
+
+/* Timer e mensagem de desbloqueio: mantém o significado por texto e cor
+   sólida, sem pulsar (menos ruído visual em alto contraste). */
+body.alto-contraste .timer-verde { background-color: var(--verde-grama); color: var(--branco-giz); }
+body.alto-contraste .timer-amarelo { background-color: var(--amarelo-sol-escuro); color: var(--branco-giz); }
+body.alto-contraste .timer-vermelho { background-color: #7A0000; color: var(--branco-giz); animation: none; }
+body.alto-contraste .mensagem-desbloqueio { color: var(--amarelo-sol-escuro); }
+/* Chips de personagem/animal: no alto contraste o laranja da paleta com
+   texto preto fica em 4.21:1, abaixo dos 4.5:1 exigidos para texto normal.
+   O selecionado passa entao a ser preto sólido com texto branco (21:1) —
+   e continua marcado tambem pelo ✓, nunca só pela cor. */
+body.alto-contraste .chip-escolha {
+  background: var(--branco-giz);
+  color: var(--grafite);
+  border-color: var(--grafite);
+}
+body.alto-contraste .chip-escolha.chip-ativo {
+  background: var(--grafite);
+  color: var(--branco-giz);
+  border-color: var(--grafite);
+}
+body.alto-contraste .lista-chips {
+  background: var(--branco-giz);
+  border-color: var(--grafite);
+}
+
+body.alto-contraste .bolinha-cobranca { border-color: var(--grafite); background: var(--branco-giz); }
+body.alto-contraste .bolinha-cobranca.acerto { background: var(--verde-grama); border-color: var(--grafite); }
+body.alto-contraste .bolinha-cobranca.erro { background: #7A0000; border-color: var(--grafite); }
+body.alto-contraste .bolinha-cobranca.atual { background: var(--amarelo-sol-escuro); border-color: var(--grafite); }
+
+/* Modal de acessibilidade: fundo opaco atrás e trilho do alternador com
+   contorno reforçado. */
+body.alto-contraste .sobreposicao { background: rgba(0,0,0,0.85); }
+body.alto-contraste .trilho-alternador { border-width: 3px; background: var(--branco-giz); }
+body.alto-contraste .alternador input:checked ~ .trilho-alternador { background: var(--verde-grama); }
+
+/* Foco por teclado: contorno bem grosso e de alto contraste, também sobre
+   o canvas do jogo. */
+body.alto-contraste .botao-icone:focus-visible,
+body.alto-contraste .botao:focus-visible,
+body.alto-contraste .botao-logo:focus-visible,
+body.alto-contraste .cartao:focus-visible,
+body.alto-contraste .botao-zona:focus-visible,
+body.alto-contraste .aba-avatar:focus-visible,
+body.alto-contraste .chip-escolha:focus-visible,
+body.alto-contraste .item-avatar:focus-visible {
+  outline: 5px solid #000000;
+  outline-offset: 3px;
+  box-shadow: 0 0 0 3px #FFFFFF, 0 0 0 8px #000000 !important;
+}
+
+/* ==========================================================================
+   Espaçamento para dislexia
+   Só aumenta espaçamento entre letras/palavras/linhas de TEXTO lido pela
+   criança — símbolos matemáticos da pergunta, números das zonas, ícones e
+   o layout dos controles continuam estáveis, como pede a HU.
+   ========================================================================== */
+body.espaco-dislexia {
+  --interlinha: 1.9;
+}
+body.espaco-dislexia h1, body.espaco-dislexia h2, body.espaco-dislexia h3,
+body.espaco-dislexia p, body.espaco-dislexia label,
+body.espaco-dislexia .botao, body.espaco-dislexia .botao-ouvir-novamente,
+body.espaco-dislexia .cartao-titulo, body.espaco-dislexia .cartao-descricao,
+body.espaco-dislexia .subtitulo, body.espaco-dislexia .mensagem-feedback,
+body.espaco-dislexia .resumo-resultado, body.espaco-dislexia .caixa-apelido,
+body.espaco-dislexia .texto-apelido, body.espaco-dislexia .chip-escolha,
+body.espaco-dislexia .aba-avatar, body.espaco-dislexia .mensagem-desbloqueio,
+body.espaco-dislexia .placar-grande, body.espaco-dislexia .pontuacao-resultado,
+body.espaco-dislexia .item-cobranca-texto, body.espaco-dislexia .rodape-texto {
+  letter-spacing: 0.04em;
+  word-spacing: 0.14em;
+  line-height: 1.9;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+  background: var(--branco-giz);
+  color: var(--grafite);
+  font-family: var(--fonte-corpo);
+  line-height: var(--interlinha);
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Textura de campo bem sutil no fundo de toda a aplicacao */
+body {
+  background-image:
+    repeating-linear-gradient(
+      0deg,
+      rgba(46, 158, 91, 0.05) 0px,
+      rgba(46, 158, 91, 0.05) 48px,
+      transparent 48px,
+      transparent 96px
+    );
+}
+
+#app {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  z-index: 1;
+}
+
+.tela {
+  display: none;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 20px 48px;
+  max-width: 640px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.tela.tela-ativa {
+  display: flex;
+}
+
+/* ---------- Cabecalho comum ---------- */
+
+.topo {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  position: relative;
+  z-index: 1;
+}
+
+.marca-logo {
+  height: 34px;
+  width: auto;
+  display: block;
+  filter: drop-shadow(0 2px 5px rgba(0,0,0,0.45));
+}
+.marca-logo.escondido {
+  visibility: hidden;
+}
+
+.topo-esquerda {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.botao-logo {
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  border-radius: var(--raio-medio);
+}
+
+.botao-voltar {
+  width: 44px;
+  height: 44px;
+  font-size: 1.3rem;
+  font-weight: 700;
+}
+.botao-voltar.escondido {
+  visibility: hidden;
+}
+
+.logo-hero {
+  width: min(72%, 280px);
+  height: auto;
+  margin-bottom: 10px;
+  filter: drop-shadow(0 4px 10px rgba(0,0,0,0.4));
+}
+
+/* ---------- Mascote (bolinha com carinha) ---------- */
+
+.mascote {
+  display: block;
+}
+.mascote-grande {
+  width: 84px;
+  height: 84px;
+  margin-bottom: 4px;
+  animation: flutuar 2.6s ease-in-out infinite;
+}
+@keyframes flutuar {
+  0%, 100% { transform: translateY(0) rotate(-3deg); }
+  50% { transform: translateY(-14px) rotate(3deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mascote-grande { animation: none; }
+}
+
+/* ---------- Fundo tematico: bola e numeros boiando ---------- */
+
+.fundo-tematico {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.item-flutuante {
+  position: absolute;
+  font-family: var(--fonte-titulo);
+  font-weight: 700;
+  animation-name: boiar;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  user-select: none;
+}
+@keyframes boiar {
+  0%, 100% { transform: translateY(0) rotate(-6deg); }
+  50% { transform: translateY(-22px) rotate(6deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .item-flutuante { animation: none; }
+}
+
+.item-1  { left: 4%;  top: 10%; font-size: 20px; color: rgba(255,253,246,0.45); animation-duration: 6.5s; animation-delay: -1s; }
+.item-3  { left: 80%; top: 7%;  font-size: 22px; color: rgba(255,253,246,0.4);  animation-duration: 6s;   animation-delay: -2s; }
+.item-5  { left: 6%;  top: 50%; font-size: 20px; color: rgba(255,253,246,0.35); animation-duration: 7s;   animation-delay: -1.5s; }
+.item-6  { left: 84%; top: 40%; font-size: 22px; color: rgba(255,253,246,0.4);  animation-duration: 9s;   animation-delay: -5s; }
+.item-7  { left: 30%; top: 68%; font-size: 20px; color: rgba(255,253,246,0.4); animation-duration: 6.8s; animation-delay: -2.5s; }
+.item-9  { left: 10%; top: 82%; font-size: 20px; color: rgba(255,253,246,0.4); animation-duration: 6.2s; animation-delay: -0.5s; }
+.item-10 { left: 88%; top: 74%; font-size: 20px; color: rgba(255,253,246,0.35); animation-duration: 8.4s; animation-delay: -4.5s; }
+.item-13 { left: 74%; top: 22%; font-size: 20px; color: rgba(255,253,246,0.4); animation-duration: 6.6s; animation-delay: -2.8s; }
+.item-14 { left: 22%; top: 3%;  font-size: 20px; color: rgba(255,253,246,0.4); animation-duration: 7.6s; animation-delay: -3.2s; }
+
+/* ---------- Cena animada: jogador chuta, goleiro pula e sai o gol ---------- */
+
+.campo-animado {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.cena-gol {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.texto-gol {
+  font-family: var(--fonte-titulo);
+  font-weight: 700;
+  font-size: 22px;
+  fill: var(--amarelo-sol);
+  stroke: var(--grafite);
+  stroke-width: 0.8px;
+  opacity: 0;
+  animation: aparecer-gol 5s ease-in-out infinite;
+}
+
+.perna-chute {
+  transform-box: fill-box;
+  transform-origin: 50% 0%;
+  animation: chutar-perna 5s ease-in-out infinite;
+}
+
+.bola {
+  transform-box: view-box;
+  animation: chutar-bola 5s ease-in-out infinite;
+  filter: drop-shadow(0 0 3px rgba(255,227,138,0.9));
+}
+
+.bola-eco {
+  transform-box: view-box;
+  animation: chutar-bola 5s ease-in-out infinite;
+}
+.bola-eco-1 { animation-delay: -0.09s; opacity: 0.5; }
+.bola-eco-2 { animation-delay: -0.18s; opacity: 0.3; }
+.bola-eco-3 { animation-delay: -0.27s; opacity: 0.15; }
+
+.goleiro {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: goleiro-pular 5s ease-in-out infinite;
+}
+
+@keyframes chutar-perna {
+  0%, 8%   { transform: rotate(0deg); }
+  12%      { transform: rotate(-24deg); }
+  18%      { transform: rotate(36deg); }
+  26%, 100% { transform: rotate(0deg); }
+}
+
+@keyframes chutar-bola {
+  0%, 13%  { transform: translate(66px, 885px); opacity: 1; }
+  20%      { transform: translate(128px, 858px); opacity: 1; }
+  32%      { transform: translate(228px, 826px); opacity: 1; }
+  44%      { transform: translate(318px, 800px); opacity: 1; }
+  48%, 63% { transform: translate(348px, 790px); opacity: 1; }
+  70%      { transform: translate(348px, 790px); opacity: 0; }
+  80%      { transform: translate(66px, 885px); opacity: 0; }
+  92%, 100% { transform: translate(66px, 885px); opacity: 1; }
+}
+
+@keyframes goleiro-pular {
+  0%, 16%  { transform: translate(0, 0) rotate(0deg); }
+  28%      { transform: translate(-16px, -8px) rotate(-14deg); }
+  40%, 62% { transform: translate(-62px, -16px) rotate(-58deg); }
+  78%, 100% { transform: translate(0, 0) rotate(0deg); }
+}
+
+@keyframes aparecer-gol {
+  0%, 46%  { opacity: 0; transform: scale(0.7); }
+  50%      { opacity: 1; transform: scale(1.1); }
+  58%, 64% { opacity: 1; transform: scale(1); }
+  70%, 100% { opacity: 0; transform: scale(0.7); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .perna-chute, .bola, .bola-eco, .goleiro, .texto-gol { animation: none; }
+  .bola, .bola-eco { transform: translate(66px, 885px); opacity: 0; }
+}
+
+
+/* ---------- Formas decorativas do menu ---------- */
+
+.tela-menu {
+  position: relative;
+  overflow: hidden;
+}
+.forma-confete {
+  position: absolute;
+  border-radius: 50%;
+  opacity: 0.5;
+  z-index: 0;
+}
+.forma-1 { width: 90px; height: 90px; background: var(--amarelo-sol); top: 6%; left: -20px; }
+.forma-2 { width: 60px; height: 60px; background: var(--azul-ceu); top: 62%; right: -10px; }
+.forma-3 { width: 40px; height: 40px; background: var(--verde-grama); bottom: 4%; left: 12%; }
+.tela-menu > * { position: relative; z-index: 1; }
+
+.subtitulo-curto {
+  margin-bottom: 32px;
+}
+
+.selo {
+  display: inline-block;
+  background: var(--azul-texto);
+  color: var(--branco-giz);
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 5px 14px;
+  border-radius: 999px;
+  margin-bottom: 18px;
+}
+
+@keyframes pulo-avatar {
+  0% { transform: scale(1) rotate(0deg); }
+  35% { transform: scale(1.15) rotate(-8deg); }
+  65% { transform: scale(1.1) rotate(8deg); }
+  100% { transform: scale(1) rotate(0deg); }
+}
+.avatar-apelido.pulo {
+  animation: pulo-avatar 0.5s ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .avatar-apelido.pulo { animation: none; }
+}
+
+.botao-icone {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 3px solid var(--grafite);
+  background: var(--branco-giz);
+  font-size: 1.4rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.botao-icone:focus-visible,
+.botao:focus-visible,
+.botao-logo:focus-visible,
+.cartao:focus-visible,
+.botao-zona:focus-visible,
+.botao-ouvir-novamente:focus-visible,
+.aba-avatar:focus-visible,
+.chip-escolha:focus-visible,
+.item-avatar:focus-visible {
+  outline: 4px solid var(--azul-ceu);
+  outline-offset: 3px;
+}
+
+/* ---------- Titulos ---------- */
+
+h1, h2, h3 {
+  font-family: var(--fonte-titulo);
+  font-weight: 600;
+  color: var(--grafite);
+  text-align: center;
+  margin: 0 0 8px;
+}
+
+h1, h2 {
+  display: inline-block;
+  background: rgba(255,253,246,0.94);
+  padding: 10px 28px;
+  border-radius: 999px;
+  box-shadow: 0 5px 16px rgba(11,30,61,0.28);
+}
+
+h1 { font-size: clamp(1.8rem, 7.5vw, 2.6rem); color: var(--verde-grama-escuro); }
+h2 { font-size: clamp(1.25rem, 5.5vw, 1.7rem); }
+
+.subtitulo {
+  text-align: center;
+  color: var(--grafite-suave);
+  font-size: 1.05rem;
+  margin: 0 0 28px;
+  max-width: 46ch;
+  display: inline-block;
+  background: rgba(255,253,246,0.9);
+  padding: 8px 20px;
+  border-radius: 999px;
+  box-shadow: 0 4px 12px rgba(11,30,61,0.2);
+}
+
+/* ---------- Botoes (alvo de toque grande, minimo ~56px de altura) ---------- */
+
+.botao {
+  font-family: var(--fonte-titulo);
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--grafite);
+  background: linear-gradient(180deg, #FFD65C 0%, var(--amarelo-sol) 100%);
+  border: 4px solid var(--grafite);
+  border-radius: var(--raio-medio);
+  padding: 18px 32px;
+  min-height: 64px;
+  cursor: pointer;
+  box-shadow: 0 6px 0 rgba(0,0,0,0.2), 0 6px 14px rgba(232,172,29,0.35);
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+  width: 100%;
+  max-width: 360px;
+}
+.botao:hover { background: linear-gradient(180deg, var(--amarelo-sol) 0%, var(--amarelo-sol-escuro) 100%); }
+.botao:active {
+  transform: translateY(4px);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.18);
+}
+
+.botao-secundario {
+  background: linear-gradient(180deg, #FFFFFF 0%, #EAF6F0 100%);
+  border-color: var(--verde-grama-escuro);
+  color: var(--verde-grama-escuro);
+  box-shadow: 0 6px 0 rgba(0,0,0,0.2), 0 6px 14px rgba(46,158,91,0.3);
+}
+.botao-secundario:hover { background: #DCF0E4; }
+
+.botao-azul {
+  background: linear-gradient(180deg, #1F74A3 0%, var(--azul-texto) 100%);
+  color: var(--branco-giz);
+  border-color: #08405F;
+  box-shadow: 0 6px 0 rgba(0,0,0,0.2), 0 6px 14px rgba(58,169,214,0.35);
+}
+.botao-azul:hover { background: linear-gradient(180deg, var(--azul-texto) 0%, #08405F 100%); }
+
+.botao-cta {
+  font-size: 1.7rem;
+  padding: 22px 60px;
+  min-height: 76px;
+  border-width: 5px;
+  background: linear-gradient(180deg, #FFD65C 0%, var(--amarelo-sol) 60%, #FFB020 100%);
+  box-shadow: 0 7px 0 rgba(0,0,0,0.22), 0 0 0 7px rgba(255, 198, 59, 0.3), 0 10px 20px rgba(255,176,32,0.35);
+  animation: pulsar-cta 1.8s ease-in-out infinite;
+}
+.botao-cta:hover { background: var(--amarelo-sol-escuro); }
+@keyframes pulsar-cta {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.045); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .botao-cta { animation: none; }
+}
+
+.botao:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: var(--sombra-botao);
+}
+
+.pilha-botoes {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  align-items: center;
+  width: 100%;
+}
+
+/* ---------- Cartoes (selecao, dificuldade) ---------- */
+
+.grade-cartoes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 16px;
+  width: 100%;
+}
+
+.cartao {
+  border: 3px solid var(--grafite);
+  border-radius: var(--raio-medio);
+  background: var(--branco-giz);
+  padding: 18px 12px;
+  min-height: 96px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  text-align: center;
+  font-family: var(--fonte-corpo);
+  transition: transform 0.08s ease;
+}
+.cartao:hover { transform: translateY(-2px); }
+.cartao:active { transform: translateY(1px); }
+
+.cartao-selecionado {
+  border-color: var(--verde-grama-escuro);
+  background: #E7F5EC;
+  box-shadow: 0 0 0 3px var(--verde-grama);
+}
+
+.cartao-emblema {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 3px solid var(--grafite);
+  box-shadow: 0 3px 0 rgba(0,0,0,0.15);
+}
+
+/* Cartoes de dificuldade ganham uma cor propria pra ficar mais facil de
+   diferenciar visualmente, sem depender so do texto */
+#grade-dificuldades .cartao:nth-child(1) { background: #EAF7EF; border-color: var(--verde-grama-escuro); }
+#grade-dificuldades .cartao:nth-child(2) { background: #E9F6FC; border-color: var(--azul-ceu-escuro); }
+#grade-dificuldades .cartao:nth-child(3) { background: #FFF3DE; border-color: #C97A1A; }
+
+.cartao-titulo {
+  font-family: var(--fonte-titulo);
+  font-weight: 600;
+  font-size: 1.1rem;
+}
+
+.cartao-icone-dificuldade {
+  font-size: 1.6rem;
+  line-height: 1;
+}
+
+.cartao-descricao {
+  font-size: 0.85rem;
+  color: var(--grafite-suave);
+}
+
+/* ---------- Tela de apelido ---------- */
+
+.avatar-img {
+  width: 88%;
+  height: 88%;
+  object-fit: contain;
+  border-radius: 50%;
+}
+
+.avatar-apelido {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #7FD4F2 0%, var(--azul-ceu) 60%, var(--azul-ceu-escuro) 100%);
+  border: 4px solid var(--grafite);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 3rem;
+  margin-bottom: 20px;
+}
+
+.caixa-apelido {
+  font-family: var(--fonte-titulo);
+  font-size: 1.6rem;
+  font-weight: 600;
+  background: linear-gradient(180deg, #FFFDF6 0%, #FFF6DE 100%);
+  border: 3px dashed var(--amarelo-sol-escuro);
+  border-radius: var(--raio-medio);
+  padding: 18px 28px;
+  margin-bottom: 24px;
+  text-align: center;
+}
+
+/* ---------- Tela de personalizar (apelido + galeria de avatares) ---------- */
+
+.preview-personalizar {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  width: 100%;
+  max-width: 420px;
+  margin-bottom: 22px;
+}
+
+.preview-personalizar .avatar-apelido {
+  flex-shrink: 0;
+  margin-bottom: 0;
+}
+
+.campo-apelido {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
+
+.rotulo-campo {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--grafite-suave);
+  margin-bottom: 6px;
+}
+
+.linha-apelido {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.input-apelido {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--fonte-titulo);
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--grafite);
+  background: linear-gradient(180deg, #FFFDF6 0%, #FFF6DE 100%);
+  border: 3px dashed var(--amarelo-sol-escuro);
+  border-radius: var(--raio-medio);
+  padding: 12px 16px;
+}
+.input-apelido:focus-visible {
+  outline: 3px solid var(--azul-ceu);
+  outline-offset: 2px;
+}
+
+.preview-personalizar .botao-icone {
+  width: 52px;
+  height: 52px;
+  flex-shrink: 0;
+}
+
+.subtitulo-secao {
+  font-family: var(--fonte-titulo);
+  font-size: 1.15rem;
+  font-weight: 600;
+  align-self: flex-start;
+  margin: 0 0 12px;
+}
+
+.abas-avatar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+  margin-bottom: 14px;
+}
+
+.aba-avatar {
+  font-family: var(--fonte-corpo);
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--grafite);
+  background: var(--branco-giz);
+  border: 2px solid var(--grafite);
+  border-radius: 999px;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+.aba-avatar-ativa {
+  background: var(--verde-texto);
+  color: var(--branco-giz);
+  border-color: var(--grafite);
+}
+
+.grade-avatares {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(76px, 1fr));
+  gap: 12px;
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+.item-avatar {
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+  border: 3px solid var(--grafite);
+  background: var(--branco-giz);
+  padding: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.item-avatar:hover { transform: translateY(-2px); }
+/* "Selecionado" nao pode depender de box-shadow: o alto contraste remove
+   todas as sombras, e a selecao sumiria. Por isso a borda engrossa e muda
+   de cor — dois sinais que sobrevivem aos dois modos. */
+.avatar-selecionado {
+  border-color: var(--verde-texto);
+  border-width: 6px;
+  padding: 3px;
+  box-shadow: 0 0 0 3px var(--verde-grama);
+  background: #E7F5EC;
+}
+body.alto-contraste .avatar-selecionado {
+  border-color: var(--grafite) !important;
+  border-width: 6px !important;
+  background: var(--amarelo-sol);
+}
+
+.item-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+@media (max-width: 420px) {
+  .preview-personalizar {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+  .campo-apelido {
+    width: 100%;
+    text-align: center;
+  }
+  .rotulo-campo { text-align: center; }
+}
+
+/* ---------- Fase 1: jogo ---------- */
+
+.cabecalho-fase {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.bolinha-cobranca {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--borda-sutil);
+  background: #E8EFEA;
+}
+.bolinha-cobranca.acerto { background: var(--verde-texto); border-color: var(--verde-texto); }
+.bolinha-cobranca.erro   { background: var(--vermelho-texto); border-color: var(--vermelho-texto); }
+.bolinha-cobranca.atual  { background: var(--amarelo-sol); border-color: var(--amarelo-sol); }
+
+.caixa-pergunta {
+  width: 100%;
+  background: linear-gradient(180deg, #FFFFFF 0%, #F3FBF6 100%);
+  border: 3px solid var(--verde-grama);
+  border-radius: var(--raio-grande);
+  padding: 20px;
+  text-align: center;
+  margin-bottom: 18px;
+}
+
+.pergunta-texto {
+  font-family: var(--fonte-titulo);
+  font-size: clamp(2.2rem, 12vw, 3rem);
+  font-weight: 600;
+  margin: 4px 0 0;
+}
+
+.grade-alternativas {
+  display: none; /* mantido apenas por compatibilidade; nao e mais usado na Fase 1 */
+}
+
+/* ---------- Fase 1: palco do penalti com as 5 zonas do gol ---------- */
+
+.palco-penalti {
+  position: relative;
+  width: 100%;
+  max-width: 480px;
+  aspect-ratio: 640 / 360;
+  margin: 0 auto;
+}
+
+#jogo-penalti {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--raio-grande);
+  overflow: hidden;
+  border: 3px solid var(--grafite);
+}
+#jogo-penalti canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.zonas-gol {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.botao-zona {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+  width: auto;
+  min-width: 34px;
+  padding: 4px 8px;
+  border-radius: 10px;
+  border: 2px solid var(--grafite);
+  background: linear-gradient(180deg, rgba(255,227,138,0.72) 0%, rgba(255,198,59,0.72) 100%);
+  color: var(--grafite);
+  font-family: var(--fonte-titulo);
+  font-weight: 700;
+  font-size: clamp(0.7rem, 3vw, 0.9rem);
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.18);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+.botao-zona:hover { background: var(--amarelo-sol-escuro); }
+.botao-zona:active { transform: translate(-50%, -50%) translateY(3px); box-shadow: 0 1px 0 rgba(0,0,0,0.25); }
+.botao-zona:disabled { opacity: 0.55; cursor: not-allowed; }
+
+/* Acerto/erro nunca dependem só da cor de fundo: um ícone de texto (✓/✗)
+   e uma borda de espessura diferente reforçam o significado (CA-08.2 e
+   secao 5 do documento de melhorias). */
+.botao-zona.acertou,
+.botao-zona.errou {
+  border-width: 4px;
+}
+.botao-zona.acertou {
+  background: var(--verde-texto);
+  color: var(--branco-giz);
+}
+.botao-zona.acertou::after {
+  content: ' ✓';
+}
+.botao-zona.errou {
+  background: var(--azul-texto);
+  color: var(--branco-giz);
+}
+.botao-zona.errou::after {
+  content: ' ✗';
+}
+
+.zona-topo-esquerda  { left: 35.94%; top: 15.28%; }
+.zona-topo-direita   { left: 64.06%; top: 15.28%; }
+.zona-meio           { left: 50%;    top: 22.22%; }
+.zona-baixo-esquerda { left: 35.94%; top: 30.56%; }
+.zona-baixo-direita  { left: 64.06%; top: 30.56%; }
+
+.mensagem-feedback {
+  font-family: var(--fonte-titulo);
+  font-size: 1.2rem;
+  min-height: 1.6em;
+  text-align: center;
+  margin-top: 14px;
+  color: var(--verde-grama-escuro);
+  display: inline-block;
+  background: rgba(255,253,246,0.92);
+  padding: 6px 20px;
+  border-radius: 999px;
+  box-shadow: 0 4px 12px rgba(11,30,61,0.2);
+}
+.mensagem-feedback:empty {
+  background: transparent;
+  box-shadow: none;
+  padding: 6px 20px;
+}
+
+/* ---------- Botão "Ouvir novamente" (Narração) ---------- */
+
+.botao-ouvir-novamente {
+  display: block;
+  margin: 10px auto 0;
+  font-family: var(--fonte-corpo);
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--azul-texto);
+  background: var(--branco-giz);
+  border: 2px solid var(--azul-texto);
+  border-radius: 999px;
+  padding: 7px 16px;
+  cursor: pointer;
+}
+.botao-ouvir-novamente:hover { background: #E9F6FC; }
+.botao-ouvir-novamente[hidden] { display: none; }
+
+/* ---------- Resumo de cobranças (HU-07) — nunca só por cor ---------- */
+
+.lista-cobrancas {
+  list-style: none;
+  margin: 0 0 20px;
+  padding: 0;
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.item-cobranca {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  border-radius: 12px;
+  background: rgba(255,253,246,0.92);
+  border: 2px solid var(--grafite);
+  font-size: 0.92rem;
+  text-align: left;
+}
+
+.item-cobranca-icone {
+  font-weight: 700;
+  font-size: 1.1rem;
+  flex-shrink: 0;
+  width: 1.4em;
+  text-align: center;
+}
+
+.item-cobranca-gol {
+  border-color: var(--verde-grama-escuro);
+}
+.item-cobranca-gol .item-cobranca-icone { color: var(--verde-grama-escuro); }
+
+.item-cobranca-defesa {
+  border-color: #A3282C;
+}
+.item-cobranca-defesa .item-cobranca-icone { color: #A3282C; }
+
+.item-cobranca-texto {
+  color: var(--grafite);
+}
+
+/* ---------- Tela de resultado ---------- */
+
+.resumo-resultado {
+  font-size: 1.1rem;
+  text-align: center;
+  color: var(--grafite-suave);
+  margin-bottom: 28px;
+  display: inline-block;
+  background: rgba(255,253,246,0.92);
+  padding: 10px 22px;
+  border-radius: var(--raio-medio);
+  box-shadow: 0 4px 12px rgba(11,30,61,0.2);
+  max-width: 34ch;
+}
+
+.placar-grande {
+  font-family: var(--fonte-titulo);
+  font-size: 4rem;
+  font-weight: 600;
+  color: var(--verde-grama-escuro);
+  margin-bottom: 4px;
+  display: inline-block;
+  background: rgba(255,253,246,0.94);
+  padding: 6px 36px;
+  border-radius: var(--raio-grande);
+  box-shadow: 0 6px 16px rgba(11,30,61,0.28);
+}
+
+/* ---------- Modal de acessibilidade ---------- */
+
+.sobreposicao {
+  position: fixed;
+  inset: 0;
+  background: rgba(33, 48, 59, 0.55);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 50;
+}
+.sobreposicao.aberta { display: flex; }
+
+.painel-acessibilidade {
+  background: var(--branco-giz);
+  border: 3px solid var(--grafite);
+  border-radius: var(--raio-grande);
+  padding: 24px;
+  max-width: 380px;
+  width: 100%;
+}
+
+.linha-opcao {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 0;
+  border-bottom: 1px solid #e2ddce;
+}
+.linha-opcao:last-of-type { border-bottom: none; }
+
+.alternador {
+  position: relative;
+  width: 56px;
+  height: 32px;
+  flex-shrink: 0;
+}
+.alternador input {
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  cursor: pointer;
+  position: absolute;
+  z-index: 1;
+}
+.trilho-alternador {
+  position: absolute;
+  inset: 0;
+  background: #D8D2BF;
+  border: 2px solid var(--grafite);
+  border-radius: 20px;
+  transition: background 0.15s ease;
+}
+.trilho-alternador::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--branco-giz);
+  border: 2px solid var(--grafite);
+  transition: transform 0.15s ease;
+}
+.alternador input:checked ~ .trilho-alternador {
+  background: var(--verde-grama);
+}
+.alternador input:checked ~ .trilho-alternador::after {
+  transform: translateX(24px);
+}
+
+/* Respeita usuarios que pedem menos movimento no sistema */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+/* ---------- Botao secundario (backup no menu) ---------- */
+
+.botao-secundario {
+  background: transparent;
+  color: var(--grafite);
+  border: 2px solid var(--grafite);
+  font-size: 0.85rem;
+  padding: 8px 20px;
+  box-shadow: none;
+}
+.botao-secundario:hover {
+  background: var(--grafite);
+  color: var(--branco-giz);
+}
+body.alto-contraste .botao-secundario {
+  border-width: 3px;
+}
+
+/* ---------- Botao "Creditos" do menu (mais visivel que o secundario padrao) ---------- */
+
+#botao-creditos {
+  background: linear-gradient(180deg, #4FC0EB 0%, var(--azul-ceu) 60%, var(--azul-ceu-escuro) 100%);
+  color: var(--branco-giz);
+  border: 3px solid var(--grafite);
+  font-size: 1rem;
+  font-weight: 700;
+  padding: 12px 28px;
+  box-shadow: 0 5px 0 rgba(0,0,0,0.2), 0 5px 12px rgba(58,169,214,0.4);
+}
+#botao-creditos:hover {
+  background: linear-gradient(180deg, var(--azul-ceu) 0%, var(--azul-ceu-escuro) 100%);
+  color: var(--branco-giz);
+}
+#botao-creditos:active {
+  transform: translateY(3px);
+  box-shadow: 0 2px 0 rgba(0,0,0,0.18);
+}
+body.alto-contraste #botao-creditos {
+  background-color: var(--azul-ceu) !important;
+  color: var(--branco-giz) !important;
+  border-width: 4px !important;
+}
+
+/* ---------- Modal de creditos ---------- */
+
+.painel-creditos {
+  background: var(--branco-giz);
+  border: 3px solid var(--grafite);
+  border-radius: var(--raio-grande);
+  padding: 28px 24px;
+  max-width: 420px;
+  width: 100%;
+  text-align: center;
+  /* As bios abrem dentro do painel: rola aqui em vez de estourar a tela */
+  max-height: 86vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.creditos-subtitulo {
+  font-family: var(--fonte-titulo);
+  font-size: 0.9rem;
+  color: var(--grafite-suave);
+  margin-bottom: 16px;
+}
+
+.lista-devs {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dev-card {
+  padding: 10px 14px;
+  background: linear-gradient(135deg, rgba(46,158,91,0.08), rgba(58,169,214,0.08));
+  border: 2px solid rgba(33,48,59,0.12);
+  border-radius: 14px;
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+}
+.dev-card.aberto {
+  border-color: rgba(46,158,91,0.45);
+  box-shadow: 0 4px 14px rgba(0,0,0,0.1);
+}
+
+.dev-linha {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.dev-icone {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+
+.dev-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+}
+
+.dev-nome {
+  font-family: var(--fonte-titulo);
+  font-weight: 600;
+  font-size: 0.88rem;
+  color: var(--grafite);
+  text-align: left;
+  line-height: 1.25;
+}
+
+.dev-papel {
+  font-family: var(--fonte-titulo);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--verde-texto);
+  text-align: left;
+  letter-spacing: 0.02em;
+}
+
+/* ---------- Botao "sobre mim" ---------- */
+
+.botao-sobre-mim {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 8px 14px;
+  border: 2px solid var(--azul-texto);
+  border-radius: 999px;
+  background: linear-gradient(180deg, #E9F6FC 0%, #D6EEF8 100%);
+  color: var(--azul-texto);
+  font-family: var(--fonte-titulo);
+  font-weight: 700;
+  font-size: 0.78rem;
+  cursor: pointer;
+  box-shadow: 0 3px 0 rgba(0,0,0,0.12);
+  transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+.botao-sobre-mim:hover {
+  background: var(--azul-texto);
+  color: var(--branco-giz);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 0 rgba(0,0,0,0.16);
+}
+.botao-sobre-mim:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 rgba(0,0,0,0.14);
+}
+.botao-sobre-mim:focus-visible {
+  outline: 3px solid var(--amarelo-sol);
+  outline-offset: 2px;
+}
+.botao-sobre-mim[aria-expanded="true"] {
+  background: var(--verde-grama-escuro);
+  border-color: var(--verde-grama-escuro);
+  color: var(--branco-giz);
+  box-shadow: 0 3px 0 rgba(0,0,0,0.18);
+}
+
+.icone-sobre-mim {
+  width: 17px;
+  height: 17px;
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+.botao-sobre-mim[aria-expanded="true"] .icone-sobre-mim {
+  transform: rotate(360deg);
+}
+
+/* Em telas bem estreitas some o texto e fica so o icone (i) */
+@media (max-width: 400px) {
+  .rotulo-sobre-mim { display: none; }
+  .botao-sobre-mim { padding: 8px; }
+  .icone-sobre-mim { width: 19px; height: 19px; }
+}
+
+body.alto-contraste .botao-sobre-mim {
+  border-width: 3px;
+  background: var(--branco-giz);
+  color: var(--grafite);
+  border-color: var(--grafite);
+}
+body.alto-contraste .botao-sobre-mim[aria-expanded="true"] {
+  background: var(--grafite);
+  border-color: var(--grafite);
+  color: var(--branco-giz);
+}
+
+/* ---------- Bio expansivel ---------- */
+
+.dev-bio {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 2px dashed rgba(33,48,59,0.18);
+  text-align: left;
+  animation: abrirBio 0.28s ease;
+}
+
+.dev-bio p {
+  font-size: 0.82rem;
+  line-height: 1.55;
+  color: var(--grafite-suave);
+  margin: 0 0 8px;
+}
+.dev-bio p:last-child { margin-bottom: 0; }
+
+.dev-bio strong {
+  color: var(--grafite);
+  font-weight: 700;
+}
+
+.dev-recado {
+  background: rgba(255,198,59,0.18);
+  border-left: 4px solid var(--amarelo-sol);
+  border-radius: 0 10px 10px 0;
+  padding: 8px 10px;
+  font-weight: 600;
+  color: var(--grafite) !important;
+}
+
+@keyframes abrirBio {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ---------- Foto da equipe (créditos) ---------- */
+
+.foto-equipe {
+  margin: 4px 0 16px;
+  padding: 0;
+}
+
+.foto-equipe-img {
+  display: block;
+  width: 100%;
+  max-width: 320px;
+  margin: 0 auto;
+  border-radius: var(--raio-medio);
+  border: 3px solid var(--grafite);
+  box-shadow: 0 5px 14px rgba(11,30,61,0.22);
+  object-fit: cover;
+}
+
+.foto-equipe-legenda {
+  font-family: var(--fonte-titulo);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--grafite-suave);
+  text-align: center;
+  margin-top: 8px;
+}
+
+body.alto-contraste .foto-equipe-img {
+  border-width: 4px;
+}
+body.alto-contraste .foto-equipe-legenda {
+  color: var(--grafite);
+}
+
+.creditos-instituicao {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: linear-gradient(135deg, rgba(255,198,59,0.15), rgba(255,198,59,0.05));
+  border: 2px solid rgba(255,198,59,0.4);
+  border-radius: 14px;
+  margin-bottom: 12px;
+}
+
+.inst-icone {
+  font-size: 2rem;
+  flex-shrink: 0;
+}
+
+.inst-nome {
+  font-family: var(--fonte-titulo);
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--grafite);
+  text-align: left;
+  line-height: 1.35;
+}
+
+.creditos-equipe {
+  font-family: var(--fonte-titulo);
+  font-size: 0.85rem;
+  color: var(--grafite-suave);
+  margin-bottom: 0;
+}
+.creditos-equipe strong {
+  color: var(--verde-grama-escuro);
+}
+
+body.alto-contraste .painel-creditos {
+  background: var(--branco-giz);
+  border-width: 4px;
+}
+body.alto-contraste .dev-card {
+  background: var(--branco-giz);
+  border-color: var(--grafite);
+  border-width: 3px;
+}
+body.alto-contraste .creditos-instituicao {
+  background: var(--branco-giz);
+  border-color: var(--grafite);
+}
+body.alto-contraste .dev-papel {
+  color: var(--grafite);
+}
+body.alto-contraste .dev-bio p {
+  color: var(--grafite);
+}
+body.alto-contraste .dev-bio {
+  border-top-color: var(--grafite);
+}
+body.alto-contraste .dev-recado {
+  background: var(--branco-giz);
+  border: 3px solid var(--grafite);
+  border-radius: 10px;
+}
+
+/* Espacamento para dislexia tambem vale para os textos das bios */
+body.espaco-dislexia .dev-bio p,
+body.espaco-dislexia .dev-nome,
+body.espaco-dislexia .dev-papel,
+body.espaco-dislexia .creditos-equipe,
+body.espaco-dislexia .inst-nome {
+  letter-spacing: 0.04em;
+  word-spacing: 0.14em;
+  line-height: 1.9;
+}
+
+/* ---------- Modal de backup ---------- */
+
+.painel-backup {
+  background: var(--branco-giz);
+  border: 3px solid var(--grafite);
+  border-radius: var(--raio-grande);
+  padding: 28px 24px;
+  max-width: 400px;
+  width: 100%;
+  text-align: center;
+}
+
+.backup-descricao {
+  font-size: 0.85rem;
+  color: var(--grafite-suave);
+  margin-bottom: 18px;
+  line-height: 1.5;
+}
+
+.pilha-botoes-backup {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.pilha-botoes-backup .botao {
+  font-size: 0.85rem;
+  width: 100%;
+}
+
+.backup-status {
+  font-family: var(--fonte-titulo);
+  font-size: 0.85rem;
+  color: var(--verde-grama-escuro);
+  min-height: 1.5em;
+  margin-top: 12px;
+  transition: opacity 0.3s;
+}
+.backup-status.erro {
+  color: #d32f2f;
+}
+
+body.alto-contraste .painel-backup {
+  background: var(--branco-giz);
+  border-width: 4px;
+}
+
+/* ---------- Rodape com a marca ---------- */
+
+.rodape {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 18px;
+  margin: 0 auto 22px;
+  width: fit-content;
+  border-radius: 999px;
+  background: var(--branco-giz);
+  box-shadow: 0 3px 10px rgba(0,0,0,0.12);
+  position: relative;
+  z-index: 1;
+}
+
+.rodape-texto {
+  font-size: 0.78rem;
+  color: var(--grafite-suave);
+}
+
+.rodape-logo {
+  height: 20px;
+  width: auto;
+  display: block;
+}
+
+@media (max-width: 380px) {
+  .grade-alternativas { grid-template-columns: 1fr; }
+}
+
+/* ---------- Chips de escolha (personagem + animal) ---------- */
+
+/* Estes chips tinham sido desenhados para um fundo escuro que a tela nao
+   usa mais: eram texto quase branco (#FFFDF6) sobre um fundo branco
+   translucido, ou seja 1:1 de contraste — literalmente invisiveis. Agora
+   seguem o mesmo padrao das abas de avatar: pilula clara, texto grafite
+   (13.5:1) e borda solida com 3.95:1 contra o fundo da pagina. */
+.lista-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  width: 100%;
+  max-height: 140px;
+  overflow-y: auto;
+  padding: 10px 8px;
+  background: #F2F7F4;
+  border: 2px solid var(--borda-sutil);
+  border-radius: 14px;
+  margin-bottom: 10px;
+}
+
+.chip-escolha {
+  font-family: var(--fonte-titulo);
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 8px 16px;
+  border: 2px solid var(--borda-sutil);
+  border-radius: 999px;
+  background: #FFFFFF;
+  color: var(--grafite);
+  cursor: pointer;
+  transition: background-color 0.1s ease, border-color 0.1s ease;
+}
+.chip-escolha:hover {
+  background: #E4EFE8;
+  border-color: var(--verde-texto);
+}
+/* Selecionado nao e sinalizado so por cor: alem do amarelo, ganha borda
+   grossa escura e um marcador de texto no ::after. */
+.chip-escolha.chip-ativo {
+  background: var(--amarelo-sol);
+  color: var(--grafite);
+  border-color: var(--grafite);
+  border-width: 3px;
+  padding: 7px 15px;
+  box-shadow: 0 3px 0 rgba(0,0,0,0.2);
+}
+.chip-escolha.chip-ativo::after {
+  content: ' ✓';
+  font-weight: 700;
+}
+
+/* ---------- Timer e pontuacao na barra da Fase 1 ---------- */
+
+.barra-fase {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-bottom: 10px;
+}
+
+.timer-display {
+  font-family: var(--fonte-titulo);
+  font-weight: 700;
+  font-size: 1.1rem;
+  padding: 5px 14px;
+  border-radius: 999px;
+  min-width: 52px;
+  text-align: center;
+}
+.timer-verde    { background: var(--verde-texto); color: var(--branco-giz); }
+.timer-amarelo  { background: var(--amarelo-sol); color: var(--grafite); }
+.timer-vermelho { background: var(--vermelho-texto); color: var(--branco-giz); animation: pulsar-timer 0.5s ease-in-out infinite; }
+
+@keyframes pulsar-timer {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .timer-vermelho { animation: none; }
+}
+
+.pontuacao-display {
+  font-family: var(--fonte-titulo);
+  font-weight: 700;
+  font-size: 1rem;
+  padding: 5px 14px;
+  border-radius: 999px;
+  background: rgba(255,253,246,0.9);
+  color: var(--grafite);
+  display: inline-flex;
+  align-items: center;
+}
+
+.pontuacao-resultado {
+  font-family: var(--fonte-titulo);
+  font-weight: 700;
+  font-size: 1.3rem;
+  color: var(--amarelo-texto);
+  text-align: center;
+  margin-bottom: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255,253,246,0.92);
+  padding: 8px 22px;
+  border-radius: 999px;
+  box-shadow: 0 4px 12px rgba(11,30,61,0.2);
+}
+
+/* ---------- Icone da estrela Cruzeiro do Sul (substitui "pts"/"pontos") ---------- */
+
+.icone-cruzeiro {
+  height: 1.3em;
+  width: auto;
+  vertical-align: -0.2em;
+  margin: 0 5px;
+}
+
+/* Contador ao vivo (barra do jogo): so numero + icone, mais compacto */
+.pontuacao-display .icone-cruzeiro {
+  height: 1.15em;
+  margin: 0 0 0 5px;
+}
+
+/* Mensagem de gol e recorde nos cartoes de fase: icone um pouco maior */
+.mensagem-feedback .icone-cruzeiro {
+  height: 1.2em;
+}
+
+.pontuacao-resultado .icone-cruzeiro {
+  height: 1.5em;
+}
+
+.cartao-descricao .icone-cruzeiro {
+  height: 1.1em;
+  margin: 0 3px;
+}
+
+/* ---------- Bandeiras reais nas selecoes ---------- */
+
+.cartao-bandeira {
+  width: 64px;
+  height: 48px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 2px solid rgba(33,48,59,0.15);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+}
+
+/* ========================================================================
+   Progressao entre fases — cartao bloqueado, estrelas, desbloqueio
+   ======================================================================== */
+
+.cartao-fase {
+  position: relative;
+}
+
+.cartao-bloqueado {
+  opacity: 0.45;
+  pointer-events: none;
+  filter: grayscale(0.6);
+}
+
+.cartao-estrelas {
+  display: block;
+  font-size: 1rem;
+  margin-top: 4px;
+  letter-spacing: 2px;
+}
+
+.mensagem-desbloqueio {
+  font-family: var(--fonte-titulo);
+  font-size: 1.15rem;
+  color: var(--amarelo-sol-escuro);
+  min-height: 1.5em;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s, transform 0.4s;
+}
+.mensagem-desbloqueio.visivel {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.titulo-fase {
+  font-family: var(--fonte-titulo);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--branco-giz);
+  background: var(--grafite);
+  padding: 3px 10px;
+  border-radius: 12px;
+  margin-right: 8px;
+  white-space: nowrap;
+}
