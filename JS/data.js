@@ -39,17 +39,90 @@ let DIFICULDADES = [
   { id: 'dificil', nome: 'Dificil', descricao: 'x e /',                icone: '3' }
 ];
 
+// ---------- Validacao das configuracoes remotas (Firestore) ----------
+// Tudo que vem do Firestore e tratado como dado NAO confiavel: cada item e
+// validado campo a campo (formato, tamanho, lista permitida) e so entra no
+// jogo se passar. Os componentes da tela sao montados com createElement +
+// textContent (main.js), nunca concatenando texto remoto em HTML.
+
+var ID_VALIDO = /^[a-z0-9_-]{1,32}$/;
+var COR_VALIDA = /^#[0-9a-fA-F]{6}$/;
+// Codigos da flagcdn: ISO 3166-1 alfa-2 (br, ar...) ou subdivisoes do
+// Reino Unido (gb-eng, gb-sct, gb-wls, gb-nir).
+var BANDEIRA_VALIDA = /^(?:[a-z]{2}|gb-(?:eng|sct|wls|nir))$/;
+// Dificuldades que o jogo realmente sabe gerar (banco-questoes/progressao).
+var IDS_DIFICULDADE_CONHECIDOS = ['facil', 'medio', 'dificil'];
+
+function codigoBandeiraValido(codigo) {
+  return typeof codigo === 'string' && BANDEIRA_VALIDA.test(codigo);
+}
+
+function textoValido(v, max) {
+  return typeof v === 'string' && v.trim().length > 0 && v.length <= max &&
+    !/[<>\u0000-\u001f]/.test(v);
+}
+
+function validarPalavra(v) {
+  return textoValido(v, 20) ? v.trim() : null;
+}
+
+function validarSelecao(s) {
+  if (!s || typeof s !== 'object') return null;
+  if (typeof s.id !== 'string' || !ID_VALIDO.test(s.id)) return null;
+  if (!textoValido(s.nome, 30)) return null;
+  var sel = { id: s.id, nome: s.nome.trim() };
+  if (s.bandeira !== undefined) {
+    if (!codigoBandeiraValido(s.bandeira)) return null;
+    sel.bandeira = s.bandeira;
+  }
+  if (s.corPrimaria !== undefined) {
+    if (typeof s.corPrimaria !== 'string' || !COR_VALIDA.test(s.corPrimaria)) return null;
+    sel.corPrimaria = s.corPrimaria;
+  }
+  if (s.corSecundaria !== undefined) {
+    if (typeof s.corSecundaria !== 'string' || !COR_VALIDA.test(s.corSecundaria)) return null;
+    sel.corSecundaria = s.corSecundaria;
+  }
+  return sel;
+}
+
+function validarDificuldade(d) {
+  if (!d || typeof d !== 'object') return null;
+  if (IDS_DIFICULDADE_CONHECIDOS.indexOf(d.id) === -1) return null;
+  if (!textoValido(d.nome, 20) || !textoValido(d.descricao, 60) || !textoValido(d.icone, 12)) return null;
+  return { id: d.id, nome: d.nome.trim(), descricao: d.descricao.trim(), icone: d.icone.trim() };
+}
+
+// Valida uma lista inteira: se QUALQUER item for invalido, a lista remota
+// e descartada e o jogo fica com o padrao local (nao mistura parcial).
+function validarLista(lista, validador) {
+  if (!Array.isArray(lista) || lista.length === 0 || lista.length > 100) return null;
+  var saida = [];
+  var ids = {};
+  for (var i = 0; i < lista.length; i++) {
+    var item = validador(lista[i]);
+    if (item === null) return null;
+    var chave = typeof item === 'string' ? item : item.id;
+    if (ids[chave]) return null; // duplicado
+    ids[chave] = true;
+    saida.push(item);
+  }
+  return saida;
+}
+
 function aplicarConfiguracoesRemotas(config) {
-  if (!config) return;
-  // So aceita a lista remota se ela tiver pelo menos tantos itens quanto a
-  // lista local. Evita que um Firestore desatualizado/parcial (ex.: seed
-  // antigo, com menos paises do que o jogo tem hoje) apague opcoes que ja
-  // existem no codigo — a lista so cresce/atualiza, nunca encolhe por causa
-  // de dados remotos incompletos.
-  if (Array.isArray(config.personagens) && config.personagens.length >= PERSONAGENS.length) PERSONAGENS = config.personagens;
-  if (Array.isArray(config.animais) && config.animais.length >= ANIMAIS.length) ANIMAIS = config.animais;
-  if (Array.isArray(config.selecoes) && config.selecoes.length >= SELECOES.length) SELECOES = config.selecoes;
-  if (Array.isArray(config.dificuldades) && config.dificuldades.length >= DIFICULDADES.length) DIFICULDADES = config.dificuldades;
+  if (!config || typeof config !== 'object') return;
+  // So aceita a lista remota se ela for valida E tiver pelo menos tantos
+  // itens quanto a lista local (um Firestore desatualizado nao apaga
+  // opcoes que ja existem no codigo).
+  var personagens = validarLista(config.personagens, validarPalavra);
+  var animais = validarLista(config.animais, validarPalavra);
+  var selecoes = validarLista(config.selecoes, validarSelecao);
+  var dificuldades = validarLista(config.dificuldades, validarDificuldade);
+  if (personagens && personagens.length >= PERSONAGENS.length) PERSONAGENS = personagens;
+  if (animais && animais.length >= ANIMAIS.length) ANIMAIS = animais;
+  if (selecoes && selecoes.length >= SELECOES.length) SELECOES = selecoes;
+  if (dificuldades && dificuldades.length >= DIFICULDADES.length) DIFICULDADES = dificuldades;
 }
 
 const MENSAGENS_RESULTADO = {
@@ -80,7 +153,37 @@ const MENSAGENS_RESULTADO = {
   ]
 };
 
-function sortearMensagemResultado(gols) {
-  var lista = MENSAGENS_RESULTADO[gols] || MENSAGENS_RESULTADO[0];
+// Mensagens genericas (sem numero fixo) para fases com 5 ou 7 cobrancas.
+// As de MENSAGENS_RESULTADO citam "tres" e so valem para 3 cobrancas.
+const MENSAGENS_RESULTADO_GERAIS = {
+  zero: MENSAGENS_RESULTADO[0],
+  poucos: [
+    'Bom comeco! Voce ja balancou a rede, bora buscar mais!',
+    'Ja ta no caminho certo! Mais uma rodada e voce arrebenta!'
+  ],
+  quase: [
+    'Muito bem! Mais da metade das cobrancas viraram gol!',
+    'Show! Falta pouco pra fase perfeita!'
+  ],
+  perfeito: [
+    'FASE PERFEITA! Voce e o Craque das Contas!',
+    'Nenhuma cobranca perdida! Ninguem segura voce!'
+  ]
+};
+
+function sortearMensagemResultado(gols, totalCobrancas) {
+  var total = totalCobrancas || 3;
+  var lista;
+  if (total === 3) {
+    lista = MENSAGENS_RESULTADO[gols] || MENSAGENS_RESULTADO[0];
+  } else if (gols <= 0) {
+    lista = MENSAGENS_RESULTADO_GERAIS.zero;
+  } else if (gols >= total) {
+    lista = MENSAGENS_RESULTADO_GERAIS.perfeito;
+  } else if (gols * 2 >= total) {
+    lista = MENSAGENS_RESULTADO_GERAIS.quase;
+  } else {
+    lista = MENSAGENS_RESULTADO_GERAIS.poucos;
+  }
   return lista[Math.floor(Math.random() * lista.length)];
 }

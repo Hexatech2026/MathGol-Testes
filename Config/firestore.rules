@@ -1,41 +1,120 @@
 rules_version = '2';
 
-// Regras do MathGol — permitem leitura e escrita apenas em documentos cuja
-// chave (token) o cliente conheça. Sem autenticação Firebase Auth, porque
-// o jogo é anônimo de propósito (crianças do fundamental, sem cadastro).
+// Regras do MathGol.
 //
-// ATENÇÃO: esse modelo é adequado para o MVP (sem dados sensíveis, sem
-// ranking público). Para funcionalidades futuras com dados mais críticos,
-// considere migrar para Firebase Auth anônimo + regras baseadas em UID.
+// Identidade: Firebase Authentication ANÔNIMO (request.auth.uid). Cada
+// usuário só acessa os próprios documentos:
+//   jogadores/{uid}
+//   jogadores/{uid}/resultados/{resultadoId}
+//   apelidos/{uid}
+// Conhecer o id de um documento NÃO dá acesso a ele. As coleções de
+// configuração são de leitura pública e escrita negada (o seed usa o
+// Admin SDK, que não passa por estas regras).
+//
+// Toda escrita é validada: campos permitidos, tipos, tamanho de texto e
+// limites plausíveis de gols, pontos e tempo. Campo inesperado = recusa.
+// Os mesmos limites existem em JS/backup-validacao.js (lado do cliente).
+//
+// App Check pode ser somado como camada extra contra abuso automatizado,
+// mas NÃO substitui a autenticação nem estas regras.
+//
+// Testes: tests/rules/firestore.rules.test.js (npm run test:rules, usa o
+// Firebase Emulator).
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Documento do jogador (conta / progresso matemático): qualquer um pode
-    // criar (é anônimo) e ler/atualizar o próprio documento se souber o
-    // token (que é um UUID aleatório).
-    match /jogadores/{token} {
-      allow read, write: if true;
+    // ---------- Funções auxiliares ----------
 
-      // Subcoleção de resultados (histórico das partidas): mesma regra.
+    function autenticado() {
+      return request.auth != null;
+    }
+
+    function ehDono(uid) {
+      return autenticado() && request.auth.uid == uid;
+    }
+
+    function textoAte(v, max) {
+      return v is string && v.size() > 0 && v.size() <= max;
+    }
+
+    function idValido(v) {
+      return v is string && v.matches('^[a-z0-9_-]{1,32}$');
+    }
+
+    // Resumo de uma partida (usado no histórico e em ultimoResultado).
+    function resumoPartidaValido(r) {
+      let total = {'penaltis': 3, 'falta': 5, 'final': 7}.get(r.faseId, 0);
+      return r.keys().hasAll(['versaoEsquema', 'faseId', 'dificuldadeId', 'selecaoId', 'gols',
+                              'totalCobrancas', 'pontuacao', 'tempoTotalSegundos',
+                              'resumoCobrancas', 'data'])
+        && r.versaoEsquema == 2
+        && total > 0
+        && r.totalCobrancas == total
+        && r.dificuldadeId in ['facil', 'medio', 'dificil']
+        && idValido(r.selecaoId)
+        && r.gols is int && r.gols >= 0 && r.gols <= total
+        && r.pontuacao is int && r.pontuacao >= r.gols * 10 && r.pontuacao <= r.gols * 100
+        && r.tempoTotalSegundos is int && r.tempoTotalSegundos >= 0 && r.tempoTotalSegundos <= total * 15
+        && r.resumoCobrancas is string
+        && r.resumoCobrancas.matches('^[GDTF]+$')
+        && r.resumoCobrancas.size() == total
+        && r.resumoCobrancas.replace('[^G]', '').size() == r.gols
+        && r.data is string && r.data.size() <= 40
+        && r.data.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.]+Z$');
+    }
+
+    function camposResumo() {
+      return ['versaoEsquema', 'faseId', 'dificuldadeId', 'selecaoId', 'gols',
+              'totalCobrancas', 'pontuacao', 'tempoTotalSegundos', 'resumoCobrancas', 'data'];
+    }
+
+    function jogadorValido(d) {
+      return d.keys().hasOnly(['apelido', 'avatarSeed', 'atualizadoEm', 'ultimoAcessoEm', 'ultimoResultado'])
+        && (!('apelido' in d) || textoAte(d.apelido, 40))
+        && (!('avatarSeed' in d) || textoAte(d.avatarSeed, 40))
+        && (!('atualizadoEm' in d) || d.atualizadoEm is timestamp)
+        && (!('ultimoAcessoEm' in d) || d.ultimoAcessoEm is timestamp)
+        && (!('ultimoResultado' in d) || (
+              d.ultimoResultado is map
+              && d.ultimoResultado.keys().hasOnly(camposResumo())
+              && resumoPartidaValido(d.ultimoResultado)));
+    }
+
+    function resultadoValido(d) {
+      return d.keys().hasOnly(camposResumo().concat(['criadoEm']))
+        && d.criadoEm == request.time
+        && resumoPartidaValido(d);
+    }
+
+    function apelidoValido(d) {
+      return d.keys().hasOnly(['apelido', 'avatarSeed', 'atualizadoEm'])
+        && textoAte(d.apelido, 40)
+        && (!('avatarSeed' in d) || textoAte(d.avatarSeed, 40))
+        && (!('atualizadoEm' in d) || d.atualizadoEm is timestamp);
+    }
+
+    // ---------- Dados privados de cada jogador ----------
+
+    match /jogadores/{uid} {
+      allow read, delete: if ehDono(uid);
+      allow create, update: if ehDono(uid) && jogadorValido(request.resource.data);
+
       match /resultados/{resultadoId} {
-        allow read, write: if true;
+        allow read, delete: if ehDono(uid);
+        allow create, update: if ehDono(uid)
+          && resultadoId.matches('^[A-Za-z0-9_-]{1,64}$')
+          && resultadoValido(request.resource.data);
       }
     }
 
-    // Coleção própria só com apelido + avatar escolhidos na tela de
-    // personalizar (separada de "jogadores" de propósito, ver
-    // public/firebase-config.js → salvarPerfil()).
-    match /apelidos/{token} {
-      allow read, write: if true;
+    match /apelidos/{uid} {
+      allow read, delete: if ehDono(uid);
+      allow create, update: if ehDono(uid) && apelidoValido(request.resource.data);
     }
 
-    // Coleções de configuração (uma por lista, pra não misturar tudo numa
-    // coleção só): personagens/animais viram os "nomes engraçados" do
-    // apelido sorteado; selecoes/dificuldades são as opções das telas de
-    // time e nível. O jogo só LÊ essas coleções — quem escreve é o script
-    // scripts/seed-firestore.js, usando o Admin SDK (que não passa pelas
-    // regras abaixo), então não precisa liberar escrita pro cliente.
+    // ---------- Configuração (leitura pública, escrita negada) ----------
+
     match /personagens/{itemId} {
       allow read: if true;
       allow write: if false;
@@ -53,7 +132,7 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // Nega tudo mais por padrão.
+    // Nega tudo mais por padrão (inclui documentos antigos de "token").
     match /{document=**} {
       allow read, write: if false;
     }

@@ -1,7 +1,12 @@
 // progressao.js — sistema de progressao entre fases.
-// Fase 1: Penaltis (3 cobrancas) — ja existe
-// Fase 2: Falta (5 cobrancas, timer menor, dificuldade sobe)
-// Fase 3: Final (7 cobrancas, timer curto, dificuldade maxima)
+// TODAS as fases usam a mesma mecanica de cobranca de penalti (resposta →
+// mira → forca → chute). O que muda de uma fase pra outra e so:
+// quantidade de cobrancas, tempo para responder e nivel das contas.
+// Fase 1: Penaltis (3 cobrancas, 15 s)
+// Fase 2: Falta    (5 cobrancas, 12 s, contas sobem 1 nivel)
+// Fase 3: Final    (7 cobrancas, 10 s, contas sobem mais 1 nivel)
+// Obs.: "Falta" e so o nome da fase; nao existe mecanica de cobranca de
+// falta (barreira etc.).
 //
 // Desbloqueia a proxima fase ao fazer >= 2 gols na fase atual.
 // Progresso salvo em localStorage (e Firebase quando disponivel).
@@ -24,6 +29,7 @@ var Progressao = (function() {
       nome: 'Pênaltis',
       icone: '⚽',
       descricao: '3 cobranças — aqueça o pé!',
+      tituloResultado: 'Fim da fase Pênaltis!',
       cobrancas: 3,
       timerMax: 15,
       golsParaDesbloquear: 2, // gols minimos para desbloquear a proxima
@@ -33,17 +39,19 @@ var Progressao = (function() {
       id: 'falta',
       nome: 'Falta',
       icone: '🥅',
-      descricao: '5 cobranças — goleiro mais esperto!',
+      descricao: '5 cobranças — menos tempo, contas mais difíceis!',
+      tituloResultado: 'Fim da fase Falta!',
       cobrancas: 5,
       timerMax: 12,
       golsParaDesbloquear: 3,
-      dificuldadeForcar: null // sobe 1 nivel automaticamente
+      dificuldadeForcar: null // o nivel sobe via ESCALAR_DIFICULDADE
     },
     {
       id: 'final',
       nome: 'Final',
       icone: '🏆',
       descricao: '7 cobranças — vale o título!',
+      tituloResultado: 'Fim da Final!',
       cobrancas: 7,
       timerMax: 10,
       golsParaDesbloquear: null, // ultima fase

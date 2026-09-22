@@ -1,23 +1,27 @@
 // main.js - orquestra navegacao, timer de resposta, pontuacao por velocidade.
 // Apelido TRAVADO: crianca escolhe 1 personagem + 1 animal (sem digitar).
-// v2: + efeitos sonoros (sfx.js), banco de questoes (banco-questoes.js),
-//       sistema de progressao entre fases (progressao.js).
-// v3: + acessibilidade revisada (HU-08), persistencia estruturada e
-//       versionada do resultado (HU-07) e bloqueio anti-clique-residual
-//       na fase de penalti.
-// v4: + mecanica de penalti em 4 etapas separadas (documento de melhorias):
-//       responder a conta (fora do gol) -> mirar (mouse/toque, area livre
-//       do gol) -> forca (barra oscilante, um toque trava) -> chute.
-//       Resposta CORRETA garante que o goleiro nao pode defender, mas a
-//       mira e a forca ainda podem mandar a bola pra fora. Resposta
-//       ERRADA e tempo esgotado continuam com o comportamento antigo
-//       (defesa imediata na zona escolhida), sem nenhuma mudanca.
-// v5: + etapa de altura (barra igual a de forca, entre forca e chute):
-//       0 = chute rasteiro, 1 = cavadinha. So muda o arco/velocidade
-//       visual do chute (chutarLivre em game.js) — nao interfere no
-//       calculo de gol/fora, que continua so em funcao de mira + forca.
-//       + botao de tela cheia no topo (Fullscreen API, com fallback
-//       silencioso — some se o navegador nao suportar).
+//
+// Fluxo da cobranca (regra em regras-chute.js, compartilhada com o 3D, o
+// modo simplificado 2D e os testes):
+//
+//   PERGUNTA
+//   ├─ resposta errada ou tempo esgotado → defesa do goleiro
+//   └─ resposta correta → mira → forca → chute → gol (bola dentro) | fora
+//
+// Resposta correta impede a defesa, mas NAO garante gol.
+//
+// v6 (correcoes de QA):
+//   - Ciclo de vida da partida com sessaoJogoId: todo timeout/callback
+//     assincrono e vinculado a sessao e ignorado se ela ja acabou (voltar,
+//     logo, reiniciar, resultado). finalizarCobranca e idempotente.
+//   - Um unico fluxo de Pointer Events (sem click + touchend duplicados):
+//     um toque = exatamente uma transicao. Teclado: setas movem a mira,
+//     Enter/Espaco confirmam.
+//   - Etapa "altura" removida (nao afetava o resultado).
+//   - Sem WebGL/Three.js: modo simplificado 2D com a MESMA regra (nunca
+//     mais gol automatico).
+//   - Firebase: identidade = Firebase Auth anonimo (uid), nao mais um token
+//     no localStorage.
 
 var estado = {
   personagemEscolhido: null,
@@ -30,35 +34,46 @@ var estado = {
   cobrancaAtual: 0,
   gols: 0,
   pontuacao: 0,
-  // HU-07: cada cobranca fica registrada como objeto estruturado (zona
-  // escolhida, zona correta, resultado, se estourou o tempo, pontos e
-  // tempo usado). resultado agora pode ser 'gol' | 'defesa' | 'fora'.
+  // HU-07: cada cobranca fica registrada como objeto estruturado.
+  // resultado: 'gol' | 'defesa' | 'fora'.
   resultadosCobrancas: [],
   perguntaAtual: null,
   zonaCorreta: null,
   jogoPenalti: null,
-  token: null,
   timerInicio: 0,
   timerInterval: null,
   timerSegundos: 15,
-  // Trava para garantir que cada cobranca finalize exatamente uma vez.
-  cobrancaFinalizada: false
+  ultimoSegundoAlertado: null,
+  // Etapa da cobranca atual (ver ETAPA). Protege contra dupla finalizacao
+  // e contra respostas/toques fora de hora.
+  etapa: 'ociosa'
+};
+
+var ETAPA = {
+  OCIOSA: 'ociosa',         // sem partida em andamento
+  RESPOSTA: 'resposta',     // aguardando a crianca responder a conta
+  TRANSICAO: 'transicao',   // acertou: pequena pausa antes da mira
+  MIRA: 'mira',
+  FORCA: 'forca',
+  CHUTE: 'chute',           // animacao em andamento
+  FINALIZADA: 'finalizada'  // resultado registrado; aguardando a proxima
 };
 
 var TOTAL_COBRANCAS = 3;
 var TIMER_MAX = 15;
 
-// Tempo que o resultado ("GOOOL!" / "O goleiro defendeu!" / "Pra fora!")
-// fica na tela antes de carregar a proxima pergunta. Acompanha o ritmo da
-// animacao do penalti (ver TEMPO em game.js): tem que ser maior que
-// TEMPO.ANTES_DE_RESETAR pra bola ja estar de volta na marca.
+// Pausa entre a resposta correta e o inicio da mira.
+var PAUSA_ANTES_DA_MIRA = 500;
+// Tempo que o resultado fica na tela antes da proxima pergunta. Tem que ser
+// maior que TEMPO.ANTES_DE_RESETAR (game.js) pra bola ja estar na marca.
 var PAUSA_ENTRE_COBRANCAS = 2200;
 var categoriaAvatarAtiva = CATEGORIAS_AVATAR[0].id;
 
-// Rotulos amigaveis das zonas do gol, usados no resumo de cobrancas da
-// tela de resultado (HU-07) e em mensagens acessiveis por texto. So se
-// aplica ao caminho de resposta errada / tempo esgotado (chute livre nao
-// tem "zona", tem ponto continuo).
+// Passo da mira pelo teclado (metros no plano do gol).
+var PASSO_MIRA_TECLADO = { x: 0.3, y: 0.2 };
+
+// Rotulos amigaveis das zonas do gol (resumo da tela de resultado, HU-07).
+// So existe zona no caminho de resposta errada / tempo esgotado.
 var ROTULO_ZONA = {
   'topo-esquerda': 'canto superior esquerdo',
   'topo-direita': 'canto superior direito',
@@ -67,28 +82,79 @@ var ROTULO_ZONA = {
   'baixo-direita': 'canto inferior direito'
 };
 
-// Schema versionado do ultimo resultado salvo (HU-07).
-var VERSAO_ULTIMO_RESULTADO = 1;
+// Schema versionado do ultimo resultado salvo localmente (HU-07).
+var VERSAO_ULTIMO_RESULTADO = 2;
 
-// Ordem fixa das 5 alternativas <-> 5 zonas internas (usada so no caminho
-// de resposta errada / tempo esgotado, pra reaproveitar o chutar() antigo
-// sem nenhuma mudanca nele).
+// Ordem fixa das 5 alternativas <-> 5 zonas (usada no caminho de defesa).
 var ORDEM_ZONAS = ['topo-esquerda', 'topo-direita', 'meio', 'baixo-esquerda', 'baixo-direita'];
 
-// Funcao de limpeza da etapa de mira/forca em andamento (se houver), pra
-// nao deixar listeners de clique presos em #jogo-penalti caso o jogador
-// saia da tela no meio dessas etapas (voltar / menu). Setada por
-// avancarParaMira/avancarParaForca, limpa ao confirmar ou ao encerrar.
-var cancelarEtapaAtual = null;
+// Mensagens do chute que nao entrou, por motivo (regras-chute.js).
+var MENSAGEM_FORA = {
+  fraco: 'Chute fraquinho! A bola não chegou ao gol. ❌',
+  alto: 'Forte demais! Passou por cima do gol. ❌',
+  lado: 'Pra fora! ❌'
+};
+var NARRACAO_FORA = {
+  fraco: 'Chute fraco! A bola não chegou.',
+  alto: 'Forte demais! Por cima do gol.',
+  lado: 'Pra fora!'
+};
 
-// ---------- Barra de forca (etapa 3) e de altura (etapa 4) ----------
-// As duas usam o mesmo mecanismo: oscilam sozinhas entre um minimo e um
-// maximo; um toque/clique trava o valor atual (estilo "para o ponteiro").
-// Nao dependem do game.js.
+// ======================================================================
+// Ciclo de vida da partida
+// ======================================================================
+// Toda partida tem um sessaoJogoId. Timeouts e callbacks assincronos
+// (animacoes do game.js/game-2d.js) sao vinculados ao id da sessao em que
+// foram criados; se a sessao mudou (saiu, reiniciou, foi pro resultado),
+// eles simplesmente nao fazem nada. Os timeouts tambem ficam registrados
+// para serem cancelados de uma vez em encerrarJogoEmAndamento().
+
+var cicloPartida = {
+  sessaoJogoId: 0,
+  timeouts: []
+};
+
+function telaAtivaId() {
+  var t = document.querySelector('.tela.tela-ativa');
+  return t ? t.id : null;
+}
+
+// Protecao principal: id da sessao. A tela ativa e so uma checagem extra.
+function sessaoValida(idSessao) {
+  return idSessao === cicloPartida.sessaoJogoId && telaAtivaId() === 'tela-fase1';
+}
+
+function agendarNaSessao(fn, ms) {
+  var idSessao = cicloPartida.sessaoJogoId;
+  var handle = setTimeout(function() {
+    var i = cicloPartida.timeouts.indexOf(handle);
+    if (i !== -1) cicloPartida.timeouts.splice(i, 1);
+    if (!sessaoValida(idSessao)) return;
+    fn();
+  }, ms);
+  cicloPartida.timeouts.push(handle);
+  return handle;
+}
+
+function vincularSessao(fn) {
+  var idSessao = cicloPartida.sessaoJogoId;
+  return function() {
+    if (!sessaoValida(idSessao)) return undefined;
+    return fn.apply(this, arguments);
+  };
+}
+
+function invalidarSessao() {
+  cicloPartida.sessaoJogoId++;
+  cicloPartida.timeouts.forEach(clearTimeout);
+  cicloPartida.timeouts = [];
+}
+
+// ---------- Barra de forca ----------
+// Oscila sozinha entre 0 e 1; um toque/clique/Enter trava o valor atual.
 var FORCA_CICLO_MS = 1750;
-var ALTURA_CICLO_MS = 1850;
 
-function criarControleBarraOscilante(idPreenchimento, cicloMs, propriedadeCss) {
+function criarControleBarraOscilante(idPreenchimento, cicloMs) {
   var ativa = false;
   var rafId = 0;
   var valorAtual = 0;
@@ -96,14 +162,15 @@ function criarControleBarraOscilante(idPreenchimento, cicloMs, propriedadeCss) {
   return {
     iniciar: function() {
       ativa = true;
+      valorAtual = 0;
       inicioTempo = performance.now();
       var el = document.getElementById(idPreenchimento);
       function quadro(agora) {
         if (!ativa) return;
         var progresso = ((agora - inicioTempo) % cicloMs) / cicloMs;
-        // Onda 0..1 comecando subindo a partir do meio, pra nao nascer parada nas pontas.
+        // Onda 0..1 comecando de baixo.
         valorAtual = (Math.sin(progresso * Math.PI * 2 - Math.PI / 2) + 1) / 2;
-        if (el) el.style[propriedadeCss] = (6 + valorAtual * 90) + '%';
+        if (el) el.style.width = (6 + valorAtual * 90) + '%';
         rafId = requestAnimationFrame(quadro);
       }
       rafId = requestAnimationFrame(quadro);
@@ -117,16 +184,20 @@ function criarControleBarraOscilante(idPreenchimento, cicloMs, propriedadeCss) {
   };
 }
 
-// Forca preenche na horizontal (largura); altura preenche na vertical
-// (altura do preenchimento, de baixo pra cima) — faz mais sentido pra
-// crianca associar "barra sobe" com "chute mais alto".
-var controleForca = criarControleBarraOscilante('preenchimento-forca', FORCA_CICLO_MS, 'width');
-var controleAltura = criarControleBarraOscilante('preenchimento-altura', ALTURA_CICLO_MS, 'height');
+var controleForca = criarControleBarraOscilante('preenchimento-forca', FORCA_CICLO_MS);
 
 function iniciarBarraForca() { controleForca.iniciar(); }
 function pararBarraForca() { return controleForca.parar(); }
-function iniciarBarraAltura() { controleAltura.iniciar(); }
-function pararBarraAltura() { return controleAltura.parar(); }
+
+// Desenha na barra a faixa de forca ideal (mesmos limites da regra).
+function desenharFaixaIdealForca() {
+  var faixa = document.getElementById('faixa-ideal-forca');
+  if (!faixa || typeof RegrasChute === 'undefined') return;
+  var ini = 6 + RegrasChute.FORCA_IDEAL.min * 90;
+  var fim = 6 + RegrasChute.FORCA_IDEAL.max * 90;
+  faixa.style.left = ini + '%';
+  faixa.style.width = (fim - ini) + '%';
+}
 
 // URL SEMPRE com pixel-art, nunca outro estilo. Seed muda = rosto muda.
 function gerarUrlAvatar(seed) {
@@ -141,6 +212,15 @@ function gerarAvatarFallbackLocal(seed) {
   return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
 }
 
+// Marca 1 item selecionado num grupo (visual + aria-pressed).
+function marcarSelecionado(container, seletor, classe, escolhido) {
+  container.querySelectorAll(seletor).forEach(function(el) {
+    var ativo = el === escolhido;
+    el.classList.toggle(classe, ativo);
+    el.setAttribute('aria-pressed', ativo ? 'true' : 'false');
+  });
+}
+
 // ---------- Navegacao ----------
 
 var TELA_ANTERIOR = {
@@ -152,10 +232,12 @@ var TELA_ANTERIOR = {
   'tela-resultado':  'tela-fases'
 };
 
-function mostrarTela(idTela) {
+// opcoes.focar === false: nao move o foco (ex.: carga inicial da pagina).
+function mostrarTela(idTela, opcoes) {
   Narracao.cancelar();
   document.querySelectorAll('.tela').forEach(function(t) { t.classList.remove('tela-ativa'); });
-  document.getElementById(idTela).classList.add('tela-ativa');
+  var tela = document.getElementById(idTela);
+  tela.classList.add('tela-ativa');
   var logo = document.getElementById('logo-mini');
   var botaoVoltar = document.getElementById('botao-voltar');
   var naTelaPrincipal = idTela === 'tela-menu';
@@ -164,14 +246,34 @@ function mostrarTela(idTela) {
 
   var botaoOuvir = document.getElementById('botao-ouvir-novamente');
   if (botaoOuvir) botaoOuvir.hidden = (idTela !== 'tela-fase1');
+
+  // Leva o foco (e o leitor de tela) para o titulo da nova tela.
+  if (!opcoes || opcoes.focar !== false) {
+    var titulo = tela.querySelector('[data-titulo-tela]') || tela.querySelector('h1, h2');
+    if (titulo) {
+      if (!titulo.hasAttribute('tabindex')) titulo.setAttribute('tabindex', '-1');
+      try { titulo.focus({ preventScroll: true }); } catch (e) { titulo.focus(); }
+    }
+  }
 }
 
 function encerrarJogoEmAndamento() {
+  invalidarSessao();
   pararTimer();
+  cancelarEtapaInterativa();
   pararBarraForca();
-  pararBarraAltura();
-  if (cancelarEtapaAtual) { cancelarEtapaAtual(); cancelarEtapaAtual = null; }
-  if (estado.jogoPenalti) { estado.jogoPenalti.destruir(); estado.jogoPenalti = null; }
+  estado.etapa = ETAPA.OCIOSA;
+  if (estado.jogoPenalti) {
+    try { estado.jogoPenalti.pararMira(); } catch (e) {}
+    estado.jogoPenalti.destruir();
+    estado.jogoPenalti = null;
+  }
+  var camada = document.getElementById('camada-mira');
+  if (camada) camada.hidden = true;
+  var bloco = document.getElementById('bloco-forca');
+  if (bloco) bloco.hidden = true;
+  var msg = document.getElementById('mensagem-etapa');
+  if (msg) msg.hidden = true;
 }
 
 function voltarTelaAnterior() {
@@ -181,6 +283,7 @@ function voltarTelaAnterior() {
   if (!anteriorId) return;
   SFX.clique();
   if (telaAtual.id === 'tela-fase1') encerrarJogoEmAndamento();
+  if (anteriorId === 'tela-fases') { irParaFases(); return; }
   mostrarTela(anteriorId);
 }
 
@@ -204,22 +307,43 @@ function initMenu() {
   });
 }
 
-// ---------- Tela cheia (Fullscreen API, com fallback silencioso) ----------
+// ---------- Tela cheia (Fullscreen API) ----------
 
 function elementoTelaCheiaAtual() {
   return document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement || null;
 }
 
+// Chama a API e SEMPRE devolve uma Promise tratada: navegadores antigos
+// (webkit/ms) retornam undefined; os novos retornam uma Promise que pode
+// ser rejeitada (ex.: sem gesto do usuario, iframe sem permissao).
+function chamarApiTelaCheia(fn, alvo) {
+  try {
+    return Promise.resolve(fn.call(alvo));
+  } catch (erro) {
+    return Promise.reject(erro);
+  }
+}
+
 function alternarTelaCheia() {
+  var botao = document.getElementById('botao-tela-cheia');
+  if (!botao || botao.getAttribute('aria-busy') === 'true') return;
   SFX.clique();
   var raiz = document.documentElement;
-  if (!elementoTelaCheiaAtual()) {
-    var pedir = raiz.requestFullscreen || raiz.webkitRequestFullscreen || raiz.msRequestFullscreen;
-    if (pedir) pedir.call(raiz);
-  } else {
-    var sair = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
-    if (sair) sair.call(document);
-  }
+  var entrar = !elementoTelaCheiaAtual();
+  var fn = entrar
+    ? (raiz.requestFullscreen || raiz.webkitRequestFullscreen || raiz.msRequestFullscreen)
+    : (document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen);
+  if (!fn) return;
+
+  botao.setAttribute('aria-busy', 'true');
+  chamarApiTelaCheia(fn, entrar ? raiz : document)
+    .catch(function(erro) {
+      console.warn('Tela cheia nao disponivel agora:', erro);
+    })
+    .then(function() {
+      botao.removeAttribute('aria-busy');
+      atualizarBotaoTelaCheia();
+    });
 }
 
 function atualizarBotaoTelaCheia() {
@@ -241,6 +365,9 @@ function initTelaCheia() {
   ['fullscreenchange', 'webkitfullscreenchange', 'msfullscreenchange'].forEach(function(evento) {
     document.addEventListener(evento, atualizarBotaoTelaCheia);
   });
+  ['fullscreenerror', 'webkitfullscreenerror'].forEach(function(evento) {
+    document.addEventListener(evento, atualizarBotaoTelaCheia);
+  });
   atualizarBotaoTelaCheia();
 }
 
@@ -256,45 +383,29 @@ function irParaApelido() {
   mostrarTela('tela-apelido');
 }
 
-function renderizarListaPersonagens() {
-  var container = document.getElementById('lista-personagens');
-  container.innerHTML = '';
-  PERSONAGENS.forEach(function(p) {
+function renderizarListaChips(idContainer, itens, campoEstado) {
+  var container = document.getElementById(idContainer);
+  container.textContent = '';
+  itens.forEach(function(texto) {
     var btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'chip-escolha';
-    btn.textContent = p;
-    if (estado.personagemEscolhido === p) btn.classList.add('chip-ativo');
+    btn.textContent = texto;
+    var ativo = estado[campoEstado] === texto;
+    btn.classList.toggle('chip-ativo', ativo);
+    btn.setAttribute('aria-pressed', ativo ? 'true' : 'false');
     btn.addEventListener('click', function() {
       SFX.clique();
-      estado.personagemEscolhido = p;
-      container.querySelectorAll('.chip-escolha').forEach(function(c) { c.classList.remove('chip-ativo'); });
-      btn.classList.add('chip-ativo');
+      estado[campoEstado] = texto;
+      marcarSelecionado(container, '.chip-escolha', 'chip-ativo', btn);
       atualizarPreviewApelido();
     });
     container.appendChild(btn);
   });
 }
 
-function renderizarListaAnimais() {
-  var container = document.getElementById('lista-animais');
-  container.innerHTML = '';
-  ANIMAIS.forEach(function(a) {
-    var btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'chip-escolha';
-    btn.textContent = a;
-    if (estado.animalEscolhido === a) btn.classList.add('chip-ativo');
-    btn.addEventListener('click', function() {
-      SFX.clique();
-      estado.animalEscolhido = a;
-      container.querySelectorAll('.chip-escolha').forEach(function(c) { c.classList.remove('chip-ativo'); });
-      btn.classList.add('chip-ativo');
-      atualizarPreviewApelido();
-    });
-    container.appendChild(btn);
-  });
-}
+function renderizarListaPersonagens() { renderizarListaChips('lista-personagens', PERSONAGENS, 'personagemEscolhido'); }
+function renderizarListaAnimais() { renderizarListaChips('lista-animais', ANIMAIS, 'animalEscolhido'); }
 
 function atualizarPreviewApelido() {
   var texto = '';
@@ -326,18 +437,19 @@ function atualizarPreviewAvatar() {
 
 function renderizarAbasAvatar() {
   var container = document.getElementById('abas-avatar');
-  container.innerHTML = '';
+  container.textContent = '';
   CATEGORIAS_AVATAR.forEach(function(cat) {
     var btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'aba-avatar';
-    if (cat.id === categoriaAvatarAtiva) btn.classList.add('aba-ativa');
+    var ativo = cat.id === categoriaAvatarAtiva;
+    btn.classList.toggle('aba-ativa', ativo);
+    btn.setAttribute('aria-pressed', ativo ? 'true' : 'false');
     btn.textContent = cat.nome;
     btn.addEventListener('click', function() {
       SFX.clique();
       categoriaAvatarAtiva = cat.id;
-      container.querySelectorAll('.aba-avatar').forEach(function(a) { a.classList.remove('aba-ativa'); });
-      btn.classList.add('aba-ativa');
+      marcarSelecionado(container, '.aba-avatar', 'aba-ativa', btn);
       renderizarGradeAvatares();
     });
     container.appendChild(btn);
@@ -346,14 +458,16 @@ function renderizarAbasAvatar() {
 
 function renderizarGradeAvatares() {
   var container = document.getElementById('grade-avatares');
-  container.innerHTML = '';
+  container.textContent = '';
   var cat = CATEGORIAS_AVATAR.find(function(c) { return c.id === categoriaAvatarAtiva; });
   if (!cat) return;
   cat.seeds.forEach(function(seed) {
     var btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'item-avatar';
-    if (estado.avatarSeed === seed) btn.classList.add('avatar-selecionado');
+    var ativo = estado.avatarSeed === seed;
+    btn.classList.toggle('avatar-selecionado', ativo);
+    btn.setAttribute('aria-pressed', ativo ? 'true' : 'false');
     var img = document.createElement('img');
     img.src = gerarUrlAvatar(seed);
     img.alt = seed;
@@ -363,8 +477,7 @@ function renderizarGradeAvatares() {
     btn.addEventListener('click', function() {
       SFX.clique();
       estado.avatarSeed = seed;
-      container.querySelectorAll('.item-avatar').forEach(function(i) { i.classList.remove('avatar-selecionado'); });
-      btn.classList.add('avatar-selecionado');
+      marcarSelecionado(container, '.item-avatar', 'avatar-selecionado', btn);
       atualizarPreviewAvatar();
     });
     container.appendChild(btn);
@@ -375,8 +488,10 @@ function initApelido() {
   document.getElementById('botao-confirmar-apelido').addEventListener('click', function() {
     if (!estado.apelido) return;
     SFX.selecionar();
-    if (window.FirebaseMathGol && estado.token) {
-      window.FirebaseMathGol.salvarPerfil(estado.token, {
+    // Nao bloqueia o jogo: o firebase-config.js aguarda a autenticacao
+    // anonima ficar pronta (com tempo limite) antes de gravar.
+    if (window.FirebaseMathGol) {
+      window.FirebaseMathGol.salvarPerfil({
         apelido: estado.apelido,
         avatarSeed: estado.avatarSeed
       });
@@ -387,36 +502,42 @@ function initApelido() {
 
 // ---------- Selecao ----------
 
+var BANDEIRAS_POR_ID = {
+  brasil:'br', argentina:'ar', alemanha:'de', franca:'fr', japao:'jp',
+  portugal:'pt', espanha:'es', italia:'it', inglaterra:'gb-eng',
+  colombia:'co', mexico:'mx', coreia:'kr'
+};
+
 function irParaSelecao() {
   var grade = document.getElementById('grade-selecoes');
-  grade.innerHTML = '';
+  grade.textContent = '';
 
-  var BANDEIRAS_POR_ID = {
-    brasil:'br', argentina:'ar', alemanha:'de', franca:'fr', japao:'jp',
-    portugal:'pt', espanha:'es', italia:'it', inglaterra:'gb-eng',
-    colombia:'co', mexico:'mx', coreia:'kr'
-  };
-
+  // SELECOES ja chega validada (data.js → validarSelecao). Mesmo assim,
+  // nada aqui concatena texto em HTML: so createElement/textContent.
   SELECOES.forEach(function(sel) {
     var codigo = sel.bandeira || BANDEIRAS_POR_ID[sel.id] || '';
     var cartao = document.createElement('button');
     cartao.className = 'cartao';
     cartao.type = 'button';
+    cartao.setAttribute('aria-pressed', 'false');
 
-    var conteudo = '';
-    if (codigo) {
-      conteudo += '<img class="cartao-bandeira" src="https://flagcdn.com/w80/' + codigo + '.png"';
-      conteudo += ' srcset="https://flagcdn.com/w160/' + codigo + '.png 2x"';
-      conteudo += ' alt="' + sel.nome + '"';
-      conteudo += ' onerror="this.onerror=null;this.src=\'\';">';
+    if (codigoBandeiraValido(codigo)) {
+      var img = document.createElement('img');
+      img.className = 'cartao-bandeira';
+      img.src = 'https://flagcdn.com/w80/' + codigo + '.png';
+      img.srcset = 'https://flagcdn.com/w160/' + codigo + '.png 2x';
+      img.alt = '';
+      img.onerror = function() { this.onerror = null; this.hidden = true; };
+      cartao.appendChild(img);
     }
-    conteudo += '<span class="cartao-titulo">' + sel.nome + '</span>';
-    cartao.innerHTML = conteudo;
+    var titulo = document.createElement('span');
+    titulo.className = 'cartao-titulo';
+    titulo.textContent = sel.nome;
+    cartao.appendChild(titulo);
 
     cartao.addEventListener('click', function() {
       SFX.clique();
-      grade.querySelectorAll('.cartao').forEach(function(c) { c.classList.remove('cartao-selecionado'); });
-      cartao.classList.add('cartao-selecionado');
+      marcarSelecionado(grade, '.cartao', 'cartao-selecionado', cartao);
       estado.selecaoId = sel.id;
       document.getElementById('botao-confirmar-selecao').disabled = false;
     });
@@ -435,18 +556,27 @@ function initSelecao() {
 
 // ---------- Dificuldade ----------
 
+function criarSpan(classe, texto) {
+  var s = document.createElement('span');
+  s.className = classe;
+  s.textContent = texto;
+  return s;
+}
+
 function irParaDificuldade() {
   var grade = document.getElementById('grade-dificuldades');
-  grade.innerHTML = '';
+  grade.textContent = '';
   DIFICULDADES.forEach(function(dif) {
     var cartao = document.createElement('button');
     cartao.className = 'cartao';
     cartao.type = 'button';
-    cartao.innerHTML = '<span class="cartao-icone-dificuldade">' + dif.icone + '</span><span class="cartao-titulo">' + dif.nome + '</span><span class="cartao-descricao">' + dif.descricao + '</span>';
+    cartao.setAttribute('aria-pressed', 'false');
+    cartao.appendChild(criarSpan('cartao-icone-dificuldade', dif.icone));
+    cartao.appendChild(criarSpan('cartao-titulo', dif.nome));
+    cartao.appendChild(criarSpan('cartao-descricao', dif.descricao));
     cartao.addEventListener('click', function() {
       SFX.clique();
-      grade.querySelectorAll('.cartao').forEach(function(c) { c.classList.remove('cartao-selecionado'); });
-      cartao.classList.add('cartao-selecionado');
+      marcarSelecionado(grade, '.cartao', 'cartao-selecionado', cartao);
       estado.dificuldadeId = dif.id;
       document.getElementById('botao-confirmar-dificuldade').disabled = false;
     });
@@ -465,9 +595,17 @@ function initDificuldade() {
 
 // ---------- Tela de Fases ----------
 
+function criarIconeCruzeiro(alt) {
+  var img = document.createElement('img');
+  img.className = 'icone-cruzeiro';
+  img.src = '../Imagens/estrela-cruzeiro.png';
+  img.alt = alt || '';
+  return img;
+}
+
 function irParaFases() {
   var grade = document.getElementById('grade-fases');
-  grade.innerHTML = '';
+  grade.textContent = '';
 
   var fases = Progressao.obterFases();
   fases.forEach(function(fase) {
@@ -475,30 +613,42 @@ function irParaFases() {
     var cartao = document.createElement('button');
     cartao.className = 'cartao cartao-fase';
     cartao.type = 'button';
-    if (!desbloqueada) cartao.classList.add('cartao-bloqueado');
+    if (!desbloqueada) {
+      cartao.classList.add('cartao-bloqueado');
+      cartao.disabled = true;
+      cartao.setAttribute('aria-disabled', 'true');
+    } else {
+      cartao.setAttribute('aria-pressed', 'false');
+    }
 
     var melhorPts = Progressao.melhorPontuacao(fase.id);
     var melhorG = Progressao.melhorGols(fase.id);
     var estrelas = '';
-    if (melhorG > 0) {
-      for (var i = 0; i < Math.min(melhorG, fase.cobrancas); i++) estrelas += '⭐';
+    for (var i = 0; i < Math.min(melhorG, fase.cobrancas); i++) estrelas += '⭐';
+
+    cartao.appendChild(criarSpan('cartao-icone-dificuldade', desbloqueada ? fase.icone : '🔒'));
+    cartao.appendChild(criarSpan('cartao-titulo', fase.nome));
+    cartao.appendChild(criarSpan('cartao-descricao', desbloqueada ? fase.descricao : 'Complete a fase anterior!'));
+    if (estrelas) {
+      var spanEstrelas = criarSpan('cartao-estrelas', estrelas);
+      spanEstrelas.setAttribute('aria-label', 'Melhor resultado: ' + melhorG + ' de ' + fase.cobrancas + ' gols');
+      cartao.appendChild(spanEstrelas);
+    }
+    if (melhorPts > 0) {
+      var recorde = criarSpan('cartao-descricao', 'Recorde: ' + melhorPts + ' ');
+      recorde.appendChild(criarIconeCruzeiro(''));
+      recorde.appendChild(document.createTextNode('Cruzeiro'));
+      cartao.appendChild(recorde);
     }
 
-    var conteudo = '<span class="cartao-icone-dificuldade">' + (desbloqueada ? fase.icone : '🔒') + '</span>';
-    conteudo += '<span class="cartao-titulo">' + fase.nome + '</span>';
-    conteudo += '<span class="cartao-descricao">' + (desbloqueada ? fase.descricao : 'Complete a fase anterior!') + '</span>';
-    if (estrelas) conteudo += '<span class="cartao-estrelas">' + estrelas + '</span>';
-    if (melhorPts > 0) conteudo += '<span class="cartao-descricao">Recorde: ' + melhorPts + ' <img class="icone-cruzeiro" src="../Imagens/estrela-cruzeiro.png" alt="">Cruzeiro</span>';
-    cartao.innerHTML = conteudo;
-
-    cartao.addEventListener('click', function() {
-      if (!desbloqueada) return;
-      SFX.selecionar();
-      grade.querySelectorAll('.cartao').forEach(function(c) { c.classList.remove('cartao-selecionado'); });
-      cartao.classList.add('cartao-selecionado');
-      estado.faseAtual = fase.id;
-      document.getElementById('botao-confirmar-fase').disabled = false;
-    });
+    if (desbloqueada) {
+      cartao.addEventListener('click', function() {
+        SFX.selecionar();
+        marcarSelecionado(grade, '.cartao:not(.cartao-bloqueado)', 'cartao-selecionado', cartao);
+        estado.faseAtual = fase.id;
+        document.getElementById('botao-confirmar-fase').disabled = false;
+      });
+    }
     grade.appendChild(cartao);
   });
   document.getElementById('botao-confirmar-fase').disabled = true;
@@ -508,14 +658,39 @@ function irParaFases() {
 function initFases() {
   document.getElementById('botao-confirmar-fase').addEventListener('click', function() {
     SFX.selecionar();
-    iniciarFase1();
+    iniciarPartida();
   });
 }
 
-// ---------- Fase 1: timer + pontuacao por velocidade ----------
+// ======================================================================
+// Partida (usada por TODAS as fases: Penaltis, Falta e Final)
+// ======================================================================
 
-function iniciarFase1() {
+// Cria a cena: 3D quando possivel; senao, modo simplificado 2D com a
+// mesma regra. Se nem o 2D abrir, devolve null e a partida NAO comeca.
+function criarCenaDaPartida() {
+  var container = document.getElementById('jogo-penalti');
+  container.textContent = '';
+  try {
+    if (typeof THREE === 'undefined') throw new Error('Three.js nao carregou');
+    return criarJogoPenalti('jogo-penalti', estado.selecaoId);
+  } catch (erro3d) {
+    console.warn('Cena 3D indisponivel, usando o modo simplificado:', erro3d);
+    container.textContent = '';
+  }
+  try {
+    return criarJogoPenalti2D('jogo-penalti', estado.selecaoId);
+  } catch (erro2d) {
+    console.error('Modo simplificado indisponivel:', erro2d);
+    container.textContent = '';
+    return null;
+  }
+}
+
+function iniciarPartida() {
+  encerrarJogoEmAndamento(); // invalida qualquer sessao anterior
   var fase = Progressao.obterFase(estado.faseAtual);
+  estado.faseAtual = fase.id;
   TOTAL_COBRANCAS = fase.cobrancas;
   TIMER_MAX = fase.timerMax;
 
@@ -523,8 +698,7 @@ function iniciarFase1() {
   estado.gols = 0;
   estado.pontuacao = 0;
   estado.resultadosCobrancas = [];
-  estado.cobrancaFinalizada = false;
-  cancelarEtapaAtual = null;
+  estado.perguntaAtual = null;
 
   BancoQuestoes.resetarSessao();
 
@@ -533,17 +707,24 @@ function iniciarFase1() {
 
   mostrarTela('tela-fase1');
   atualizarBolinhasProgresso();
+  atualizarDisplayPontuacao();
+  document.getElementById('mensagem-feedback').textContent = '';
 
-  if (estado.jogoPenalti) { estado.jogoPenalti.destruir(); estado.jogoPenalti = null; }
-  document.getElementById('jogo-penalti').innerHTML = '';
+  var aviso = document.getElementById('aviso-modo-jogo');
+  estado.jogoPenalti = criarCenaDaPartida();
 
-  try {
-    if (typeof THREE === 'undefined') throw new Error('Three.js nao carregou');
-    estado.jogoPenalti = criarJogoPenalti('jogo-penalti', estado.selecaoId);
-  } catch (e) {
-    console.warn('Cena 3D indisponivel:', e);
-    estado.jogoPenalti = null;
+  if (!estado.jogoPenalti) {
+    // Nunca premia gol automatico: sem cena jogavel, nao ha partida.
+    aviso.hidden = false;
+    aviso.classList.add('aviso-erro');
+    aviso.textContent = 'Não foi possível abrir o campo neste navegador. Tente atualizar a página ou usar outro navegador.';
+    document.getElementById('area-respostas').hidden = true;
+    document.getElementById('pergunta-texto').textContent = '--';
+    return;
   }
+  aviso.classList.remove('aviso-erro');
+  aviso.hidden = estado.jogoPenalti.modo !== '2d';
+  aviso.textContent = estado.jogoPenalti.modo === '2d' ? 'Modo simplificado ativo (sem 3D).' : '';
 
   SFX.apito();
   carregarProximaPergunta();
@@ -551,7 +732,8 @@ function iniciarFase1() {
 
 function atualizarBolinhasProgresso() {
   var container = document.getElementById('cabecalho-fase');
-  container.innerHTML = '';
+  container.textContent = '';
+  container.setAttribute('aria-label', 'Cobrança ' + Math.min(estado.cobrancaAtual + 1, TOTAL_COBRANCAS) + ' de ' + TOTAL_COBRANCAS);
   for (var i = 0; i < TOTAL_COBRANCAS; i++) {
     var b = document.createElement('span');
     b.className = 'bolinha-cobranca';
@@ -565,17 +747,26 @@ function atualizarBolinhasProgresso() {
   }
 }
 
+// ---------- Timer ----------
+
 function iniciarTimer() {
+  pararTimer();
   estado.timerSegundos = TIMER_MAX;
   estado.timerInicio = Date.now();
+  estado.ultimoSegundoAlertado = null;
   atualizarDisplayTimer();
-  pararTimer();
+  var idSessao = cicloPartida.sessaoJogoId;
   estado.timerInterval = setInterval(function() {
+    if (!sessaoValida(idSessao) || estado.etapa !== ETAPA.RESPOSTA) { pararTimer(); return; }
     var decorrido = Math.floor((Date.now() - estado.timerInicio) / 1000);
     estado.timerSegundos = Math.max(0, TIMER_MAX - decorrido);
     atualizarDisplayTimer();
 
-    if (estado.timerSegundos > 0 && estado.timerSegundos <= 4) {
+    // Um unico alerta por segundo exibido (4, 3, 2, 1), mesmo o intervalo
+    // rodando a cada 200 ms.
+    if (estado.timerSegundos > 0 && estado.timerSegundos <= 4 &&
+        estado.timerSegundos !== estado.ultimoSegundoAlertado) {
+      estado.ultimoSegundoAlertado = estado.timerSegundos;
       SFX.timerAlerta();
     }
 
@@ -601,42 +792,18 @@ function atualizarDisplayTimer() {
 }
 
 // Pontuacao SEMPRE pelo tempo de resposta da conta — capturado no instante
-// do clique (ou do estouro do timer), nunca recalculado depois. O tempo
-// gasto em mira/forca/altura e na animacao do chute NAO entra nessa conta.
+// do clique (ou do estouro do timer). Mira, forca e animacao NAO contam.
 function calcularPontosPorVelocidade(tempoUsadoSegundos) {
-  var pontos = Math.max(10, Math.round(100 * (1 - tempoUsadoSegundos / TIMER_MAX)));
-  return pontos;
+  return Math.max(10, Math.round(100 * (1 - tempoUsadoSegundos / TIMER_MAX)));
 }
 
-// Tempo esgotado = mesmo tratamento de resposta errada de sempre: defesa
-// imediata (zona "meio"), sem passar por mira/forca.
-function tempoEsgotado() {
-  if (estado.cobrancaFinalizada) return;
-  estado.cobrancaFinalizada = true;
-
-  SFX.tempoEsgotado();
-  document.querySelectorAll('.botao-resposta').forEach(function(b) { b.disabled = true; });
-  document.getElementById('mensagem-feedback').textContent = 'Tempo esgotado!';
-  var tempoUsadoMs = TIMER_MAX * 1000;
-  if (estado.jogoPenalti) {
-    estado.jogoPenalti.chutar('meio', false, function() {
-      finalizarCobranca({ foiGol: false, zonaEscolhida: null, estourouTempo: true, tempoUsadoMs: tempoUsadoMs });
-    });
-  } else {
-    setTimeout(function() {
-      finalizarCobranca({ foiGol: false, zonaEscolhida: null, estourouTempo: true, tempoUsadoMs: tempoUsadoMs });
-    }, 500);
-  }
-}
-
-// ---------- Etapas visuais da cobranca (mostrar/esconder cada bloco) ----------
+// ---------- Etapas visuais ----------
 
 function mostrarEtapaRespostas() {
   document.getElementById('area-respostas').hidden = false;
   document.getElementById('mensagem-etapa').hidden = true;
   document.getElementById('camada-mira').hidden = true;
   document.getElementById('bloco-forca').hidden = true;
-  document.getElementById('bloco-altura').hidden = true;
 }
 
 function esconderEtapaRespostas() {
@@ -644,8 +811,6 @@ function esconderEtapaRespostas() {
 }
 
 function carregarProximaPergunta() {
-  estado.cobrancaFinalizada = false;
-
   var dificuldadeEfetiva = Progressao.dificuldadeEfetiva(estado.dificuldadeId, estado.faseAtual);
   estado.perguntaAtual = BancoQuestoes.sortearPergunta(dificuldadeEfetiva);
   document.getElementById('mensagem-feedback').textContent = '';
@@ -654,7 +819,7 @@ function carregarProximaPergunta() {
 
   estado.zonaCorreta = null;
   var container = document.getElementById('respostas-alternativas');
-  container.innerHTML = '';
+  container.textContent = '';
   ORDEM_ZONAS.forEach(function(zonaId, indice) {
     var alt = estado.perguntaAtual.alternativas[indice];
     var botao = document.createElement('button');
@@ -667,28 +832,27 @@ function carregarProximaPergunta() {
     if (alt.correta) estado.zonaCorreta = zonaId;
   });
 
+  estado.etapa = ETAPA.RESPOSTA;
+  atualizarBolinhasProgresso();
   Narracao.falar(estado.perguntaAtual.textoFalado);
   iniciarTimer();
 }
 
 function initFase1() {
-  // Delegacao removida: cada botao de resposta agora ganha seu proprio
-  // listener quando e criado em carregarProximaPergunta() (os botoes nao
-  // ficam mais sobre o canvas, entao nao ha mais um container fixo
-  // #zonas-gol pra delegar clique).
   var botaoOuvir = document.getElementById('botao-ouvir-novamente');
   if (botaoOuvir) {
     botaoOuvir.addEventListener('click', function() {
       if (estado.perguntaAtual) Narracao.falar(estado.perguntaAtual.textoFalado);
     });
   }
+  desenharFaixaIdealForca();
 }
 
-// Etapa 1 -> resposta escolhida.
-// Correta: avanca pra mira (etapa 2). Errada: mantem o comportamento
-// antigo — defesa imediata na zona da alternativa clicada, sem mira.
+// ---------- Resposta ----------
+
+// Correta: avanca SOMENTE para a mira. Errada: defesa (uma unica vez).
 function responderAlternativa(botaoClicado) {
-  if (estado.cobrancaFinalizada) return;
+  if (estado.etapa !== ETAPA.RESPOSTA) return;
 
   var tempoUsadoMs = Date.now() - estado.timerInicio;
   pararTimer();
@@ -700,169 +864,263 @@ function responderAlternativa(botaoClicado) {
   botaoClicado.setAttribute('aria-label', (acertou ? 'Acertou! Resposta ' : 'Errou. Resposta ') + botaoClicado.textContent);
 
   if (acertou) {
+    estado.etapa = ETAPA.TRANSICAO;
     SFX.selecionar();
     document.getElementById('mensagem-feedback').textContent = '✓ Resposta correta!';
-    setTimeout(function() { avancarParaMira(tempoUsadoMs); }, 500);
+    agendarNaSessao(function() { avancarParaMira(tempoUsadoMs); }, PAUSA_ANTES_DA_MIRA);
     return;
   }
 
-  estado.cobrancaFinalizada = true;
+  estado.etapa = ETAPA.CHUTE;
   document.getElementById('mensagem-feedback').textContent = '✗ Resposta errada!';
-  if (estado.jogoPenalti) {
-    estado.jogoPenalti.chutar(zonaId, false, function() {
-      finalizarCobranca({ foiGol: false, zonaEscolhida: zonaId, estourouTempo: false, tempoUsadoMs: tempoUsadoMs });
-    });
-  } else {
-    setTimeout(function() {
-      finalizarCobranca({ foiGol: false, zonaEscolhida: zonaId, estourouTempo: false, tempoUsadoMs: tempoUsadoMs });
-    }, 500);
-  }
+  chutarParaDefesa(zonaId, { respostaCorreta: false, zonaEscolhida: zonaId, estourouTempo: false, tempoUsadoMs: tempoUsadoMs });
 }
 
-// Etapa 2: mira livre dentro do gol (mouse/toque). Um toque na area do
-// jogo trava o alvo atual e avanca pra forca.
+// Tempo esgotado = mesmo tratamento de resposta errada: defesa no meio.
+function tempoEsgotado() {
+  if (estado.etapa !== ETAPA.RESPOSTA) return;
+  estado.etapa = ETAPA.CHUTE;
+
+  SFX.tempoEsgotado();
+  document.querySelectorAll('.botao-resposta').forEach(function(b) { b.disabled = true; });
+  document.getElementById('mensagem-feedback').textContent = 'Tempo esgotado!';
+  chutarParaDefesa('meio', { respostaCorreta: false, zonaEscolhida: null, estourouTempo: true, tempoUsadoMs: TIMER_MAX * 1000 });
+}
+
+function chutarParaDefesa(zonaId, detalhes) {
+  var aoFinalizar = vincularSessao(function() { finalizarCobranca(detalhes); });
+  var iniciou = estado.jogoPenalti && estado.jogoPenalti.chutar(zonaId, aoFinalizar);
+  // Cena ocupada/indisponivel: registra a defesa mesmo assim (sem gol).
+  if (!iniciou) agendarNaSessao(function() { finalizarCobranca(detalhes); }, 500);
+}
+
+// ---------- Etapas interativas (mira e forca) ----------
+// Um unico fluxo de Pointer Events na superficie do jogo:
+//   - so o ponteiro primario conta;
+//   - a transicao acontece no pointerup DAQUELE ponteiro que deu pointerdown
+//     nesta etapa (o "up" de um toque antigo nunca confirma a etapa nova);
+//   - nenhum listener de click/touchend: o clique sintetico que o navegador
+//     gera depois do toque nao tem efeito;
+//   - trava por etapa: depois de confirmar, nada mais e aceito nela.
+// Teclado: setas movem a mira; Enter ou Espaco confirmam.
+
+var etapaInterativa = null;
+
+function cancelarEtapaInterativa() {
+  if (etapaInterativa) { etapaInterativa.cancelar(); etapaInterativa = null; }
+}
+
+function iniciarEtapaInterativa(opcoes) {
+  cancelarEtapaInterativa();
+  var superficie = document.getElementById('superficie-jogo');
+  var idSessao = cicloPartida.sessaoJogoId;
+  var ponteiroAtivo = null;
+  var travada = false;
+
+  function limpar() {
+    superficie.removeEventListener('pointerdown', aoPointerDown);
+    superficie.removeEventListener('pointermove', aoPointerMove);
+    superficie.removeEventListener('pointerup', aoPointerUp);
+    superficie.removeEventListener('pointercancel', aoPointerCancel);
+    superficie.removeEventListener('keydown', aoTecla);
+    superficie.classList.remove('superficie-interativa');
+    superficie.tabIndex = -1;
+    if (ponteiroAtivo !== null) {
+      try { superficie.releasePointerCapture(ponteiroAtivo); } catch (e) {}
+    }
+    ponteiroAtivo = null;
+  }
+
+  function confirmar() {
+    if (travada) return;
+    travada = true;
+    limpar();
+    if (etapaInterativa === controle) etapaInterativa = null;
+    if (!sessaoValida(idSessao)) return;
+    opcoes.aoConfirmar();
+  }
+
+  function aoPointerDown(ev) {
+    if (travada || !ev.isPrimary) return;
+    if (ev.pointerType === 'mouse' && ev.button !== 0) return;
+    ponteiroAtivo = ev.pointerId;
+    try { superficie.setPointerCapture(ev.pointerId); } catch (e) {}
+    if (opcoes.aoMover) opcoes.aoMover(ev.clientX, ev.clientY);
+    ev.preventDefault();
+  }
+
+  function aoPointerMove(ev) {
+    if (travada || !ev.isPrimary || !opcoes.aoMover) return;
+    // Mouse mira so de passar por cima; toque/caneta, arrastando.
+    if (ev.pointerType !== 'mouse' && ev.pointerId !== ponteiroAtivo) return;
+    opcoes.aoMover(ev.clientX, ev.clientY);
+  }
+
+  function aoPointerUp(ev) {
+    if (travada || !ev.isPrimary || ev.pointerId !== ponteiroAtivo) return;
+    ev.preventDefault();
+    confirmar();
+  }
+
+  function aoPointerCancel(ev) {
+    if (ev.pointerId === ponteiroAtivo) ponteiroAtivo = null;
+  }
+
+  function aoTecla(ev) {
+    var tecla = ev.key;
+    var confirma = tecla === 'Enter' || tecla === ' ' || tecla === 'Spacebar';
+    if (confirma) {
+      ev.preventDefault();
+      if (!ev.repeat) confirmar();
+      return;
+    }
+    if (!opcoes.aoSeta) return;
+    var dx = 0, dy = 0;
+    if (tecla === 'ArrowLeft') dx = -1;
+    else if (tecla === 'ArrowRight') dx = 1;
+    else if (tecla === 'ArrowUp') dy = 1;
+    else if (tecla === 'ArrowDown') dy = -1;
+    else return;
+    ev.preventDefault();
+    if (!travada) opcoes.aoSeta(dx, dy);
+  }
+
+  superficie.addEventListener('pointerdown', aoPointerDown);
+  superficie.addEventListener('pointermove', aoPointerMove);
+  superficie.addEventListener('pointerup', aoPointerUp);
+  superficie.addEventListener('pointercancel', aoPointerCancel);
+  superficie.addEventListener('keydown', aoTecla);
+  superficie.classList.add('superficie-interativa');
+  superficie.tabIndex = 0;
+  document.getElementById('instrucoes-jogo').textContent = opcoes.instrucoes || '';
+  try { superficie.focus({ preventScroll: true }); } catch (e) { superficie.focus(); }
+
+  var controle = {
+    cancelar: function() { travada = true; limpar(); },
+    confirmar: confirmar
+  };
+  etapaInterativa = controle;
+  return controle;
+}
+
+// Etapa: mira (ponteiro, arrastar o dedo ou setas).
 function avancarParaMira(tempoUsadoMs) {
+  if (estado.etapa !== ETAPA.TRANSICAO || !estado.jogoPenalti) return;
+  estado.etapa = ETAPA.MIRA;
   esconderEtapaRespostas();
   var msg = document.getElementById('mensagem-etapa');
   msg.hidden = false;
   msg.textContent = 'Escolha onde chutar! 🎯';
 
-  var containerJogo = document.getElementById('jogo-penalti');
-
-  // Sem cena 3D (WebGL indisponivel): pula mira/forca, mas mantem o jogo
-  // jogavel — resposta correta = gol direto, igual ao comportamento do
-  // fallback ja existente pra chute normal.
-  if (!estado.jogoPenalti) {
-    msg.hidden = true;
-    setTimeout(function() {
-      finalizarCobranca({ foiGol: true, zonaEscolhida: null, estourouTempo: false, tempoUsadoMs: tempoUsadoMs });
-    }, 400);
-    return;
-  }
-
+  var jogo = estado.jogoPenalti;
   var camada = document.getElementById('camada-mira');
   camada.hidden = false;
   var alvo = document.getElementById('alvo-mira');
 
-  estado.jogoPenalti.iniciarMira(function(pos) {
+  jogo.iniciarMira(function(pos) {
     alvo.style.left = pos.leftPercent + '%';
     alvo.style.top = pos.topPercent + '%';
   });
 
-  function aoConfirmarMira() {
-    containerJogo.removeEventListener('click', aoConfirmarMira);
-    containerJogo.removeEventListener('touchend', aoConfirmarMira);
-    cancelarEtapaAtual = null;
-    var ponto = estado.jogoPenalti.pararMira();
-    camada.hidden = true;
-    avancarParaForca(ponto, tempoUsadoMs);
-  }
-  containerJogo.addEventListener('click', aoConfirmarMira);
-  containerJogo.addEventListener('touchend', aoConfirmarMira);
-  cancelarEtapaAtual = function() {
-    containerJogo.removeEventListener('click', aoConfirmarMira);
-    containerJogo.removeEventListener('touchend', aoConfirmarMira);
-  };
+  iniciarEtapaInterativa({
+    instrucoes: 'Mire no gol com o dedo, o mouse ou as setas do teclado. Toque, clique ou aperte Enter para confirmar a mira.',
+    aoMover: function(x, y) { jogo.moverMiraTela(x, y); },
+    aoSeta: function(dx, dy) { jogo.moverMiraDelta(dx * PASSO_MIRA_TECLADO.x, dy * PASSO_MIRA_TECLADO.y); },
+    aoConfirmar: function() {
+      var ponto = jogo.pararMira();
+      camada.hidden = true;
+      SFX.clique();
+      avancarParaForca(ponto, tempoUsadoMs);
+    }
+  });
 }
 
-// Etapa 3: barra de forca oscilante. Um toque trava o valor e avanca pra
-// etapa de altura.
+// Etapa: forca (barra oscilante; um toque/clique/Enter trava).
 function avancarParaForca(pontoMira, tempoUsadoMs) {
+  if (estado.etapa !== ETAPA.MIRA) return;
+  estado.etapa = ETAPA.FORCA;
   var msg = document.getElementById('mensagem-etapa');
   msg.textContent = 'Escolha a força do chute! 💪';
   var bloco = document.getElementById('bloco-forca');
   bloco.hidden = false;
   iniciarBarraForca();
 
-  var containerJogo = document.getElementById('jogo-penalti');
-  function aoConfirmarForca() {
-    containerJogo.removeEventListener('click', aoConfirmarForca);
-    containerJogo.removeEventListener('touchend', aoConfirmarForca);
-    cancelarEtapaAtual = null;
-    var forca = pararBarraForca();
-    bloco.hidden = true;
-    SFX.clique();
-    avancarParaAltura(pontoMira, forca, tempoUsadoMs);
-  }
-  containerJogo.addEventListener('click', aoConfirmarForca);
-  containerJogo.addEventListener('touchend', aoConfirmarForca);
-  cancelarEtapaAtual = function() {
-    containerJogo.removeEventListener('click', aoConfirmarForca);
-    containerJogo.removeEventListener('touchend', aoConfirmarForca);
-    pararBarraForca();
-  };
+  iniciarEtapaInterativa({
+    instrucoes: 'A barra de força está enchendo. Toque, clique ou aperte Enter quando ela estiver na faixa verde.',
+    aoConfirmar: function() {
+      var forca = pararBarraForca();
+      bloco.hidden = true;
+      msg.hidden = true;
+      SFX.clique();
+      chutarComMiraEForca(pontoMira, forca, tempoUsadoMs);
+    }
+  });
 }
 
-// Etapa 4: barra de altura oscilante (mesmo mecanismo da forca). 0 =
-// rasteiro, 1 = cavadinha — so muda o arco/velocidade visual do chute em
-// game.js, nao interfere no calculo de gol/fora (ja decidido por mira +
-// forca). Um toque trava o valor e dispara o chute.
-function avancarParaAltura(pontoMira, forca, tempoUsadoMs) {
-  var msg = document.getElementById('mensagem-etapa');
-  msg.textContent = 'Rasteiro ou no alto? Escolha a altura! ⬆️⬇️';
-  var bloco = document.getElementById('bloco-altura');
-  bloco.hidden = false;
-  iniciarBarraAltura();
-
-  var containerJogo = document.getElementById('jogo-penalti');
-  function aoConfirmarAltura() {
-    containerJogo.removeEventListener('click', aoConfirmarAltura);
-    containerJogo.removeEventListener('touchend', aoConfirmarAltura);
-    cancelarEtapaAtual = null;
-    var altura = pararBarraAltura();
-    bloco.hidden = true;
-    msg.hidden = true;
-    SFX.clique();
-
-    estado.jogoPenalti.chutarLivre(pontoMira, forca, altura, function(r) {
-      finalizarCobranca({
-        foiGol: !!r.gol,
-        foiFora: !!r.fora,
-        zonaEscolhida: null,
-        estourouTempo: false,
-        tempoUsadoMs: tempoUsadoMs
-      });
+function chutarComMiraEForca(pontoMira, forca, tempoUsadoMs) {
+  if (estado.etapa !== ETAPA.FORCA) return;
+  estado.etapa = ETAPA.CHUTE;
+  document.getElementById('instrucoes-jogo').textContent = '';
+  var detalhesBase = { respostaCorreta: true, zonaEscolhida: null, estourouTempo: false, tempoUsadoMs: tempoUsadoMs };
+  var aoFinalizar = vincularSessao(function(r) {
+    finalizarCobranca({
+      respostaCorreta: true,
+      bolaDentro: !!(r && r.gol),
+      motivo: r && r.motivo,
+      zonaEscolhida: null,
+      estourouTempo: false,
+      tempoUsadoMs: tempoUsadoMs
     });
+  });
+  var iniciou = estado.jogoPenalti && estado.jogoPenalti.chutarLivre(pontoMira, forca, aoFinalizar);
+  if (!iniciou) {
+    // Nunca vira gol automatico: sem animacao, a bola nao entrou.
+    agendarNaSessao(function() { finalizarCobranca(Object.assign({ bolaDentro: false, motivo: 'lado' }, detalhesBase)); }, 500);
   }
-  containerJogo.addEventListener('click', aoConfirmarAltura);
-  containerJogo.addEventListener('touchend', aoConfirmarAltura);
-  cancelarEtapaAtual = function() {
-    containerJogo.removeEventListener('click', aoConfirmarAltura);
-    containerJogo.removeEventListener('touchend', aoConfirmarAltura);
-    pararBarraAltura();
-  };
 }
 
-// HU-07: registra cada cobranca como um objeto estruturado. resultado
-// agora pode ser 'gol' | 'defesa' | 'fora'.
-function finalizarCobranca(detalhes) {
-  var tempoUsadoSegundos = Math.min(TIMER_MAX, Math.max(0, Math.round((detalhes.tempoUsadoMs || 0) / 1000)));
-  var pontosGanhos = 0;
+// ---------- Finalizacao (idempotente) ----------
 
-  if (detalhes.foiGol) {
+// HU-07: registra cada cobranca como objeto estruturado. So roda UMA vez
+// por cobranca: a segunda chamada (clique duplo, callback atrasado) e
+// ignorada pela etapa FINALIZADA.
+function finalizarCobranca(detalhes) {
+  if (estado.etapa === ETAPA.FINALIZADA || estado.etapa === ETAPA.OCIOSA) return;
+  estado.etapa = ETAPA.FINALIZADA;
+  cancelarEtapaInterativa();
+
+  var tempoUsadoSegundos = Math.min(TIMER_MAX, Math.max(0, Math.round((detalhes.tempoUsadoMs || 0) / 1000)));
+  var resultado = RegrasChute.resolverCobranca(!!detalhes.respostaCorreta,
+    detalhes.respostaCorreta ? { dentro: !!detalhes.bolaDentro } : null);
+  var pontosGanhos = 0;
+  var feedback = document.getElementById('mensagem-feedback');
+
+  if (resultado === 'gol') {
     SFX.gol();
     pontosGanhos = calcularPontosPorVelocidade(tempoUsadoSegundos);
     estado.gols++;
     estado.pontuacao += pontosGanhos;
-    document.getElementById('mensagem-feedback').innerHTML = 'GOOOL! +' + pontosGanhos + ' <img class="icone-cruzeiro" src="../Imagens/estrela-cruzeiro.png" alt="">Cruzeiro!';
+    feedback.textContent = 'GOOOL! +' + pontosGanhos + ' ';
+    feedback.appendChild(criarIconeCruzeiro(''));
+    feedback.appendChild(document.createTextNode('Cruzeiro!'));
     Narracao.falar('Gol!');
-  } else if (detalhes.foiFora) {
+  } else if (resultado === 'fora') {
     // Reaproveita o som existente de "sem gol" — nao criar SFX novo.
     SFX.defesa();
-    document.getElementById('mensagem-feedback').textContent = 'Pra fora! ❌';
-    Narracao.falar('Pra fora!');
+    var motivo = MENSAGEM_FORA[detalhes.motivo] ? detalhes.motivo : 'lado';
+    feedback.textContent = MENSAGEM_FORA[motivo];
+    Narracao.falar(NARRACAO_FORA[motivo]);
   } else {
     SFX.defesa();
-    if (document.getElementById('mensagem-feedback').textContent !== 'Tempo esgotado!') {
-      document.getElementById('mensagem-feedback').textContent = 'O goleiro defendeu!';
-    }
+    feedback.textContent = detalhes.estourouTempo ? 'Tempo esgotado! O goleiro defendeu!' : 'O goleiro defendeu!';
     Narracao.falar(detalhes.estourouTempo ? 'Tempo esgotado! O goleiro defendeu.' : 'O goleiro defendeu!');
   }
 
   estado.resultadosCobrancas.push({
     zonaEscolhida: detalhes.zonaEscolhida,
     zonaCorreta: estado.zonaCorreta,
-    resultado: detalhes.foiGol ? 'gol' : (detalhes.foiFora ? 'fora' : 'defesa'),
+    resultado: resultado,
+    motivoFora: resultado === 'fora' ? (detalhes.motivo || 'lado') : null,
     estourouTempo: !!detalhes.estourouTempo,
     pontos: pontosGanhos,
     tempoUsado: tempoUsadoSegundos
@@ -872,23 +1130,21 @@ function finalizarCobranca(detalhes) {
   atualizarBolinhasProgresso();
   atualizarDisplayPontuacao();
 
-  setTimeout(function() {
-    if (estado.cobrancaAtual >= TOTAL_COBRANCAS) { irParaResultado(); }
-    else { carregarProximaPergunta(); }
+  agendarNaSessao(function() {
+    if (estado.cobrancaAtual >= TOTAL_COBRANCAS) irParaResultado();
+    else carregarProximaPergunta();
   }, PAUSA_ENTRE_COBRANCAS);
 }
 
 function atualizarDisplayPontuacao() {
   var el = document.getElementById('pontuacao-display');
-  if (el) el.innerHTML = estado.pontuacao + ' <img class="icone-cruzeiro" src="../Imagens/estrela-cruzeiro.png" alt="estrelinhas Cruzeiro">';
+  if (!el) return;
+  el.textContent = estado.pontuacao + ' ';
+  el.appendChild(criarIconeCruzeiro('estrelinhas Cruzeiro'));
 }
 
 // ---------- Resultado ----------
 
-// HU-07: monta o resumo de cada cobranca (zona escolhida + resultado) de
-// forma compreensivel pra crianca e acessivel por texto — nunca so por
-// cor. resultado 'fora' ganha seu proprio icone/estilo (nem acerto nem
-// defesa do goleiro).
 function renderizarListaCobrancas() {
   var lista = document.getElementById('lista-cobrancas');
   if (!lista) return;
@@ -907,7 +1163,9 @@ function renderizarListaCobrancas() {
     item.appendChild(icone);
 
     var zonaTexto = cobranca.zonaEscolhida ? (ROTULO_ZONA[cobranca.zonaEscolhida] || cobranca.zonaEscolhida) : null;
-    var resultadoTexto = cobranca.resultado === 'gol' ? 'gol' : (cobranca.resultado === 'fora' ? 'chute para fora' : 'defesa');
+    var resultadoTexto = cobranca.resultado === 'gol' ? 'gol'
+      : (cobranca.resultado === 'fora' ? (cobranca.motivoFora === 'fraco' ? 'chute fraco, não chegou ao gol'
+        : (cobranca.motivoFora === 'alto' ? 'chute por cima do gol' : 'chute para fora')) : 'defesa');
     var textoCompleto = 'Cobrança ' + (indice + 1) + ' — ' + resultadoTexto;
     if (zonaTexto) textoCompleto = 'Cobrança ' + (indice + 1) + ' — ' + zonaTexto + ' — ' + resultadoTexto;
     if (cobranca.estourouTempo) textoCompleto += ' (tempo esgotado)';
@@ -921,17 +1179,45 @@ function renderizarListaCobrancas() {
   });
 }
 
+// Codigo compacto por cobranca, salvo no Firestore: G = gol, D = defesa,
+// T = defesa por tempo esgotado, F = fora.
+function codigoCobranca(c) {
+  if (c.resultado === 'gol') return 'G';
+  if (c.resultado === 'fora') return 'F';
+  return c.estourouTempo ? 'T' : 'D';
+}
+
+function montarResumoPartida() {
+  var tempoTotal = estado.resultadosCobrancas.reduce(function(s, c) { return s + (c.tempoUsado || 0); }, 0);
+  return {
+    versaoEsquema: 2,
+    faseId: estado.faseAtual,
+    dificuldadeId: estado.dificuldadeId,
+    selecaoId: estado.selecaoId,
+    gols: estado.gols,
+    totalCobrancas: TOTAL_COBRANCAS,
+    pontuacao: estado.pontuacao,
+    tempoTotalSegundos: tempoTotal,
+    resumoCobrancas: estado.resultadosCobrancas.map(codigoCobranca).join(''),
+    data: new Date().toISOString()
+  };
+}
+
 function irParaResultado() {
-  pararTimer();
-  pararBarraForca();
-  if (estado.jogoPenalti) { estado.jogoPenalti.destruir(); estado.jogoPenalti = null; }
+  var fase = Progressao.obterFase(estado.faseAtual);
+  var resumo = montarResumoPartida();
+  encerrarJogoEmAndamento(); // invalida a sessao: nada mais da partida roda
 
-  var resultadoProgressao = Progressao.registrarResultado(estado.faseAtual, estado.gols, estado.pontuacao);
+  var resultadoProgressao = Progressao.registrarResultado(fase.id, estado.gols, estado.pontuacao);
 
-  document.getElementById('placar-final').textContent = estado.gols + ' / ' + TOTAL_COBRANCAS;
-  document.getElementById('pontuacao-final').innerHTML = estado.pontuacao + ' <img class="icone-cruzeiro" src="../Imagens/estrela-cruzeiro.png" alt="">Cruzeiro';
+  document.getElementById('titulo-resultado').textContent = fase.tituloResultado;
+  document.getElementById('placar-final').textContent = estado.gols + ' / ' + fase.cobrancas;
+  var pontuacaoFinal = document.getElementById('pontuacao-final');
+  pontuacaoFinal.textContent = estado.pontuacao + ' ';
+  pontuacaoFinal.appendChild(criarIconeCruzeiro(''));
+  pontuacaoFinal.appendChild(document.createTextNode('Cruzeiro'));
 
-  var mensagem = sortearMensagemResultado(estado.gols);
+  var mensagem = sortearMensagemResultado(estado.gols, fase.cobrancas);
   document.getElementById('resumo-resultado').textContent = mensagem;
 
   renderizarListaCobrancas();
@@ -955,22 +1241,12 @@ function irParaResultado() {
   try {
     localStorage.setItem('mathgol_ultimo_resultado', JSON.stringify({
       versao: VERSAO_ULTIMO_RESULTADO,
-      dados: {
-        apelido: estado.apelido, selecaoId: estado.selecaoId,
-        dificuldadeId: estado.dificuldadeId, faseId: estado.faseAtual,
-        gols: estado.gols, pontuacao: estado.pontuacao,
-        cobrancas: estado.resultadosCobrancas,
-        data: new Date().toISOString()
-      }
+      dados: Object.assign({ apelido: estado.apelido, cobrancas: estado.resultadosCobrancas }, resumo)
     }));
   } catch (e) {}
 
-  if (window.FirebaseMathGol && estado.token) {
-    window.FirebaseMathGol.salvarProgresso(estado.token, {
-      apelido: estado.apelido, selecaoId: estado.selecaoId,
-      dificuldadeId: estado.dificuldadeId, faseId: estado.faseAtual,
-      gols: estado.gols, pontuacao: estado.pontuacao
-    });
+  if (window.FirebaseMathGol) {
+    window.FirebaseMathGol.salvarProgresso(resumo);
   }
 
   Narracao.falar(mensagem);
@@ -991,15 +1267,95 @@ function initResultado() {
   }
 }
 
+// ======================================================================
+// Modais acessiveis (acessibilidade, creditos, backup)
+// ======================================================================
+// role="dialog" + aria-modal + aria-labelledby ficam no HTML. Aqui: foco
+// entra no modal, Tab fica preso dentro dele, Escape fecha, o foco volta
+// pro botao que abriu e o fundo fica inerte (inert) enquanto aberto.
+
+var Modal = (function() {
+  var aberto = null; // { sobreposicao, origem, aoFechar }
+  var SELETOR_FOCAVEL = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+  function fundo() {
+    return [document.getElementById('app'), document.querySelector('.rodape')].filter(Boolean);
+  }
+
+  function focaveis(sobreposicao) {
+    return Array.prototype.filter.call(sobreposicao.querySelectorAll(SELETOR_FOCAVEL), function(el) {
+      return !el.hidden && el.offsetParent !== null && el.style.display !== 'none';
+    });
+  }
+
+  function abrir(sobreposicao, origem, opcoes) {
+    if (aberto) fechar();
+    aberto = { sobreposicao: sobreposicao, origem: origem || document.activeElement, aoFechar: opcoes && opcoes.aoFechar };
+    sobreposicao.classList.add('aberta');
+    sobreposicao.removeAttribute('aria-hidden');
+    fundo().forEach(function(el) { el.setAttribute('inert', ''); el.setAttribute('aria-hidden', 'true'); });
+    var dialogo = sobreposicao.querySelector('[role="dialog"]');
+    var alvo = dialogo && dialogo.querySelector('h2');
+    if (alvo) {
+      if (!alvo.hasAttribute('tabindex')) alvo.setAttribute('tabindex', '-1');
+      alvo.focus();
+    } else {
+      var lista = focaveis(sobreposicao);
+      if (lista.length) lista[0].focus();
+    }
+  }
+
+  function fechar() {
+    if (!aberto) return;
+    var atual = aberto;
+    aberto = null;
+    atual.sobreposicao.classList.remove('aberta');
+    atual.sobreposicao.setAttribute('aria-hidden', 'true');
+    fundo().forEach(function(el) { el.removeAttribute('inert'); el.removeAttribute('aria-hidden'); });
+    if (atual.aoFechar) atual.aoFechar();
+    if (atual.origem && typeof atual.origem.focus === 'function') atual.origem.focus();
+  }
+
+  document.addEventListener('keydown', function(ev) {
+    if (!aberto) return;
+    if (ev.key === 'Escape' || ev.key === 'Esc') {
+      ev.preventDefault();
+      fechar();
+      return;
+    }
+    if (ev.key !== 'Tab') return;
+    var lista = focaveis(aberto.sobreposicao);
+    if (!lista.length) { ev.preventDefault(); return; }
+    var primeiro = lista[0], ultimo = lista[lista.length - 1];
+    var ativo = document.activeElement;
+    var dentro = aberto.sobreposicao.contains(ativo);
+    // Foco no titulo (tabindex=-1) nao esta na lista: Shift+Tab vai pro ultimo.
+    if (ev.shiftKey && (ativo === primeiro || !dentro || lista.indexOf(ativo) === -1)) {
+      ev.preventDefault(); ultimo.focus();
+    } else if (!ev.shiftKey && (ativo === ultimo || !dentro)) {
+      ev.preventDefault(); primeiro.focus();
+    }
+  });
+
+  // Clique fora do painel (no fundo escurecido) fecha.
+  function ligarFundo(sobreposicao) {
+    sobreposicao.addEventListener('click', function(ev) {
+      if (ev.target === sobreposicao && aberto && aberto.sobreposicao === sobreposicao) fechar();
+    });
+  }
+
+  return { abrir: abrir, fechar: fechar, ligarFundo: ligarFundo, estaAberto: function() { return !!aberto; } };
+})();
+
 // ---------- Acessibilidade ----------
 
 function carregarPreferenciasAcessibilidade() {
   var prefs = {};
-  try { prefs = JSON.parse(localStorage.getItem('mathgol_acessibilidade') || '{}'); } catch(e) {}
+  try { prefs = JSON.parse(localStorage.getItem('mathgol_acessibilidade') || '{}') || {}; } catch(e) {}
   document.body.classList.toggle('alto-contraste', !!prefs.altoContraste);
   document.body.classList.toggle('espaco-dislexia', !!prefs.espacoDislexia);
-  Narracao.alternar(prefs.narracaoAtiva !== undefined ? prefs.narracaoAtiva : true);
-  SFX.alternar(prefs.sfxAtivo !== undefined ? prefs.sfxAtivo : true);
+  Narracao.alternar(prefs.narracaoAtiva !== undefined ? !!prefs.narracaoAtiva : true);
+  SFX.alternar(prefs.sfxAtivo !== undefined ? !!prefs.sfxAtivo : true);
   document.getElementById('opcao-alto-contraste').checked = !!prefs.altoContraste;
   document.getElementById('opcao-espaco-dislexia').checked = !!prefs.espacoDislexia;
   document.getElementById('opcao-narracao').checked = prefs.narracaoAtiva !== false;
@@ -1024,9 +1380,10 @@ function salvarPreferenciasAcessibilidade() {
 
 function initAcessibilidade() {
   var sobreposicao = document.getElementById('sobreposicao-acessibilidade');
-  document.getElementById('botao-acessibilidade').addEventListener('click', function() { sobreposicao.classList.add('aberta'); });
-  document.getElementById('botao-fechar-acessibilidade').addEventListener('click', function() { sobreposicao.classList.remove('aberta'); });
-  sobreposicao.addEventListener('click', function(ev) { if (ev.target === sobreposicao) sobreposicao.classList.remove('aberta'); });
+  var botaoAbrir = document.getElementById('botao-acessibilidade');
+  botaoAbrir.addEventListener('click', function() { Modal.abrir(sobreposicao, botaoAbrir); });
+  document.getElementById('botao-fechar-acessibilidade').addEventListener('click', function() { Modal.fechar(); });
+  Modal.ligarFundo(sobreposicao);
   ['opcao-alto-contraste', 'opcao-espaco-dislexia', 'opcao-narracao', 'opcao-sfx'].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.addEventListener('change', salvarPreferenciasAcessibilidade);
@@ -1040,38 +1397,38 @@ function initCreditos() {
   var sobreposicao = document.getElementById('sobreposicao-creditos');
   var botaoAbrir = document.getElementById('botao-creditos');
   var botaoFechar = document.getElementById('botao-fechar-creditos');
+  var botoesSobre = sobreposicao.querySelectorAll('.botao-sobre-mim');
+
+  function recolherBios() {
+    botoesSobre.forEach(function(botao) {
+      var bio = document.getElementById(botao.getAttribute('aria-controls'));
+      botao.setAttribute('aria-expanded', 'false');
+      if (bio) bio.hidden = true;
+      var card = botao.closest('.dev-card');
+      if (card) card.classList.remove('aberto');
+    });
+  }
 
   if (botaoAbrir) {
     botaoAbrir.addEventListener('click', function() {
       SFX.clique();
-      sobreposicao.classList.add('aberta');
+      Modal.abrir(sobreposicao, botaoAbrir, { aoFechar: recolherBios });
     });
   }
   if (botaoFechar) {
     botaoFechar.addEventListener('click', function() {
       SFX.clique();
-      sobreposicao.classList.remove('aberta');
+      Modal.fechar();
     });
   }
-  sobreposicao.addEventListener('click', function(ev) {
-    if (ev.target === sobreposicao) sobreposicao.classList.remove('aberta');
-  });
+  Modal.ligarFundo(sobreposicao);
 
-  var botoesSobre = sobreposicao.querySelectorAll('.botao-sobre-mim');
   botoesSobre.forEach(function(botao) {
     botao.addEventListener('click', function() {
       SFX.clique();
       var bio = document.getElementById(botao.getAttribute('aria-controls'));
       var vaiAbrir = botao.getAttribute('aria-expanded') !== 'true';
-
-      botoesSobre.forEach(function(outro) {
-        var outraBio = document.getElementById(outro.getAttribute('aria-controls'));
-        outro.setAttribute('aria-expanded', 'false');
-        if (outraBio) outraBio.hidden = true;
-        var card = outro.closest('.dev-card');
-        if (card) card.classList.remove('aberto');
-      });
-
+      recolherBios();
       if (vaiAbrir) {
         botao.setAttribute('aria-expanded', 'true');
         if (bio) bio.hidden = false;
@@ -1084,20 +1441,6 @@ function initCreditos() {
         }
       }
     });
-  });
-
-  function recolherBios() {
-    botoesSobre.forEach(function(botao) {
-      var bio = document.getElementById(botao.getAttribute('aria-controls'));
-      botao.setAttribute('aria-expanded', 'false');
-      if (bio) bio.hidden = true;
-      var card = botao.closest('.dev-card');
-      if (card) card.classList.remove('aberto');
-    });
-  }
-  if (botaoFechar) botaoFechar.addEventListener('click', recolherBios);
-  sobreposicao.addEventListener('click', function(ev) {
-    if (ev.target === sobreposicao) recolherBios();
   });
 }
 
@@ -1115,44 +1458,56 @@ function baixarJSON(dados, nomeArquivo) {
   URL.revokeObjectURL(url);
 }
 
+var timerStatusBackup = null;
 function mostrarStatusBackup(texto, erro) {
   var el = document.getElementById('backup-status');
   if (!el) return;
   el.textContent = texto;
   el.classList.toggle('erro', !!erro);
-  setTimeout(function() { el.textContent = ''; }, 5000);
+  if (timerStatusBackup) clearTimeout(timerStatusBackup);
+  timerStatusBackup = setTimeout(function() { el.textContent = ''; }, 6000);
 }
 
 function exportarProgressoLocal() {
   var backup = {
-    versao: 1,
-    tipo: 'mathgol-backup-local',
+    versao: ValidacaoBackup.VERSAO_BACKUP_LOCAL,
+    tipo: ValidacaoBackup.TIPO_LOCAL,
     exportadoEm: new Date().toISOString(),
     dados: {}
   };
-
   try {
-    var chaves = ['mathgol_token', 'mathgol_acessibilidade', 'mathgol_ultimo_resultado',
-                  'mathgol_progresso', 'mathgol_fases_desbloqueadas'];
-    for (var i = 0; i < chaves.length; i++) {
-      var valor = localStorage.getItem(chaves[i]);
-      if (valor !== null) {
-        backup.dados[chaves[i]] = valor;
-      }
-    }
-    for (var j = 0; j < localStorage.length; j++) {
-      var chave = localStorage.key(j);
-      if (chave && chave.indexOf('mathgol_') === 0 && !backup.dados[chave]) {
-        backup.dados[chave] = localStorage.getItem(chave);
-      }
-    }
+    // So as chaves conhecidas. O antigo "mathgol_token" NAO e exportado:
+    // ele nunca foi credencial e nao da acesso a nada.
+    ValidacaoBackup.CHAVES_LOCAIS_PERMITIDAS.forEach(function(chave) {
+      var valor = localStorage.getItem(chave);
+      if (valor !== null) backup.dados[chave] = valor;
+    });
   } catch (e) {
     console.warn('Erro ao ler localStorage:', e);
   }
-
   var dataStr = new Date().toISOString().slice(0, 10);
   baixarJSON(backup, 'mathgol-backup-local-' + dataStr + '.json');
   mostrarStatusBackup('✅ Backup local exportado com sucesso!');
+}
+
+// Restaura um arquivo de backup ja lido (texto). Separado do FileReader pra
+// ficar testavel. Retorna uma Promise<string> com a mensagem de sucesso,
+// ou rejeita com uma mensagem amigavel.
+function restaurarBackupDeTexto(texto, tamanhoBytes) {
+  var analise = ValidacaoBackup.analisarArquivo(texto, tamanhoBytes);
+  if (!analise.ok) return Promise.reject(new Error(analise.erro));
+
+  if (analise.tipo === 'local') {
+    try {
+      analise.entradas.forEach(function(entrada) { localStorage.setItem(entrada.chave, entrada.valor); });
+    } catch (e) {
+      return Promise.reject(new Error('Não foi possível gravar os dados neste navegador.'));
+    }
+    return Promise.resolve('local');
+  }
+
+  if (!window.FirebaseMathGol) return Promise.reject(new Error('A nuvem (Firebase) não está disponível agora.'));
+  return window.FirebaseMathGol.restaurarDadosFirebase(analise.dados).then(function() { return 'firebase'; });
 }
 
 function initBackup() {
@@ -1167,18 +1522,16 @@ function initBackup() {
   if (botaoAbrir) {
     botaoAbrir.addEventListener('click', function() {
       SFX.clique();
-      sobreposicao.classList.add('aberta');
+      Modal.abrir(sobreposicao, botaoAbrir);
     });
   }
   if (botaoFechar) {
     botaoFechar.addEventListener('click', function() {
       SFX.clique();
-      sobreposicao.classList.remove('aberta');
+      Modal.fechar();
     });
   }
-  sobreposicao.addEventListener('click', function(ev) {
-    if (ev.target === sobreposicao) sobreposicao.classList.remove('aberta');
-  });
+  Modal.ligarFundo(sobreposicao);
 
   if (botaoLocal) {
     botaoLocal.addEventListener('click', function() {
@@ -1190,17 +1543,17 @@ function initBackup() {
   if (botaoFirebase) {
     botaoFirebase.addEventListener('click', function() {
       SFX.selecionar();
-      if (!window.FirebaseMathGol || !estado.token) {
+      if (!window.FirebaseMathGol) {
         mostrarStatusBackup('⚠️ Firebase não disponível.', true);
         return;
       }
       mostrarStatusBackup('⏳ Exportando dados do Firebase...');
-      window.FirebaseMathGol.exportarDadosFirebase(estado.token).then(function(dados) {
+      window.FirebaseMathGol.exportarDadosFirebase().then(function(dados) {
         var dataStr = new Date().toISOString().slice(0, 10);
         baixarJSON(dados, 'mathgol-backup-firebase-' + dataStr + '.json');
         mostrarStatusBackup('✅ Backup do Firebase exportado!');
-      }).catch(function(erro) {
-        mostrarStatusBackup('❌ Erro ao exportar: ' + erro.message, true);
+      }).catch(function() {
+        mostrarStatusBackup('❌ Não foi possível exportar os dados da nuvem agora.', true);
       });
     });
   }
@@ -1214,41 +1567,26 @@ function initBackup() {
 
   if (inputRestaurar) {
     inputRestaurar.addEventListener('change', function(ev) {
-      var arquivo = ev.target.files[0];
+      var arquivo = ev.target.files && ev.target.files[0];
+      inputRestaurar.value = '';
       if (!arquivo) return;
-
+      if (arquivo.size > ValidacaoBackup.TAMANHO_MAXIMO_BYTES) {
+        mostrarStatusBackup('❌ Arquivo grande demais para ser um backup do MathGol.', true);
+        return;
+      }
       var leitor = new FileReader();
+      leitor.onerror = function() { mostrarStatusBackup('❌ Não foi possível ler o arquivo.', true); };
       leitor.onload = function(e) {
-        try {
-          var dados = JSON.parse(e.target.result);
-
-          if (dados.tipo === 'mathgol-backup-local') {
-            var chaves = Object.keys(dados.dados || {});
-            for (var i = 0; i < chaves.length; i++) {
-              try { localStorage.setItem(chaves[i], dados.dados[chaves[i]]); } catch(err) {}
-            }
+        restaurarBackupDeTexto(String(e.target.result || ''), arquivo.size).then(function(tipo) {
+          if (tipo === 'local') {
             mostrarStatusBackup('✅ Backup local restaurado! Recarregando...');
             setTimeout(function() { location.reload(); }, 1500);
-
-          } else if (dados.tipo === 'mathgol-backup-firebase') {
-            if (!window.FirebaseMathGol || !estado.token) {
-              mostrarStatusBackup('⚠️ Firebase não disponível.', true);
-              return;
-            }
-            mostrarStatusBackup('⏳ Restaurando dados no Firebase...');
-            window.FirebaseMathGol.restaurarDadosFirebase(estado.token, dados).then(function() {
-              mostrarStatusBackup('✅ Backup do Firebase restaurado!');
-            }).catch(function(erro) {
-              mostrarStatusBackup('❌ Erro ao restaurar: ' + erro.message, true);
-            });
-
           } else {
-            mostrarStatusBackup('❌ Arquivo de backup não reconhecido.', true);
+            mostrarStatusBackup('✅ Backup da nuvem restaurado!');
           }
-        } catch (erro) {
-          mostrarStatusBackup('❌ Arquivo inválido: ' + erro.message, true);
-        }
-        inputRestaurar.value = '';
+        }).catch(function(erro) {
+          mostrarStatusBackup('❌ ' + (erro && erro.message ? erro.message : 'Arquivo de backup inválido.'), true);
+        });
       };
       leitor.readAsText(arquivo);
     });
@@ -1258,6 +1596,10 @@ function initBackup() {
 // ---------- Init ----------
 
 document.addEventListener('DOMContentLoaded', function() {
+  // O antigo identificador "mathgol_token" nao e credencial e nao da acesso
+  // a nada (a identidade agora e o uid do Firebase Auth). Remove a sobra.
+  try { localStorage.removeItem('mathgol_token'); } catch (e) {}
+
   initAcessibilidade();
   initNavegacaoTopo();
   initTelaCheia();
@@ -1270,12 +1612,13 @@ document.addEventListener('DOMContentLoaded', function() {
   initResultado();
   initCreditos();
   initBackup();
-  mostrarTela('tela-menu');
+  mostrarTela('tela-menu', { focar: false });
 
   if (window.FirebaseMathGol) {
-    window.FirebaseMathGol.obterOuCriarToken().then(function(t) { estado.token = t; });
     window.FirebaseMathGol.carregarConfiguracoes().then(function(config) {
       aplicarConfiguracoesRemotas(config);
+    }).catch(function(erro) {
+      console.warn('Configuracoes remotas indisponiveis; usando padrao:', erro);
     });
   }
 });

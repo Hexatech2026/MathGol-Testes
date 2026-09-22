@@ -54,7 +54,7 @@
    modal, foco por teclado, desabilitado, acerto/erro e desbloqueio),
    garante WCAG AA (4.5:1 texto normal, 3:1 texto grande/UI) e remove
    transparências/sombras/gradientes que atrapalhem a leitura — inclusive
-   por cima do canvas do Phaser. O modo normal mantém a identidade infantil
+   por cima da cena do jogo. O modo normal mantém a identidade infantil
    intacta: nada aqui vaza pra fora de `body.alto-contraste`.
    ========================================================================== */
 
@@ -149,7 +149,7 @@ body.alto-contraste .cartao-selecionado {
 }
 body.alto-contraste .cartao-bloqueado { opacity: 0.7; filter: none; }
 
-/* Zonas do gol precisam continuar legíveis por cima do canvas do Phaser,
+/* Zonas do gol precisam continuar legíveis por cima da cena do jogo,
    então ganham fundo sólido (não translúcido) e contorno bem grosso. */
 body.alto-contraste .botao-zona {
   background: var(--branco-giz) !important;
@@ -1087,6 +1087,7 @@ body.alto-contraste .alvo-mira::after {
   margin-bottom: 4px;
 }
 .trilho-forca {
+  position: relative;
   width: 100%;
   height: 22px;
   background: #E3EAE5;
@@ -1111,45 +1112,22 @@ body.alto-contraste .preenchimento-forca {
 body.alto-contraste .trilho-forca {
   border-width: 3px;
 }
-
-/* ---------- Barra de altura (etapa 4) — vertical, faz mais sentido:
-   "barra sobe" = "chute mais alto". ---------- */
-.bloco-altura {
-  width: 100%;
-  max-width: 380px;
-  margin: 12px auto 0;
-  text-align: center;
+/* Faixa de forca ideal (mesmos limites de RegrasChute.FORCA_IDEAL; a
+   posicao e aplicada pelo main.js). Fica por cima do preenchimento, so com
+   contorno, pra crianca ver onde parar. */
+.faixa-ideal-forca {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 1;
+  border-left: 3px solid var(--verde-texto);
+  border-right: 3px solid var(--verde-texto);
+  background: rgba(46, 158, 91, 0.22);
+  pointer-events: none;
 }
-.coluna-altura {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-}
-.extremo-altura {
-  font-size: 1rem;
-  line-height: 1;
-}
-.trilho-altura {
-  width: 30px;
-  height: 120px;
-  background: #E3EAE5;
-  border: 2px solid var(--grafite);
-  border-radius: 14px;
-  overflow: hidden;
-  display: flex;
-  align-items: flex-end;
-}
-.preenchimento-altura {
-  width: 100%;
-  height: 6%;
-  background: linear-gradient(0deg, var(--verde-grama-escuro) 0%, var(--azul-ceu) 55%, var(--amarelo-sol) 100%);
-}
-body.alto-contraste .preenchimento-altura {
-  background: var(--grafite);
-}
-body.alto-contraste .trilho-altura {
-  border-width: 3px;
+body.alto-contraste .faixa-ideal-forca {
+  border-color: #000000;
+  background: repeating-linear-gradient(45deg, transparent 0 4px, rgba(0,0,0,0.25) 4px 6px);
 }
 
 /* ---------- Etapa 1: respostas SEMPRE fora da area do gol ---------- */
@@ -1900,7 +1878,7 @@ body.alto-contraste .painel-backup {
 
 /* ---------- Tela cheia: foco na area de penaltis ----------
    O objetivo principal e evitar que a crianca precise rolar a tela pra ver
-   a barra de forca/altura: a tela-fase1 fica mais compacta sempre, e ganha
+   a barra de forca: a tela-fase1 fica mais compacta sempre, e ganha
    ainda mais espaco quando o jogo esta em tela cheia. */
 html:fullscreen .tela,
 html:-webkit-full-screen .tela {
@@ -1930,8 +1908,7 @@ html:-webkit-full-screen .tela {
   padding: 5px 14px;
   font-size: 0.92rem;
 }
-.tela-fase1 .bloco-forca,
-.tela-fase1 .bloco-altura {
+.tela-fase1 .bloco-forca {
   margin-top: 8px;
 }
 .tela-fase1 .area-respostas {
@@ -1941,16 +1918,47 @@ html:-webkit-full-screen .tela {
   margin-top: 6px;
 }
 
-/* Em tela cheia, o palco (gol/animacao) pode crescer bem mais — e o resto
-   encolhe um pouco mais ainda, pra sobrar espaco vertical de verdade. */
+/* Em tela cheia, o palco (gol/animacao) cresce usando a largura E a
+   altura disponiveis, sempre em 16:9. O pai (.tela-fase1) deixa de ficar
+   preso nos 640px de .tela. A altura reservada (--reserva-vertical) cobre
+   barra do topo, pergunta, mensagem, barra de forca/respostas e feedback,
+   pra nada disso ficar fora da tela. */
 html:fullscreen .tela-fase1,
 html:-webkit-full-screen .tela-fase1 {
+  width: 100%;
+  max-width: none;
   padding-top: 8px;
   padding-bottom: 8px;
+  /* Altura de tudo que nao e o palco (medida com Playwright em 1366x768,
+     1920x1080 e 360x640, na etapa mais alta: mensagem + barra de forca,
+     com folga para o aviso do modo simplificado). */
+  --reserva-vertical: 480px;
+}
+html:fullscreen .topo,
+html:-webkit-full-screen .topo {
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+@media (max-width: 480px) {
+  html:fullscreen .tela-fase1,
+  html:-webkit-full-screen .tela-fase1 { --reserva-vertical: 505px; }
+}
+html:fullscreen .tela-fase1 .caixa-pergunta,
+html:-webkit-full-screen .tela-fase1 .caixa-pergunta,
+html:fullscreen .tela-fase1 .barra-fase,
+html:-webkit-full-screen .tela-fase1 .barra-fase,
+html:fullscreen .tela-fase1 .area-respostas,
+html:-webkit-full-screen .tela-fase1 .area-respostas {
+  max-width: 900px;
+  margin-left: auto;
+  margin-right: auto;
 }
 html:fullscreen .tela-fase1 .palco-penalti,
 html:-webkit-full-screen .tela-fase1 .palco-penalti {
-  max-width: min(760px, 92vw);
+  max-width: none;
+  width: min(100%, calc((100vh - var(--reserva-vertical)) * 16 / 9));
+  width: min(100%, calc((100dvh - var(--reserva-vertical)) * 16 / 9));
+  min-width: min(100%, 200px);
 }
 html:fullscreen .tela-fase1 .caixa-pergunta,
 html:-webkit-full-screen .tela-fase1 .caixa-pergunta {
@@ -2020,10 +2028,27 @@ html:-webkit-full-screen .tela-fase1 .pergunta-texto {
 .barra-fase {
   width: 100%;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: 16px;
+  gap: 8px 16px;
   margin-bottom: 10px;
+  min-width: 0;
+}
+.barra-fase > * { min-width: 0; }
+/* Dentro da barra o progresso ocupa so o necessario (fora dela, .cabecalho-fase
+   tinha width:100% e, com quebra de linha, iria sozinho pra outra linha). */
+.barra-fase .cabecalho-fase { width: auto; margin-bottom: 0; }
+
+/* Telas estreitas (ex.: 320x568, 360x640): titulo + progresso numa linha,
+   timer + pontuacao na outra. Nada se sobrepoe nem gera rolagem lateral. */
+@media (max-width: 480px) {
+  .barra-fase { gap: 6px 10px; }
+  .barra-fase .cabecalho-fase { flex: 1 1 auto; flex-wrap: wrap; justify-content: flex-start; gap: 6px; margin: 0; }
+  .barra-fase .titulo-fase { margin-right: 0; }
+  .barra-fase .timer-display,
+  .barra-fase .pontuacao-display { font-size: 0.95rem; padding: 4px 10px; }
+  .bolinha-cobranca { width: 14px; height: 14px; }
 }
 
 .timer-display {
@@ -2123,9 +2148,10 @@ html:-webkit-full-screen .tela-fase1 .pergunta-texto {
   position: relative;
 }
 
-.cartao-bloqueado {
+.cartao-bloqueado,
+.cartao-bloqueado:disabled {
   opacity: 0.45;
-  pointer-events: none;
+  cursor: not-allowed;
   filter: grayscale(0.6);
 }
 
@@ -2161,3 +2187,144 @@ html:-webkit-full-screen .tela-fase1 .pergunta-texto {
   margin-right: 8px;
   white-space: nowrap;
 }
+
+
+/* ==========================================================================
+   v6 — utilitarios, superficie interativa, aviso de modo e cena 2D
+   ========================================================================== */
+
+/* O atributo hidden sempre vence (algumas classes definem display e
+   deixavam elementos "escondidos" visiveis, ex.: .mensagem-etapa). */
+[hidden] { display: none !important; }
+
+/* Texto so para leitor de tela. */
+.somente-leitor-tela {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Superficie do jogo (palco + mensagem + barra de forca). touch-action:
+   none SO durante mira/forca, pra nao rolar a pagina ao mirar com o dedo;
+   fora dessas etapas a pagina rola normalmente. */
+.superficie-jogo {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  border-radius: var(--raio-grande);
+}
+.superficie-jogo.superficie-interativa {
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  cursor: pointer;
+}
+.superficie-jogo.superficie-interativa .palco-penalti { cursor: crosshair; }
+.superficie-jogo:focus { outline: none; }
+.superficie-jogo:focus-visible {
+  outline: 4px solid var(--azul-ceu);
+  outline-offset: 4px;
+}
+body.alto-contraste .superficie-jogo:focus-visible { outline-color: #000000; }
+
+.titulo-fase:focus { outline: none; }
+.titulo-fase:focus-visible,
+h1:focus-visible, h2:focus-visible {
+  outline: 3px solid var(--azul-ceu);
+  outline-offset: 3px;
+}
+
+/* Aviso discreto: modo simplificado (sem 3D) ou erro ao abrir o campo. */
+.aviso-modo-jogo {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--grafite);
+  background: rgba(255,253,246,0.94);
+  border: 2px dashed var(--borda-sutil);
+  border-radius: 999px;
+  padding: 3px 12px;
+  margin: 0 auto 6px;
+  text-align: center;
+}
+.aviso-modo-jogo.aviso-erro {
+  color: var(--vermelho-texto);
+  border-style: solid;
+  border-color: var(--vermelho-texto);
+  border-radius: 14px;
+  font-size: 0.95rem;
+  padding: 10px 14px;
+}
+
+/* ---------- Modo simplificado 2D (game-2d.js) ---------- */
+.cena-2d {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, #8ECAE6 0%, #8ECAE6 30%, #2E9E5B 30%, #2A9455 100%);
+}
+.cena-2d-gol {
+  position: absolute;
+  box-sizing: border-box;
+  border: 5px solid #FFFDF6;
+  border-bottom: none;
+  background:
+    repeating-linear-gradient(90deg, rgba(255,253,246,0.35) 0 1px, transparent 1px 12px),
+    repeating-linear-gradient(0deg, rgba(255,253,246,0.35) 0 1px, transparent 1px 12px),
+    rgba(33,48,59,0.25);
+}
+.cena-2d-gol-marcado .cena-2d-gol { background-color: rgba(255,198,59,0.45); }
+.cena-2d-goleiro,
+.cena-2d-batedor,
+.cena-2d-bola {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  transition-property: left, top, transform;
+  transition-timing-function: ease-out;
+}
+.cena-2d-goleiro {
+  width: 7%;
+  height: 26%;
+  border-radius: 40% 40% 12% 12%;
+  background: #21303B;
+  border: 3px solid #FFC63B;
+}
+.cena-2d-goleiro.mergulho-esquerda { transform: translate(-50%, -100%) rotate(-60deg); }
+.cena-2d-goleiro.mergulho-direita { transform: translate(-50%, -100%) rotate(60deg); }
+.cena-2d-batedor {
+  width: 5%;
+  height: 16%;
+  border-radius: 40% 40% 10% 10%;
+  border: 2px solid #FFFDF6;
+}
+.cena-2d-bola {
+  width: 4.5%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: #FFFDF6;
+  border: 2px solid #21303B;
+  transform: translate(-50%, -50%);
+}
+body.alto-contraste .cena-2d { background: #1A3A5C; }
+body.alto-contraste .cena-2d-goleiro { background: #FF6600; border-color: #FFFFFF; }
+@media (prefers-reduced-motion: reduce) {
+  .cena-2d-goleiro, .cena-2d-batedor, .cena-2d-bola { transition-duration: 1ms !important; }
+}
+
+/* Barra de forca legivel sobre o fundo escuro do estadio (o texto de ajuda
+   agora cita mouse, toque e teclado). */
+.bloco-forca {
+  background: rgba(255,253,246,0.94);
+  border-radius: 16px;
+  padding: 6px 12px 8px;
+  box-sizing: border-box;
+}
+.bloco-forca .dica-forca { color: var(--grafite); }

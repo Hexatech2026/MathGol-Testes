@@ -10,7 +10,7 @@
 ## Opção 1 — Live Server (mais fácil, recomendada)
 
 1. Abra a **pasta do projeto** no VS Code
-   (`Arquivo > Abrir Pasta...` → selecione a pasta `mathgol-3d`).
+   (`Arquivo > Abrir Pasta...` → selecione a pasta `MathGol-VSCode`).
    Tem que ser a pasta inteira, não só o arquivo HTML.
 
 2. Instale a extensão **Live Server** (o VS Code já vai sugerir ao abrir a
@@ -37,7 +37,8 @@ Abra o terminal (`Ctrl+'`) na pasta do projeto e rode:
 npm start
 ```
 
-Depois abra no navegador: **http://localhost:5500/HTML/index.html**
+Depois abra no navegador: **http://localhost:5500/** (a raiz redireciona
+para `HTML/index.html`).
 
 Se não tiver Node instalado, use o Python:
 
@@ -80,6 +81,14 @@ fixas do `JS/data.js` e continua jogável. O que você perde é só o
 salvamento na nuvem. Os avatares também têm fallback local (um círculo
 colorido com a inicial).
 
+**Se o Three.js não carregar (ou o navegador não tiver WebGL)**, o jogo
+entra no **modo simplificado 2D**, com o aviso "Modo simplificado ativo".
+Mira e força continuam valendo — acertar a conta nunca vira gol automático.
+
+**Para salvar na nuvem** é preciso ativar o login **Anônimo** no Console do
+Firebase (Authentication → Método de login) e publicar
+`Config/firestore.rules`. Detalhes no README.
+
 ---
 
 ## Onde mexer em cada coisa
@@ -88,6 +97,8 @@ colorido com a inicial).
 |---|---|
 | Velocidade da animação do chute | `JS/game.js` → constante `TEMPO` (topo do arquivo) |
 | Pausa entre as cobranças | `JS/main.js` → `PAUSA_ENTRE_COBRANCAS` |
+| Regra de gol/fora (faixa de força, desvios) | `JS/regras-chute.js` |
+| Modo simplificado sem 3D | `JS/game-2d.js` e `CSS/styles.css` → seção "Modo simplificado 2D" |
 | Textos dos créditos / "Sobre mim" | `HTML/index.html` → bloco `#sobreposicao-creditos` |
 | Visual dos créditos e do backup | `CSS/styles.css` → seções "Modal de creditos" e "Modal de backup" |
 | Perguntas de matemática | `JS/banco-questoes.js` e `JS/questions.js` |
@@ -107,8 +118,30 @@ no `package.json` (`-l 5500`).
 
 **Erro no console: `Failed to load resource` em `cdn.jsdelivr.net`**
 Sem internet, ou a rede está bloqueando a CDN. A cena 3D do pênalti não
-carrega; o resto do jogo continua funcionando.
+carrega e o jogo usa o modo simplificado 2D (mesmas regras).
+
+**Console: `auth/operation-not-allowed` ou `auth/admin-restricted-operation`**
+O login Anônimo não está ativado no Console do Firebase. O jogo funciona,
+mas não salva na nuvem.
 
 **`npm start` reclama que não achou o `npx`**
 Instale o Node.js em <https://nodejs.org> (versão LTS) ou use a opção do
 Python acima.
+
+---
+
+## Rodar os testes
+
+```bash
+npm install
+npm run test:unit    # regra do chute e validação de backup (rápido, só Node)
+npm run test:e2e     # Playwright (abre um Chromium sem janela)
+npm run test:rules   # regras do Firestore no emulador — precisa de Java 11+
+```
+
+Se o Playwright reclamar que não achou o navegador, rode uma vez:
+`npx playwright install chromium`.
+
+O `test:rules` baixa o emulador do Firestore na primeira execução (precisa
+de internet) e usa o projeto de teste `demo-mathgol` — não toca no banco
+real.

@@ -204,8 +204,8 @@
 
   <section id="tela-fase1" class="tela tela-fase1">
     <div class="barra-fase">
-      <span id="titulo-fase" class="titulo-fase">⚽ Pênaltis</span>
-      <div id="cabecalho-fase" class="cabecalho-fase"></div>
+      <span id="titulo-fase" class="titulo-fase" data-titulo-tela>⚽ Pênaltis</span>
+      <div id="cabecalho-fase" class="cabecalho-fase" role="img" aria-label="Cobranças"></div>
       <span id="timer-display" class="timer-display timer-verde">15s</span>
       <span id="pontuacao-display" class="pontuacao-display">0 <img class="icone-cruzeiro" src="../Imagens/estrela-cruzeiro.png" alt="estrelinhas Cruzeiro"></span>
     </div>
@@ -213,33 +213,30 @@
       <p id="pergunta-texto" class="pergunta-texto" aria-live="polite" aria-atomic="true">--</p>
       <button id="botao-ouvir-novamente" class="botao-ouvir-novamente" type="button" aria-label="Ouvir a pergunta novamente" hidden>🔊 Ouvir novamente</button>
     </div>
-    <div class="palco-penalti">
-      <div id="jogo-penalti"></div>
-      <div id="camada-mira" class="camada-mira" hidden>
-        <div id="alvo-mira" class="alvo-mira" aria-hidden="true"></div>
-      </div>
-    </div>
+    <p id="aviso-modo-jogo" class="aviso-modo-jogo" role="status" hidden></p>
 
-    <p id="mensagem-etapa" class="mensagem-etapa" aria-live="polite" aria-atomic="true" hidden>--</p>
-
-    <div class="bloco-forca" id="bloco-forca" hidden>
-      <span class="rotulo-forca">Força</span>
-      <div class="trilho-forca">
-        <div id="preenchimento-forca" class="preenchimento-forca"></div>
-      </div>
-      <span class="dica-forca">Toque para travar!</span>
-    </div>
-
-    <div class="bloco-altura" id="bloco-altura" hidden>
-      <span class="rotulo-forca">Altura</span>
-      <div class="coluna-altura">
-        <span class="extremo-altura" aria-hidden="true">☁️</span>
-        <div class="trilho-altura">
-          <div id="preenchimento-altura" class="preenchimento-altura"></div>
+    <!-- Superficie interativa do jogo: recebe Pointer Events (mouse, toque,
+         caneta) e teclado nas etapas de mira e forca. -->
+    <div id="superficie-jogo" class="superficie-jogo" tabindex="-1"
+         role="group" aria-label="Campo do pênalti" aria-describedby="instrucoes-jogo">
+      <div class="palco-penalti">
+        <div id="jogo-penalti"></div>
+        <div id="camada-mira" class="camada-mira" hidden>
+          <div id="alvo-mira" class="alvo-mira" aria-hidden="true"></div>
         </div>
-        <span class="extremo-altura" aria-hidden="true">⬇️</span>
       </div>
-      <span class="dica-forca">Toque para travar!</span>
+
+      <p id="mensagem-etapa" class="mensagem-etapa" aria-live="polite" aria-atomic="true" hidden>--</p>
+      <p id="instrucoes-jogo" class="somente-leitor-tela" aria-live="polite"></p>
+
+      <div class="bloco-forca" id="bloco-forca" hidden>
+        <span class="rotulo-forca">Força</span>
+        <div class="trilho-forca" aria-hidden="true">
+          <div id="faixa-ideal-forca" class="faixa-ideal-forca"></div>
+          <div id="preenchimento-forca" class="preenchimento-forca"></div>
+        </div>
+        <span class="dica-forca">Pare na faixa verde! Toque, clique ou aperte Enter.</span>
+      </div>
     </div>
 
     <div id="area-respostas" class="area-respostas">
@@ -250,7 +247,7 @@
   </section>
 
   <section id="tela-resultado" class="tela">
-    <h2>Fim da Fase 1!</h2>
+    <h2 id="titulo-resultado">Fim da fase Pênaltis!</h2>
     <p id="placar-final" class="placar-grande">0 / 3</p>
     <p id="pontuacao-final" class="pontuacao-resultado">0 <img class="icone-cruzeiro" src="../Imagens/estrela-cruzeiro.png" alt="">Cruzeiro</p>
     <p id="resumo-resultado" class="resumo-resultado" aria-live="polite" aria-atomic="true">--</p>
@@ -269,9 +266,9 @@
   <img class="rodape-logo" src="../Imagens/hexatech-logo.png" alt="HexaTech">
 </footer>
 
-<div id="sobreposicao-acessibilidade" class="sobreposicao">
-  <div class="painel-acessibilidade">
-    <h2 style="text-align:left; margin-bottom:16px;">Acessibilidade</h2>
+<div id="sobreposicao-acessibilidade" class="sobreposicao" aria-hidden="true">
+  <div class="painel-acessibilidade" role="dialog" aria-modal="true" aria-labelledby="titulo-acessibilidade">
+    <h2 id="titulo-acessibilidade" style="text-align:left; margin-bottom:16px;">Acessibilidade</h2>
     <div class="linha-opcao">
       <label for="opcao-alto-contraste">Alto contraste</label>
       <span class="alternador"><input type="checkbox" id="opcao-alto-contraste"><span class="trilho-alternador"></span></span>
@@ -295,9 +292,9 @@
 </div>
 
 <!-- Modal de créditos -->
-<div id="sobreposicao-creditos" class="sobreposicao">
-  <div class="painel-creditos">
-    <h2 style="text-align:center; margin-bottom:6px;">🏆 Créditos</h2>
+<div id="sobreposicao-creditos" class="sobreposicao" aria-hidden="true">
+  <div class="painel-creditos" role="dialog" aria-modal="true" aria-labelledby="titulo-creditos">
+    <h2 id="titulo-creditos" style="text-align:center; margin-bottom:6px;">🏆 Créditos</h2>
     <p class="creditos-subtitulo">Desenvolvido por</p>
     <ul class="lista-devs">
 
@@ -409,16 +406,16 @@
 </div>
 
 <!-- Modal de backup -->
-<div id="sobreposicao-backup" class="sobreposicao">
-  <div class="painel-backup">
-    <h2 style="text-align:center; margin-bottom:12px;">💾 Backup</h2>
+<div id="sobreposicao-backup" class="sobreposicao" aria-hidden="true">
+  <div class="painel-backup" role="dialog" aria-modal="true" aria-labelledby="titulo-backup">
+    <h2 id="titulo-backup" style="text-align:center; margin-bottom:12px;">💾 Backup</h2>
     <p class="backup-descricao">Exporte seus dados do jogo ou faça backup do banco de dados.</p>
     <div class="pilha-botoes-backup">
       <button id="botao-backup-local" class="botao botao-cta" type="button">📥 Exportar Progresso Local</button>
       <button id="botao-backup-firebase" class="botao" type="button">☁️ Exportar Dados do Firebase</button>
       <button id="botao-restaurar-backup" class="botao" type="button">📤 Restaurar Backup</button>
     </div>
-    <input type="file" id="input-restaurar" accept=".json" style="display:none">
+    <input type="file" id="input-restaurar" accept=".json,application/json" hidden>
     <p id="backup-status" class="backup-status" aria-live="polite"></p>
     <div class="pilha-botoes" style="margin-top: 14px;">
       <button id="botao-fechar-backup" class="botao" type="button">Fechar</button>
@@ -426,13 +423,18 @@
   </div>
 </div>
 
-<!-- Firebase (módulo ES — carrega antes dos scripts do jogo) -->
+<!-- Firebase (módulo ES — é adiado: roda depois dos scripts clássicos
+     abaixo e antes do DOMContentLoaded. Se o CDN falhar, o jogo segue
+     sem salvar na nuvem). -->
 <script type="module" src="../JS/firebase-config.js"></script>
 
-<!-- Three.js r149 (CDN, build UMD — degrada graciosamente se falhar) -->
+<!-- Three.js r149 (CDN, build UMD). Se falhar, ou se não houver WebGL,
+     o jogo usa o modo simplificado 2D (JS/game-2d.js) com a mesma regra. -->
 <script src="https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js"></script>
 
 <!-- Scripts do jogo (ordem importa) -->
+<script src="../JS/regras-chute.js"></script>
+<script src="../JS/backup-validacao.js"></script>
 <script src="../JS/data.js"></script>
 <script src="../JS/avatar-data.js"></script>
 <script src="../JS/questions.js"></script>
@@ -440,6 +442,7 @@
 <script src="../JS/narration.js"></script>
 <script src="../JS/sfx.js"></script>
 <script src="../JS/game.js"></script>
+<script src="../JS/game-2d.js"></script>
 <script src="../JS/progressao.js"></script>
 <script src="../JS/main.js"></script>
 

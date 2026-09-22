@@ -1,33 +1,30 @@
 // game.js — cena 3D do pênalti (Three.js r149, build UMD via CDN).
 //
-// Contrato com o main.js:
+// Contrato com o main.js (o modo simplificado 2D, game-2d.js, implementa
+// exatamente o mesmo contrato):
 //   criarJogoPenalti(containerId, selecaoId) -> {
-//     chutar(zonaId, correta, aoFinalizar),       // chute "fechado" (resposta errada / tempo esgotado):
-//                                                  // zona certa = gol (goleiro pula p/ OUTRA zona);
-//                                                  // zona errada = goleiro pula exatamente na zona chutada e defende.
-//     iniciarMira(aoAtualizarPosicaoTela),         // liga o acompanhamento do mouse/toque no plano do gol
-//     pararMira() -> {x, y},                       // trava a mira e devolve o ultimo ponto (mundo)
-//     chutarLivre(pontoMira, forca, altura, aoFinalizar), // chute "livre" (resposta CERTA): mira
-//                                                  // continua + forca (0..1) definem onde a bola cai
-//                                                  // e se entra (goleiro nunca alcanca — a resposta
-//                                                  // certa so garante que ele nao pode defender, NAO
-//                                                  // garante gol). altura (0..1) e so estetica: 0 =
-//                                                  // chute rasteiro (arco baixo, mais rapido), 1 =
-//                                                  // cavadinha (arco alto, mais lento) — nao muda se
-//                                                  // a bola entra ou nao.
+//     modo: '3d',
+//     chutar(zonaId, aoFinalizar),     // resposta ERRADA / tempo esgotado: o goleiro
+//                                      // pula na zona chutada e DEFENDE. Sempre defesa.
+//     iniciarMira(aoAtualizarPosicaoTela), // liga a mira (comeca no centro do gol)
+//     moverMiraTela(clientX, clientY), // mira segue ponteiro (mouse/toque/caneta)
+//     moverMiraDelta(dx, dy),          // mira por teclado (metros)
+//     pararMira() -> {x, y},           // trava e devolve o ponto mirado
+//     chutarLivre(pontoMira, forca, aoFinalizar), // resposta CERTA: o goleiro nunca
+//                                      // alcanca, mas mira + forca decidem gol ou
+//                                      // fora (RegrasChute.calcularResultadoChute).
+//                                      // aoFinalizar({gol, fora, motivo})
 //     destruir()
 //   }
 //
-// Diferenca da versao anterior: as alternativas da pergunta NAO ficam mais
-// sobre o canvas/gol (secao 5 do documento de melhorias — gol sempre
-// visivel). A mira agora e continua (nao mais 1-de-5 zonas fixas) durante
-// o chute apos resposta correta; o caminho de resposta errada / tempo
-// esgotado continua usando as 5 zonas fixas internamente (chutar()), sem
-// nenhuma mudanca de comportamento.
+// Quem ouve ponteiro e teclado e o main.js (Pointer Events, um unico
+// fluxo); este arquivo so converte coordenadas de tela em pontos do gol.
+// A decisao de gol/fora NAO mora aqui: vem de regras-chute.js, que e
+// compartilhado com o modo 2D e com os testes.
 //
-// Mantido da versao anterior: camisa da selecao (HU-16), chute so sai
-// quando o pe encosta na bola (HU-18), som do chute no contato (HU-09),
-// torcida reagindo (HU-17), e prefers-reduced-motion.
+// Mantido: camisa da selecao (HU-16), chute so sai quando o pe encosta na
+// bola (HU-18), som do chute no contato (HU-09), torcida reagindo (HU-17)
+// e prefers-reduced-motion (mesma ordem de eventos, duracoes minimas).
 //
 // Unidades: metros. Eixo x = lateral (negativo = esquerda da tela), y = altura,
 // z = profundidade (gol em z=0, marca do penalti em z=11, camera atras).
@@ -35,7 +32,7 @@
 const ALTURA_BOLA = 0.22; // raio da bola (maior que a real, para ler bem na tela)
 
 // Pontos do plano do gol (z=0) que cada alternativa representa (usado so
-// no caminho de resposta errada / tempo esgotado — chutar()).
+// no caminho de resposta errada / tempo esgotado — chutar(), sempre defesa).
 const ZONAS = {
   'topo-esquerda':  { x: -2.5, y: 2.0 },
   'topo-direita':   { x:  2.5, y: 2.0 },
@@ -43,24 +40,6 @@ const ZONAS = {
   'baixo-esquerda': { x: -2.5, y: 0.55 },
   'baixo-direita':  { x:  2.5, y: 0.55 }
 };
-
-// Area em que a mira pode se mover (secao 6) — um pouco mais larga que a
-// area valida, so pra deixar uma margem de risco perto das bordas; nao
-// muito maior que isso, pra ficar rapido/facil de mirar pra uma crianca.
-const AREA_SELECAO = { xMin: -3.6, xMax: 3.6, yMin: 0.15, yMax: 2.55 };
-// Area que conta como "dentro do gol" no calculo do resultado (secao 7).
-// Um pouco menor que o gol real (LARG_GOL=7.32 => meia-largura 3.66,
-// ALT_GOL=2.44) pra bola nunca "clipar" nas traves visualmente.
-const AREA_VALIDA = { xMin: -3.5, xMax: 3.5, yMin: 0.05, yMax: 2.32 };
-// Faixa "ideal" de forca (secao 8): dentro dela, sem desvio. Fora dela,
-// desvio proporcional a distancia ate a faixa, ate DESVIO_MAX no extremo.
-const FORCA_IDEAL = { min: 0.38, max: 0.78 };
-const DESVIO_MAX = 1.7;
-// Altura do chute (0 = rasteiro, 1 = cavadinha): controla so o FORMATO da
-// trajetoria (arco visual) e a velocidade do voo — nao interfere no
-// calculo de dentro/fora, que continua so em funcao de mira + forca.
-const ALTURA_ARCO_BASE = 0.4;
-const ALTURA_ARCO_MAX = 2.6;
 
 const CAMERA = { fov: 34, pos: [1.2, 4.4, 19], alvo: [0, -1.5, 0] };
 const PONTO_BOLA = { x: 0, y: ALTURA_BOLA, z: 11 };
@@ -614,7 +593,7 @@ function criarJogoPenalti(containerId, selecaoId) {
   // Pose de goleiro "esquivando": usado no chute livre quando a resposta
   // foi correta — o goleiro sempre mergulha pro lado OPOSTO ao destino
   // real da bola, entao nunca alcanca (mas isso nao decide gol/fora: quem
-  // decide e a area valida em chutarLivre).
+  // decide e RegrasChute.calcularResultadoChute).
   function poseGoleiroEsquiva(destino) {
     var lado = destino.x >= 0 ? -1 : 1;
     var alto = Math.random() < 0.5;
@@ -640,21 +619,18 @@ function criarJogoPenalti(containerId, selecaoId) {
     }, null, { ease: EASE.cubicIn, atraso: reduzMovimento ? 0 : 180 });
   }
 
-  function chutar(zonaId, correta, aoFinalizar) {
-    if (emAnimacao || !vivo) return;
-    const alvo = ZONAS[zonaId];
-    if (!alvo) return;
+  // Resposta errada / tempo esgotado: o goleiro vai exatamente na zona
+  // chutada e defende. Nao existe variante "correta" aqui — resposta certa
+  // sempre passa por mira + forca (chutarLivre).
+  function chutar(zonaId, aoFinalizar) {
+    if (emAnimacao || !vivo) return false;
+    const alvo = ZONAS[zonaId] || ZONAS.meio;
     if (resetPendente) { tweens.length = 0; resetar(); }
     emAnimacao = true;
     goleiroLivre = false;
 
-    let zonaGoleiro = zonaId;
-    if (correta) {
-      const outras = Object.keys(ZONAS).filter(function(id) { return id !== zonaId; });
-      zonaGoleiro = outras[Math.floor(Math.random() * outras.length)];
-    }
-    const pose = poseGoleiro(zonaGoleiro);
-    const fim = { x: alvo.x, y: alvo.y, z: correta ? -0.35 : pose.zBola };
+    const pose = poseGoleiro(ZONAS[zonaId] ? zonaId : 'meio');
+    const fim = { x: alvo.x, y: alvo.y, z: pose.zBola };
 
     function iniciarBolaEGoleiro() {
       const g0 = { x: goleiro.position.x, y: GOLEIRO_BASE.y };
@@ -665,10 +641,8 @@ function criarJogoPenalti(containerId, selecaoId) {
         goleiroObj.bracoE.rotation.set(pose.armX * e, 0, -(0.6 + (pose.armZ - 0.6) * e));
         goleiroObj.bracoD.rotation.set(pose.armX * e, 0, 0.6 + (pose.armZ - 0.6) * e);
       }, function() {
-        if (!correta) {
-          pulso(TEMPO.IMPACTO_DEFESA, function(s) { goleiro.scale.set(1 + 0.12 * s, 1 - 0.15 * s, 1); });
-          mostrarIncentivo();
-        }
+        pulso(TEMPO.IMPACTO_DEFESA, function(s) { goleiro.scale.set(1 + 0.12 * s, 1 - 0.15 * s, 1); });
+        mostrarIncentivo();
       }, { ease: EASE.sineOut });
 
       const ini = { x: bola.position.x, y: bola.position.y, z: bola.position.z };
@@ -682,52 +656,37 @@ function criarJogoPenalti(containerId, selecaoId) {
         bolaMalha.rotation.z = u * TEMPO.GIRO_BOLA * 0.3;
       }, function() {
         emAnimacao = false;
-        if (correta) {
-          const yRede = Math.max(ALTURA_BOLA, fim.y - 0.25);
-          animar(d(TEMPO.BOLA_NA_REDE), function(e) {
-            bola.position.z = fim.z + (-1.5 - fim.z) * e;
-            bola.position.y = fim.y + (yRede - fim.y) * e;
-          }, null, { ease: EASE.sineOut });
-          pulso(TEMPO.VIBRACAO_REDE, function(s) { rede.scale.set(1 + 0.05 * s, 1 + 0.05 * s, 1 + 0.05 * s); });
-          comemorarTorcida();
-        } else {
-          animar(d(TEMPO.REBOTE), function(e) {
-            bola.position.z = fim.z + 0.9 * e;
-            bola.position.y = fim.y * (1 - e * e) + ALTURA_BOLA * e * e;
-          }, null, { ease: EASE.sineOut });
-          lamentarTorcida();
-        }
+        animar(d(TEMPO.REBOTE), function(e) {
+          bola.position.z = fim.z + 0.9 * e;
+          bola.position.y = fim.y * (1 - e * e) + ALTURA_BOLA * e * e;
+        }, null, { ease: EASE.sineOut });
+        lamentarTorcida();
         quedaGoleiro();
-        if (aoFinalizar) aoFinalizar({ gol: correta });
+        if (aoFinalizar) aoFinalizar({ gol: false, fora: false, motivo: 'defesa' });
         resetPendente = animar(reduzMovimento ? 60 : TEMPO.ANTES_DE_RESETAR, null, resetar);
       }, { ease: EASE.quadOut });
     }
 
     animarChute(iniciarBolaEGoleiro);
+    return true;
   }
 
-  // ---------- Mira livre (etapa 2, apos resposta correta) ----------
+  // ---------- Mira livre (apos resposta correta) ----------
+  // So converte coordenadas; quem escuta ponteiro/teclado e o main.js.
   var raycasterMira = new THREE.Raycaster();
   var planoGol = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0); // z = 0
-  var miraOuvintePointerMove = null;
-  var pontoMiraAtual = { x: 0, y: 1.3 };
+  var pontoMiraAtual = { x: RegrasChute.CENTRO_GOL.x, y: RegrasChute.CENTRO_GOL.y };
+  var aoAtualizarMira = null;
 
   function calcularPontoMundo(clientX, clientY) {
     const rect = renderer.domElement.getBoundingClientRect();
-    if (!rect.width || !rect.height) return { x: 0, y: 1.3 };
+    if (!rect.width || !rect.height) return null;
     const ndcX = ((clientX - rect.left) / rect.width) * 2 - 1;
     const ndcY = -(((clientY - rect.top) / rect.height) * 2 - 1);
     raycasterMira.setFromCamera({ x: ndcX, y: ndcY }, camera);
     const alvo = new THREE.Vector3();
     const atingiu = raycasterMira.ray.intersectPlane(planoGol, alvo);
-    return atingiu ? alvo : { x: 0, y: 1.3 };
-  }
-
-  function clampMira(ponto) {
-    return {
-      x: Math.min(AREA_SELECAO.xMax, Math.max(AREA_SELECAO.xMin, ponto.x)),
-      y: Math.min(AREA_SELECAO.yMax, Math.max(AREA_SELECAO.yMin, ponto.y))
-    };
+    return atingiu ? { x: alvo.x, y: alvo.y } : null;
   }
 
   function pontoParaTela(ponto) {
@@ -739,73 +698,65 @@ function criarJogoPenalti(containerId, selecaoId) {
     };
   }
 
+  function notificarMira() {
+    if (aoAtualizarMira) aoAtualizarMira(pontoParaTela(pontoMiraAtual), pontoMiraAtual);
+  }
+
   function iniciarMira(aoAtualizar) {
-    pontoMiraAtual = { x: 0, y: 1.3 };
-    function mover(clientX, clientY) {
-      const bruto = calcularPontoMundo(clientX, clientY);
-      pontoMiraAtual = clampMira(bruto);
-      if (aoAtualizar) aoAtualizar(pontoParaTela(pontoMiraAtual));
-    }
-    miraOuvintePointerMove = function(ev) {
-      var t = (ev.touches && ev.touches[0]) || ev;
-      mover(t.clientX, t.clientY);
-    };
+    pontoMiraAtual = RegrasChute.limitarMira(RegrasChute.CENTRO_GOL);
+    aoAtualizarMira = aoAtualizar || null;
     renderer.domElement.style.cursor = 'crosshair';
-    renderer.domElement.addEventListener('pointermove', miraOuvintePointerMove);
-    renderer.domElement.addEventListener('touchmove', miraOuvintePointerMove, { passive: true });
-    if (aoAtualizar) aoAtualizar(pontoParaTela(pontoMiraAtual)); // posicao inicial (centro do gol)
+    notificarMira(); // posicao inicial (centro do gol)
+  }
+
+  function moverMiraTela(clientX, clientY) {
+    if (!aoAtualizarMira) return;
+    const bruto = calcularPontoMundo(clientX, clientY);
+    if (!bruto) return;
+    pontoMiraAtual = RegrasChute.limitarMira(bruto);
+    notificarMira();
+  }
+
+  function moverMiraDelta(dx, dy) {
+    if (!aoAtualizarMira) return;
+    pontoMiraAtual = RegrasChute.limitarMira({ x: pontoMiraAtual.x + dx, y: pontoMiraAtual.y + dy });
+    notificarMira();
   }
 
   function pararMira() {
-    if (miraOuvintePointerMove) {
-      renderer.domElement.removeEventListener('pointermove', miraOuvintePointerMove);
-      renderer.domElement.removeEventListener('touchmove', miraOuvintePointerMove);
-    }
-    miraOuvintePointerMove = null;
+    aoAtualizarMira = null;
     renderer.domElement.style.cursor = '';
-    return pontoMiraAtual;
+    return { x: pontoMiraAtual.x, y: pontoMiraAtual.y };
   }
 
-  // ---------- Chute livre (etapa 4, apos mira + forca) ----------
-  function calcularResultadoLivre(pontoMira, forca) {
-    var f = Math.min(1, Math.max(0, typeof forca === 'number' ? forca : 0.5));
-    var distIdeal = 0;
-    if (f < FORCA_IDEAL.min) distIdeal = FORCA_IDEAL.min - f;
-    else if (f > FORCA_IDEAL.max) distIdeal = f - FORCA_IDEAL.max;
-    var faixaFora = Math.max(FORCA_IDEAL.min, 1 - FORCA_IDEAL.max);
-    var intensidade = (distIdeal / faixaFora) * DESVIO_MAX;
-    var anguloAleatorio = Math.random() * Math.PI * 2;
-    var desvioX = Math.cos(anguloAleatorio) * intensidade;
-    var desvioY = Math.sin(anguloAleatorio) * intensidade * 0.6;
-    var destino = {
-      x: pontoMira.x + desvioX,
-      y: Math.max(0.02, pontoMira.y + desvioY),
-      z: 0
-    };
-    var dentro = destino.x >= AREA_VALIDA.xMin && destino.x <= AREA_VALIDA.xMax &&
-                 destino.y >= AREA_VALIDA.yMin && destino.y <= AREA_VALIDA.yMax;
-    return { destino: destino, dentro: dentro };
-  }
-
-  function chutarLivre(pontoMira, forca, altura, aoFinalizar) {
-    if (emAnimacao || !vivo) return;
+  // ---------- Chute livre (apos mira + forca) ----------
+  // O resultado (dentro/fora e o motivo) vem da regra pura compartilhada;
+  // aqui so se desenha a trajetoria coerente com ele.
+  function chutarLivre(pontoMira, forca, aoFinalizar) {
+    if (emAnimacao || !vivo) return false;
     if (resetPendente) { tweens.length = 0; resetar(); }
     emAnimacao = true;
     goleiroLivre = false;
 
-    var forcaClamp = Math.min(1, Math.max(0, typeof forca === 'number' ? forca : 0.5));
-    var alturaClamp = Math.min(1, Math.max(0, typeof altura === 'number' ? altura : 0.5));
-    var resultado = calcularResultadoLivre(pontoMira || { x: 0, y: 1.3 }, forcaClamp);
-    var pose = poseGoleiroEsquiva(resultado.destino);
-    var fim = resultado.dentro
-      ? { x: resultado.destino.x, y: resultado.destino.y, z: -0.35 }
-      : { x: resultado.destino.x * 1.15, y: resultado.destino.y + 0.35, z: -1.1 };
+    var resultado = RegrasChute.calcularResultadoChute(pontoMira, forca, RegrasChute.aleatorio);
+    var destino = resultado.destino;
+    var pose = poseGoleiroEsquiva(destino);
+    var fim;
+    if (resultado.motivo === 'gol') {
+      fim = { x: destino.x, y: destino.y, z: -0.35 };
+    } else if (resultado.motivo === 'fraco') {
+      // Chute fraco: a bola perde forca e morre rolando antes da linha.
+      fim = { x: destino.x * 0.6, y: ALTURA_BOLA, z: 2.6 };
+    } else if (resultado.motivo === 'alto') {
+      fim = { x: destino.x, y: Math.max(destino.y, 3.0), z: -1.1 };
+    } else {
+      fim = { x: destino.x * 1.15, y: Math.max(ALTURA_BOLA, destino.y), z: -1.1 };
+    }
 
-    // Altura so muda o FORMATO do arco (visual) e a velocidade do voo —
-    // nao entra no calculo de dentro/fora, que ja foi decidido acima.
-    var arcoAltura = ALTURA_ARCO_BASE + alturaClamp * ALTURA_ARCO_MAX;
-    // Chute forte = bola chega mais rapido; fraco = mais devagar.
-    var duracaoVoo = d(Math.round(TEMPO.VOO_BOLA * (1.3 - forcaClamp * 0.6)));
+    // Arco e velocidade acompanham a forca (so visual): forte = mais reto
+    // e rapido; fraco = mais lento.
+    var arco = resultado.motivo === 'fraco' ? 0.15 : 0.5;
+    var duracaoVoo = d(Math.round(TEMPO.VOO_BOLA * (1.3 - resultado.forca * 0.6)));
 
     function iniciarBolaEGoleiro() {
       const g0 = { x: goleiro.position.x, y: GOLEIRO_BASE.y };
@@ -821,7 +772,7 @@ function criarJogoPenalti(containerId, selecaoId) {
       animar(duracaoVoo, function(e, u) {
         bola.position.set(
           ini.x + (fim.x - ini.x) * e,
-          ini.y + (fim.y - ini.y) * e + arcoAltura * u * (1 - u) * 4,
+          ini.y + (fim.y - ini.y) * e + arco * u * (1 - u) * 4,
           ini.z + (fim.z - ini.z) * e
         );
         bolaMalha.rotation.x = -u * TEMPO.GIRO_BOLA;
@@ -840,12 +791,13 @@ function criarJogoPenalti(containerId, selecaoId) {
           lamentarTorcida();
         }
         quedaGoleiro();
-        if (aoFinalizar) aoFinalizar({ gol: resultado.dentro, fora: !resultado.dentro });
+        if (aoFinalizar) aoFinalizar({ gol: resultado.dentro, fora: !resultado.dentro, motivo: resultado.motivo });
         resetPendente = animar(reduzMovimento ? 60 : TEMPO.ANTES_DE_RESETAR, null, resetar);
       }, { ease: EASE.quadOut });
     }
 
     animarChute(iniciarBolaEGoleiro);
+    return true;
   }
 
   function destruir() {
@@ -864,5 +816,5 @@ function criarJogoPenalti(containerId, selecaoId) {
     if (renderer.domElement.parentNode) renderer.domElement.parentNode.removeChild(renderer.domElement);
   }
 
-  return { chutar, iniciarMira, pararMira, chutarLivre, destruir };
+  return { modo: '3d', chutar, iniciarMira, moverMiraTela, moverMiraDelta, pararMira, chutarLivre, destruir };
 }
