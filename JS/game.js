@@ -10,10 +10,12 @@
 //     moverMiraTela(clientX, clientY), // mira segue ponteiro (mouse/toque/caneta)
 //     moverMiraDelta(dx, dy),          // mira por teclado (metros)
 //     pararMira() -> {x, y},           // trava e devolve o ponto mirado
-//     chutarLivre(pontoMira, forca, aoFinalizar), // resposta CERTA: o goleiro nunca
-//                                      // alcanca, mas mira + forca decidem gol ou
+//     chutarLivre(pontoMira, forca, altura, aoFinalizar), // resposta CERTA: o goleiro
+//                                      // nunca alcanca, mas mira + altura (tipo de chute:
+//                                      // rasteiro/meia/cavadinha) + forca decidem gol ou
 //                                      // fora (RegrasChute.calcularResultadoChute).
-//                                      // aoFinalizar({gol, fora, motivo})
+//                                      // aoFinalizar({gol, fora, motivo, tipo})
+//     depurar() -> {goleiroMinY, bola, gol...}  // leitura p/ testes
 //     destruir()
 //   }
 //
@@ -29,7 +31,8 @@
 // Unidades: metros. Eixo x = lateral (negativo = esquerda da tela), y = altura,
 // z = profundidade (gol em z=0, marca do penalti em z=11, camera atras).
 
-const ALTURA_BOLA = 0.22; // raio da bola (maior que a real, para ler bem na tela)
+const ALTURA_BOLA = 0.22;
+const GOL_MEIA_LARGURA = 3.66, GOL_ALTURA = 2.44; // raio da bola (maior que a real, para ler bem na tela)
 
 // Pontos do plano do gol (z=0) que cada alternativa representa (usado so
 // no caminho de resposta errada / tempo esgotado — chutar(), sempre defesa).
@@ -41,9 +44,14 @@ const ZONAS = {
   'baixo-direita':  { x:  2.5, y: 0.55 }
 };
 
-const CAMERA = { fov: 34, pos: [1.2, 4.4, 19], alvo: [0, -1.5, 0] };
+// Camera mais fechada no gol (o gol ocupa ~50% da largura do palco, antes
+// ~35%), com o batedor INTEIRO no quadro e sem cobrir o gol quando ele
+// chega na bola (menos de 1% do gol encoberto). Parametros escolhidos por
+// busca numerica com a propria projecao do Three.js; a mira usa esta mesma
+// camera (raycast), entao continua alinhada com o gol desenhado.
+const CAMERA = { fov: 22, pos: [0.6, 3.5, 21], alvo: [0, -1, 0] };
+const INICIO_BATEDOR = { x: -1.4, z: 12.4 };
 const PONTO_BOLA = { x: 0, y: ALTURA_BOLA, z: 11 };
-const INICIO_BATEDOR = { x: -1.0, z: 13.4 };
 const PLANTIO_BATEDOR = { x: -0.3, z: 11.55 };
 const GOLEIRO_BASE = { x: 0, y: 1.2, z: 0.3 }; // centro do tronco
 const ALCANCE_MAOS = 0.95; // do centro do tronco ate as maos, com bracos para cima
@@ -82,7 +90,9 @@ const EASE = {
   linear: function(u) { return u; },
   sineOut: function(u) { return Math.sin(u * Math.PI / 2); },
   quadOut: function(u) { return 1 - (1 - u) * (1 - u); },
-  cubicIn: function(u) { return u * u * u; }
+  cubicIn: function(u) { return u * u * u; },
+  quadIn: function(u) { return u * u; },
+  sineInOut: function(u) { return 0.5 - 0.5 * Math.cos(u * Math.PI); }
 };
 
 function criarJogoPenalti(containerId, selecaoId) {
@@ -150,6 +160,9 @@ function criarJogoPenalti(containerId, selecaoId) {
   const matriz = new THREE.Matrix4();
   const corTmp = new THREE.Color();
   let idx = 0;
+  // Posicao e cor-base de cada torcedor: as animacoes sempre partem daqui
+  // (nunca da cor/posicao "atual"), pra nao acumular clareamento.
+  const baseTorcida = [];
   for (let r = 0; r < LINHAS; r++) {
     const yLinha = 1.4 + r * 0.85, zLinha = -9.2 - r * 0.8;
     const degrau = new THREE.Mesh(new THREE.BoxGeometry(46, 0.6, 1.0), mat(0x1c2b3a));
@@ -158,6 +171,8 @@ function criarJogoPenalti(containerId, selecaoId) {
     for (let c = 0; c < COLUNAS; c++) {
       const x = (c - COLUNAS / 2) * 1.15 + (r % 2) * 0.55;
       corTmp.setHex(CORES_TORCIDA[(c * 3 + r) % CORES_TORCIDA.length]);
+      baseTorcida.push({ x: x, y: yLinha, z: zLinha, cor: corTmp.getHex(),
+        fase: ((idx * 0.618) % 1) * Math.PI * 2, amplitude: 0.18 + 0.3 * (((idx * 37) % 10) / 10) });
       matriz.makeTranslation(x, yLinha, zLinha);
       cabecas.setMatrixAt(idx, matriz);
       cabecas.setColorAt(idx, corTmp);
@@ -395,9 +410,23 @@ function criarJogoPenalti(containerId, selecaoId) {
   let vivo = true;
   let rafId = 0;
 
+  function aplicarTorcidaBase() {
+    for (let i = 0; i < baseTorcida.length; i++) {
+      const b = baseTorcida[i];
+      corTmp.setHex(b.cor);
+      matriz.makeTranslation(b.x, b.y, b.z);
+      cabecas.setMatrixAt(i, matriz); cabecas.setColorAt(i, corTmp);
+      matriz.makeTranslation(b.x, b.y - 0.6, b.z);
+      corpos.setMatrixAt(i, matriz); corpos.setColorAt(i, corTmp);
+    }
+    cabecas.instanceMatrix.needsUpdate = true; corpos.instanceMatrix.needsUpdate = true;
+    cabecas.instanceColor.needsUpdate = true; corpos.instanceColor.needsUpdate = true;
+  }
+
   function resetar() {
     resetPendente = null;
     bola.position.set(PONTO_BOLA.x, PONTO_BOLA.y, PONTO_BOLA.z);
+    bola.visible = true;
     bolaMalha.rotation.set(0, 0, 0);
     goleiro.position.set(GOLEIRO_BASE.x, GOLEIRO_BASE.y, GOLEIRO_BASE.z);
     goleiro.rotation.set(0, 0, 0);
@@ -408,106 +437,41 @@ function criarJogoPenalti(containerId, selecaoId) {
     [batedorObj.pernaChute, batedorObj.pernaApoio, batedorObj.bracoE, batedorObj.bracoD, batedorObj.tronco].forEach(function(p) { p.rotation.set(0, 0, 0); });
     rede.scale.set(1, 1, 1);
     offTorcida = 0;
+    aplicarTorcidaBase();
     goleiroLivre = true;
   }
   resetar();
 
+  // Comemoracao: cada torcedor pula com fase e amplitude proprias (grupos
+  // nao sincronizados) e o brilho e SEMPRE calculado a partir da cor-base,
+  // entao nunca acumula ate o branco. No fim volta suavemente a base.
   function comemorarTorcida() {
+    const branco = new THREE.Color(0xffffff);
+    const base = new THREE.Color();
     animar(d(TEMPO.COMEMORA_TORCIDA), function(e, u) {
-      var onda = Math.sin(u * Math.PI * 5);
-      var envelope = 1 - u * 0.6;
-      offTorcida = Math.abs(onda) * 0.55 * envelope;
-    }, function() { offTorcida = 0; });
-
-    var corOriginal = new THREE.Color();
-    var corBrilho = new THREE.Color();
-    animar(d(TEMPO.COMEMORA_TORCIDA * 0.7), function(e, u) {
-      var pulsoV = Math.abs(Math.sin(u * Math.PI * 4));
-      for (var i = 0; i < LINHAS * COLUNAS; i++) {
-        cabecas.getColorAt(i, corOriginal);
-        corBrilho.copy(corOriginal).lerp(new THREE.Color(0xffffff), pulsoV * 0.35);
-        cabecas.setColorAt(i, corBrilho);
-        corpos.setColorAt(i, corBrilho);
+      const envelope = Math.sin(Math.PI * Math.min(1, u * 1.15)); // sobe e desce suave
+      for (let i = 0; i < baseTorcida.length; i++) {
+        const b = baseTorcida[i];
+        const onda = Math.abs(Math.sin(u * Math.PI * 5 + b.fase));
+        const salto = b.amplitude * onda * Math.max(0, envelope);
+        matriz.makeTranslation(b.x, b.y + salto, b.z);
+        cabecas.setMatrixAt(i, matriz);
+        matriz.makeTranslation(b.x, b.y - 0.6 + salto, b.z);
+        corpos.setMatrixAt(i, matriz);
+        base.setHex(b.cor);
+        corTmp.copy(base).lerp(branco, 0.28 * onda * Math.max(0, envelope));
+        cabecas.setColorAt(i, corTmp);
+        corpos.setColorAt(i, corTmp);
       }
-      cabecas.instanceColor.needsUpdate = true;
-      corpos.instanceColor.needsUpdate = true;
-    }, function() {
-      var idx2 = 0;
-      var corTmp2 = new THREE.Color();
-      for (var r = 0; r < LINHAS; r++) {
-        for (var c = 0; c < COLUNAS; c++) {
-          corTmp2.setHex(CORES_TORCIDA[(c * 3 + r) % CORES_TORCIDA.length]);
-          cabecas.setColorAt(idx2, corTmp2);
-          corpos.setColorAt(idx2, corTmp2);
-          idx2++;
-        }
-      }
-      cabecas.instanceColor.needsUpdate = true;
-      corpos.instanceColor.needsUpdate = true;
-    });
+      cabecas.instanceMatrix.needsUpdate = true; corpos.instanceMatrix.needsUpdate = true;
+      cabecas.instanceColor.needsUpdate = true; corpos.instanceColor.needsUpdate = true;
+    }, aplicarTorcidaBase);
   }
 
   function lamentarTorcida() {
     animar(d(TEMPO.LAMENTA_TORCIDA), function(e, u) {
       offTorcida = -Math.sin(u * Math.PI) * 0.22;
     }, function() { offTorcida = 0; });
-  }
-
-  var textoIncentivo = null;
-  var FRASES_INCENTIVO = [
-    'Quase! Tenta de novo!',
-    'Boa tentativa!',
-    'Não desista!',
-    'Você consegue!',
-    'Continue tentando!',
-    'Foi por pouco!',
-    'Na próxima vai!'
-  ];
-
-  function mostrarIncentivo() {
-    if (textoIncentivo) { cena.remove(textoIncentivo); textoIncentivo = null; }
-
-    var frase = FRASES_INCENTIVO[Math.floor(Math.random() * FRASES_INCENTIVO.length)];
-
-    var canvas2d = document.createElement('canvas');
-    canvas2d.width = 512; canvas2d.height = 128;
-    var ctx = canvas2d.getContext('2d');
-    ctx.clearRect(0, 0, 512, 128);
-
-    ctx.fillStyle = 'rgba(255, 198, 59, 0.92)';
-    ctx.beginPath();
-    ctx.roundRect(16, 16, 480, 96, 24);
-    ctx.fill();
-    ctx.strokeStyle = '#21303B';
-    ctx.lineWidth = 4;
-    ctx.stroke();
-
-    ctx.fillStyle = '#21303B';
-    ctx.font = 'bold 38px Fredoka, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(frase, 256, 64);
-
-    var textura = new THREE.CanvasTexture(canvas2d);
-    var matSprite = new THREE.SpriteMaterial({ map: textura, transparent: true, opacity: 0 });
-    textoIncentivo = new THREE.Sprite(matSprite);
-    textoIncentivo.scale.set(8, 2, 1);
-    textoIncentivo.position.set(0, 4, 5);
-    cena.add(textoIncentivo);
-
-    animar(d(400), function(e) {
-      textoIncentivo.material.opacity = e;
-      textoIncentivo.position.y = 3.5 + 1.5 * e;
-    }, function() {
-      animar(d(900), null, function() {
-        animar(d(500), function(e) {
-          textoIncentivo.material.opacity = 1 - e;
-          textoIncentivo.position.y = 5 + 1.2 * e;
-        }, function() {
-          if (textoIncentivo) { cena.remove(textoIncentivo); textoIncentivo = null; }
-        }, { ease: EASE.sineOut });
-      });
-    }, { ease: EASE.sineOut });
   }
 
   function ajustarTamanho() {
@@ -533,6 +497,7 @@ function criarJogoPenalti(containerId, selecaoId) {
     const t = agora / 1000;
     torcida.position.y = (reduzMovimento ? 0 : Math.sin(t * 4.2) * 0.06) + offTorcida;
     if (goleiroLivre && !reduzMovimento) goleiro.position.x = GOLEIRO_BASE.x + Math.sin(t * 1.6) * 0.18;
+    sombraBola.visible = bola.visible;
     sombraBola.position.set(bola.position.x, 0.02, bola.position.z);
     sombraBola.scale.setScalar(Math.max(0.5, 1 - (bola.position.y - ALTURA_BOLA) * 0.25));
     sombraBatedor.position.set(batedor.position.x, 0.02, batedor.position.z);
@@ -541,7 +506,7 @@ function criarJogoPenalti(containerId, selecaoId) {
   }
   rafId = requestAnimationFrame(quadro);
 
-  // ---------- Chute ----------
+  // ---------- Chute (batedor) ----------
   function animarChute(aoContato) {
     const b = batedorObj;
     animar(d(TEMPO.CORRIDA), function(e, u) {
@@ -577,51 +542,169 @@ function criarJogoPenalti(containerId, selecaoId) {
     });
   }
 
-  function poseGoleiro(zonaId) {
-    const z = ZONAS[zonaId];
-    if (zonaId === 'meio') return { x: 0, y: GOLEIRO_BASE.y, rotZ: 0, armZ: 0.25, armX: -1.3, zBola: 0.95 };
-    const lado = Math.sign(z.x);
-    const ang = z.y > 1.5 ? 0.95 : 1.4;
+  // ---------- Goleiro ----------
+  // Altura do pivo (centro do tronco) que deixa o ponto mais baixo do corpo
+  // exatamente no chao para uma dada pose. Calculada com a caixa real do
+  // modelo, pra o goleiro nunca atravessar o gramado.
+  const caixaTmp = new THREE.Box3();
+  function alturaDeApoio(rotZ, pose) {
+    const salvo = {
+      pos: goleiro.position.clone(), rot: goleiro.rotation.clone(),
+      e: goleiroObj.bracoE.rotation.clone(), d: goleiroObj.bracoD.rotation.clone()
+    };
+    goleiro.position.set(0, 0, GOLEIRO_BASE.z);
+    goleiro.rotation.set(0, 0, rotZ);
+    goleiroObj.bracoE.rotation.set(pose.armX, 0, -pose.armZ);
+    goleiroObj.bracoD.rotation.set(pose.armX, 0, pose.armZ);
+    goleiro.updateMatrixWorld(true);
+    caixaTmp.setFromObject(goleiro);
+    const apoio = -caixaTmp.min.y;
+    goleiro.position.copy(salvo.pos); goleiro.rotation.copy(salvo.rot);
+    goleiroObj.bracoE.rotation.copy(salvo.e); goleiroObj.bracoD.rotation.copy(salvo.d);
+    goleiro.updateMatrixWorld(true);
+    return apoio;
+  }
+
+  function poseDoPonto(alvo) {
+    const lado = alvo.x >= 0 ? 1 : -1;
+    const ang = alvo.y > 1.5 ? 0.95 : 1.4;
     const phi = -lado * ang;
-    return {
-      x: z.x + ALCANCE_MAOS * Math.sin(phi),
-      y: z.y - ALCANCE_MAOS * Math.cos(phi),
-      rotZ: phi, armZ: 2.9, armX: 0, zBola: 0.45
-    };
+    const pose = { x: alvo.x + ALCANCE_MAOS * Math.sin(phi), y: alvo.y - ALCANCE_MAOS * Math.cos(phi), rotZ: phi, armZ: 2.9, armX: 0, zBola: 0.45 };
+    pose.y = Math.max(pose.y, alturaDeApoio(phi, pose) + 0.02); // mergulho nunca abaixo do chao
+    return pose;
   }
 
-  // Pose de goleiro "esquivando": usado no chute livre quando a resposta
-  // foi correta — o goleiro sempre mergulha pro lado OPOSTO ao destino
-  // real da bola, entao nunca alcanca (mas isso nao decide gol/fora: quem
-  // decide e RegrasChute.calcularResultadoChute).
+  function poseGoleiro(zonaId) {
+    if (zonaId === 'meio') return { x: 0, y: GOLEIRO_BASE.y, rotZ: 0, armZ: 0.25, armX: -1.3, zBola: 0.95 };
+    return poseDoPonto(ZONAS[zonaId]);
+  }
+
+  // Resposta correta: o goleiro sempre mergulha pro lado OPOSTO ao destino
+  // real da bola, entao nunca alcanca (quem decide gol/fora e a regra).
   function poseGoleiroEsquiva(destino) {
-    var lado = destino.x >= 0 ? -1 : 1;
-    var alto = Math.random() < 0.5;
-    var zonaFake = { x: lado * (2.3 + Math.random() * 0.6), y: alto ? 2.0 : 0.55 };
-    var ang = zonaFake.y > 1.5 ? 0.95 : 1.4;
-    var phi = -Math.sign(zonaFake.x) * ang;
-    return {
-      x: zonaFake.x + ALCANCE_MAOS * Math.sin(phi),
-      y: zonaFake.y - ALCANCE_MAOS * Math.cos(phi),
-      rotZ: phi, armZ: 2.9, armX: 0
-    };
+    const lado = destino.x >= 0 ? -1 : 1;
+    const alto = Math.random() < 0.5;
+    return poseDoPonto({ x: lado * (2.3 + Math.random() * 0.6), y: alto ? 2.0 : 0.55 });
   }
 
-  // Depois de qualquer lance (gol, defesa ou fora) o goleiro nao pode ficar
-  // suspenso na pose do mergulho — ele cai/tomba no chao, com um pequeno
-  // atraso (pra nao competir visualmente com a comemoracao/lamento), e so
-  // depois disso a cena reseta.
-  function quedaGoleiro() {
-    var y0 = goleiro.position.y;
-    animar(d(420), function(e) {
-      goleiro.position.y = y0 * (1 - e);
-      goleiro.rotation.x = 0.85 * e;
-    }, null, { ease: EASE.cubicIn, atraso: reduzMovimento ? 0 : 180 });
+  function mergulharGoleiro(pose, aoTerminar) {
+    const g0 = { x: goleiro.position.x, y: GOLEIRO_BASE.y };
+    // Altura minima (corpo encostando no chao) ao longo do mergulho, para
+    // a interpolacao nunca "afundar" os pes no gramado no meio do salto.
+    const apoio = [];
+    for (let i = 0; i <= 10; i++) {
+      const e = i / 10;
+      apoio.push(alturaDeApoio(pose.rotZ * e, { armX: pose.armX * e, armZ: 0.6 + (pose.armZ - 0.6) * e }));
+    }
+    function apoioEm(e) {
+      const k = Math.min(9.999, Math.max(0, e * 10)), i = Math.floor(k), f = k - i;
+      return apoio[i] + (apoio[i + 1] - apoio[i]) * f;
+    }
+    animar(d(TEMPO.MERGULHO_GOLEIRO), function(e) {
+      goleiro.position.x = g0.x + (pose.x - g0.x) * e;
+      goleiro.position.y = Math.max(g0.y + (pose.y - g0.y) * e, apoioEm(e) + 0.01);
+      goleiro.rotation.z = pose.rotZ * e;
+      goleiroObj.bracoE.rotation.set(pose.armX * e, 0, -(0.6 + (pose.armZ - 0.6) * e));
+      goleiroObj.bracoD.rotation.set(pose.armX * e, 0, 0.6 + (pose.armZ - 0.6) * e);
+    }, function() {
+      deitarGoleiro(pose);
+      if (aoTerminar) aoTerminar();
+    }, { ease: EASE.sineOut });
   }
 
-  // Resposta errada / tempo esgotado: o goleiro vai exatamente na zona
-  // chutada e defende. Nao existe variante "correta" aqui — resposta certa
-  // sempre passa por mira + forca (chutarLivre).
+  // Depois do mergulho o goleiro cai deitado de lado, de forma continua
+  // (gravidade no Y, giro suave), da uma pequena acomodada e FICA no chao
+  // ate a cena resetar. Nunca desce abaixo do gramado: a altura final vem
+  // da caixa real do corpo (alturaDeApoio). Defesa no meio: fica em pe.
+  function deitarGoleiro(pose) {
+    if (Math.abs(pose.rotZ) < 0.01) {
+      animar(d(500), function(e) {
+        goleiroObj.bracoE.rotation.x = pose.armX * (1 - 0.5 * e);
+        goleiroObj.bracoD.rotation.x = pose.armX * (1 - 0.5 * e);
+      }, null, { ease: EASE.sineInOut });
+      return;
+    }
+    const lado = pose.rotZ > 0 ? 1 : -1;
+    const rotFinal = lado * Math.PI / 2;
+    // Deitado, os bracos ficam esticados na linha do corpo (acima da
+    // cabeca): o apoio no chao e o ombro/quadril, como uma pessoa de lado,
+    // e nao a mao "escorando" o corpo no ar.
+    const bracosDeitado = { armX: 0.25, armZ: Math.PI };
+    const yFinal = alturaDeApoio(rotFinal, bracosDeitado) + 0.005;
+    const ini = { x: goleiro.position.x, y: goleiro.position.y, rot: goleiro.rotation.z,
+      armX: goleiroObj.bracoD.rotation.x, armZ: goleiroObj.bracoD.rotation.z };
+    const deslize = -lado * 0.25; // escorrega um pouco na direcao do mergulho
+    animar(d(520), function(e, u) {
+      const g = EASE.quadIn(u);                 // queda com aceleracao
+      goleiro.position.y = ini.y + (yFinal - ini.y) * g;
+      goleiro.rotation.z = ini.rot + (rotFinal - ini.rot) * EASE.sineInOut(u);
+      goleiro.position.x = ini.x + deslize * EASE.sineOut(u);
+      const armZ = ini.armZ + (bracosDeitado.armZ - ini.armZ) * EASE.sineInOut(u);
+      const armX = ini.armX + (bracosDeitado.armX - ini.armX) * EASE.sineInOut(u);
+      goleiroObj.bracoE.rotation.set(armX, 0, -armZ);
+      goleiroObj.bracoD.rotation.set(armX, 0, armZ);
+      // Durante a queda nunca abaixo do chao (bracos mudando de pose).
+      goleiro.position.y = Math.max(goleiro.position.y, yFinal);
+    }, function() {
+      goleiro.position.y = yFinal;
+      goleiro.rotation.z = rotFinal;
+      // Acomodada curta (quique pequeno) e depois fica parado no chao.
+      animar(d(220), function(e, u) {
+        goleiro.position.y = yFinal + 0.05 * Math.sin(Math.PI * u);
+      }, function() { goleiro.position.y = yFinal; });
+    });
+  }
+
+  // ---------- Bola ----------
+  // Voo ate o plano do gol pela trajetoria da regra (em s = 1 a bola esta
+  // EXATAMENTE no destino calculado). Depois o voo continua: entra na rede
+  // (gol), passa por cima / por fora e cai no chao (fora) — a bola nunca
+  // fica parada no ar.
+  function voarBola(destino, arco, duracao, aoCruzar) {
+    const ini = { x: bola.position.x, y: bola.position.y, z: bola.position.z };
+    animar(duracao, function(e, u) {
+      const p = RegrasChute.pontoTrajetoria(ini, destino, arco, e);
+      bola.position.set(p.x, Math.max(ALTURA_BOLA, p.y), p.z);
+      bolaMalha.rotation.x = -u * TEMPO.GIRO_BOLA;
+      bolaMalha.rotation.z = u * TEMPO.GIRO_BOLA * 0.3;
+    }, aoCruzar, { ease: EASE.quadOut });
+  }
+
+  function cairNoChao(duracao) {
+    const y0 = bola.position.y;
+    animar(d(duracao), function(e, u) {
+      bola.position.y = y0 + (ALTURA_BOLA - y0) * EASE.quadIn(u);
+    }, function() { bola.position.y = ALTURA_BOLA; });
+  }
+
+  function continuarVoo(motivo, destino) {
+    const lado = destino.x >= 0 ? 1 : -1;
+    if (motivo === 'gol') {
+      const z0 = bola.position.z, y0 = bola.position.y;
+      animar(d(TEMPO.BOLA_NA_REDE), function(e) {
+        bola.position.z = z0 + (-1.5 - z0) * e;
+        bola.position.y = y0 + (Math.max(ALTURA_BOLA, y0 - 0.3) - y0) * e;
+      }, function() { cairNoChao(300); }, { ease: EASE.sineOut });
+      return;
+    }
+    // Fora: segue na mesma direcao por cima do travessao / por fora da
+    // trave e cai atras do gol.
+    const p0 = { x: bola.position.x, y: bola.position.y, z: bola.position.z };
+    const alvo = motivo === 'alto'
+      ? { x: p0.x * 1.1, y: Math.max(p0.y + 0.5, GOL_ALTURA + 0.7), z: -2.6 }
+      : { x: p0.x + lado * 1.2, y: p0.y + 0.15, z: -2.2 };
+    animar(d(320), function(e) {
+      bola.position.set(p0.x + (alvo.x - p0.x) * e, p0.y + (alvo.y - p0.y) * e, p0.z + (alvo.z - p0.z) * e);
+    }, function() {
+      const z1 = bola.position.z;
+      animar(d(380), function(e, u) {
+        bola.position.z = z1 - 1.4 * e;
+      }, null, { ease: EASE.sineOut });
+      cairNoChao(380);
+    });
+  }
+
+  // ---------- Resposta errada / tempo esgotado: defesa ----------
   function chutar(zonaId, aoFinalizar) {
     if (emAnimacao || !vivo) return false;
     const alvo = ZONAS[zonaId] || ZONAS.meio;
@@ -633,35 +716,25 @@ function criarJogoPenalti(containerId, selecaoId) {
     const fim = { x: alvo.x, y: alvo.y, z: pose.zBola };
 
     function iniciarBolaEGoleiro() {
-      const g0 = { x: goleiro.position.x, y: GOLEIRO_BASE.y };
-      animar(d(TEMPO.MERGULHO_GOLEIRO), function(e) {
-        goleiro.position.x = g0.x + (pose.x - g0.x) * e;
-        goleiro.position.y = g0.y + (pose.y - g0.y) * e;
-        goleiro.rotation.z = pose.rotZ * e;
-        goleiroObj.bracoE.rotation.set(pose.armX * e, 0, -(0.6 + (pose.armZ - 0.6) * e));
-        goleiroObj.bracoD.rotation.set(pose.armX * e, 0, 0.6 + (pose.armZ - 0.6) * e);
-      }, function() {
-        pulso(TEMPO.IMPACTO_DEFESA, function(s) { goleiro.scale.set(1 + 0.12 * s, 1 - 0.15 * s, 1); });
-        mostrarIncentivo();
-      }, { ease: EASE.sineOut });
-
+      mergulharGoleiro(pose, function() {
+        pulso(TEMPO.IMPACTO_DEFESA, function(s) { goleiro.scale.set(1 + 0.08 * s, 1 - 0.1 * s, 1); });
+      });
       const ini = { x: bola.position.x, y: bola.position.y, z: bola.position.z };
       animar(d(TEMPO.VOO_BOLA), function(e, u) {
         bola.position.set(
           ini.x + (fim.x - ini.x) * e,
-          ini.y + (fim.y - ini.y) * e + 4 * u * (1 - u) * 0.5,
+          Math.max(ALTURA_BOLA, ini.y + (fim.y - ini.y) * e + 4 * u * (1 - u) * 0.5),
           ini.z + (fim.z - ini.z) * e
         );
         bolaMalha.rotation.x = -u * TEMPO.GIRO_BOLA;
         bolaMalha.rotation.z = u * TEMPO.GIRO_BOLA * 0.3;
       }, function() {
         emAnimacao = false;
-        animar(d(TEMPO.REBOTE), function(e) {
-          bola.position.z = fim.z + 0.9 * e;
-          bola.position.y = fim.y * (1 - e * e) + ALTURA_BOLA * e * e;
-        }, null, { ease: EASE.sineOut });
+        // Rebote: a bola volta pro campo e cai no gramado.
+        const z0 = bola.position.z;
+        animar(d(TEMPO.REBOTE), function(e) { bola.position.z = z0 + 1.2 * e; }, null, { ease: EASE.sineOut });
+        cairNoChao(TEMPO.REBOTE);
         lamentarTorcida();
-        quedaGoleiro();
         if (aoFinalizar) aoFinalizar({ gol: false, fora: false, motivo: 'defesa' });
         resetPendente = animar(reduzMovimento ? 60 : TEMPO.ANTES_DE_RESETAR, null, resetar);
       }, { ease: EASE.quadOut });
@@ -692,10 +765,7 @@ function criarJogoPenalti(containerId, selecaoId) {
   function pontoParaTela(ponto) {
     const v = new THREE.Vector3(ponto.x, ponto.y, 0);
     v.project(camera);
-    return {
-      leftPercent: (v.x * 0.5 + 0.5) * 100,
-      topPercent: (-v.y * 0.5 + 0.5) * 100
-    };
+    return { leftPercent: (v.x * 0.5 + 0.5) * 100, topPercent: (-v.y * 0.5 + 0.5) * 100 };
   }
 
   function notificarMira() {
@@ -706,7 +776,7 @@ function criarJogoPenalti(containerId, selecaoId) {
     pontoMiraAtual = RegrasChute.limitarMira(RegrasChute.CENTRO_GOL);
     aoAtualizarMira = aoAtualizar || null;
     renderer.domElement.style.cursor = 'crosshair';
-    notificarMira(); // posicao inicial (centro do gol)
+    notificarMira();
   }
 
   function moverMiraTela(clientX, clientY) {
@@ -729,75 +799,77 @@ function criarJogoPenalti(containerId, selecaoId) {
     return { x: pontoMiraAtual.x, y: pontoMiraAtual.y };
   }
 
-  // ---------- Chute livre (apos mira + forca) ----------
-  // O resultado (dentro/fora e o motivo) vem da regra pura compartilhada;
-  // aqui so se desenha a trajetoria coerente com ele.
-  function chutarLivre(pontoMira, forca, aoFinalizar) {
+  // ---------- Chute livre (apos mira + altura + forca) ----------
+  function chutarLivre(pontoMira, forca, altura, aoFinalizar) {
+    if (typeof altura === 'function' && aoFinalizar === undefined) { aoFinalizar = altura; altura = undefined; }
     if (emAnimacao || !vivo) return false;
     if (resetPendente) { tweens.length = 0; resetar(); }
     emAnimacao = true;
     goleiroLivre = false;
 
-    var resultado = RegrasChute.calcularResultadoChute(pontoMira, forca, RegrasChute.aleatorio);
-    var destino = resultado.destino;
-    var pose = poseGoleiroEsquiva(destino);
-    var fim;
-    if (resultado.motivo === 'gol') {
-      fim = { x: destino.x, y: destino.y, z: -0.35 };
-    } else if (resultado.motivo === 'fraco') {
-      // Chute fraco: a bola perde forca e morre rolando antes da linha.
-      fim = { x: destino.x * 0.6, y: ALTURA_BOLA, z: 2.6 };
-    } else if (resultado.motivo === 'alto') {
-      fim = { x: destino.x, y: Math.max(destino.y, 3.0), z: -1.1 };
-    } else {
-      fim = { x: destino.x * 1.15, y: Math.max(ALTURA_BOLA, destino.y), z: -1.1 };
-    }
-
-    // Arco e velocidade acompanham a forca (so visual): forte = mais reto
-    // e rapido; fraco = mais lento.
-    var arco = resultado.motivo === 'fraco' ? 0.15 : 0.5;
-    var duracaoVoo = d(Math.round(TEMPO.VOO_BOLA * (1.3 - resultado.forca * 0.6)));
+    const r = RegrasChute.calcularResultadoChute(pontoMira, forca, altura, RegrasChute.aleatorio);
+    const tipo = RegrasChute.TIPOS[r.tipo];
+    const pose = poseGoleiroEsquiva(r.destino);
+    // Cavadinha e mais lenta; rasteiro e forte, mais rapidos.
+    const fatorTipo = r.tipo === 'cavadinha' ? 1.35 : (r.tipo === 'rasteiro' ? 0.85 : 1);
+    const duracaoVoo = d(Math.round(TEMPO.VOO_BOLA * (1.3 - r.forca * 0.6) * fatorTipo));
 
     function iniciarBolaEGoleiro() {
-      const g0 = { x: goleiro.position.x, y: GOLEIRO_BASE.y };
-      animar(d(TEMPO.MERGULHO_GOLEIRO), function(e) {
-        goleiro.position.x = g0.x + (pose.x - g0.x) * e;
-        goleiro.position.y = g0.y + (pose.y - g0.y) * e;
-        goleiro.rotation.z = pose.rotZ * e;
-        goleiroObj.bracoE.rotation.set(pose.armX * e, 0, -(0.6 + (pose.armZ - 0.6) * e));
-        goleiroObj.bracoD.rotation.set(pose.armX * e, 0, 0.6 + (pose.armZ - 0.6) * e);
-      }, null, { ease: EASE.sineOut });
+      mergulharGoleiro(pose);
+      if (r.motivo === 'fraco') {
+        // Nao chega ao gol: rola, perde velocidade e para antes da linha.
+        const ini = { x: bola.position.x, y: bola.position.y, z: bola.position.z };
+        const fim = { x: r.destino.x * 0.5, z: 2.4 };
+        animar(duracaoVoo, function(e, u) {
+          bola.position.set(ini.x + (fim.x - ini.x) * e, ALTURA_BOLA + (r.tipo === 'cavadinha' ? 1.2 : 0.25) * 4 * u * (1 - u), ini.z + (fim.z - ini.z) * e);
+          bolaMalha.rotation.x = -u * TEMPO.GIRO_BOLA;
+        }, terminar, { ease: EASE.quadOut });
+        return;
+      }
+      voarBola(r.destino, tipo.arcoVisual, duracaoVoo, function() {
+        continuarVoo(r.motivo, r.destino);
+        terminar();
+      });
+    }
 
-      const ini = { x: bola.position.x, y: bola.position.y, z: bola.position.z };
-      animar(duracaoVoo, function(e, u) {
-        bola.position.set(
-          ini.x + (fim.x - ini.x) * e,
-          ini.y + (fim.y - ini.y) * e + arco * u * (1 - u) * 4,
-          ini.z + (fim.z - ini.z) * e
-        );
-        bolaMalha.rotation.x = -u * TEMPO.GIRO_BOLA;
-        bolaMalha.rotation.z = u * TEMPO.GIRO_BOLA * 0.3;
-      }, function() {
-        emAnimacao = false;
-        if (resultado.dentro) {
-          const yRede = Math.max(ALTURA_BOLA, fim.y - 0.25);
-          animar(d(TEMPO.BOLA_NA_REDE), function(e) {
-            bola.position.z = fim.z + (-1.5 - fim.z) * e;
-            bola.position.y = fim.y + (yRede - fim.y) * e;
-          }, null, { ease: EASE.sineOut });
-          pulso(TEMPO.VIBRACAO_REDE, function(s) { rede.scale.set(1 + 0.05 * s, 1 + 0.05 * s, 1 + 0.05 * s); });
-          comemorarTorcida();
-        } else {
-          lamentarTorcida();
-        }
-        quedaGoleiro();
-        if (aoFinalizar) aoFinalizar({ gol: resultado.dentro, fora: !resultado.dentro, motivo: resultado.motivo });
-        resetPendente = animar(reduzMovimento ? 60 : TEMPO.ANTES_DE_RESETAR, null, resetar);
-      }, { ease: EASE.quadOut });
+    function terminar() {
+      emAnimacao = false;
+      if (r.dentro) {
+        pulso(TEMPO.VIBRACAO_REDE, function(s) { rede.scale.set(1 + 0.05 * s, 1 + 0.05 * s, 1 + 0.05 * s); });
+        comemorarTorcida();
+      } else {
+        lamentarTorcida();
+      }
+      if (aoFinalizar) aoFinalizar({ gol: r.dentro, fora: !r.dentro, motivo: r.motivo, tipo: r.tipo });
+      resetPendente = animar(reduzMovimento ? 60 : TEMPO.ANTES_DE_RESETAR, null, resetar);
     }
 
     animarChute(iniciarBolaEGoleiro);
     return true;
+  }
+
+  // Leitura para testes/diagnostico (sem efeito colateral).
+  function depurar() {
+    goleiro.updateMatrixWorld(true);
+    caixaTmp.setFromObject(goleiro);
+    // Quanto a torcida esta "clareada" em relacao a cor-base (0 = base,
+    // 1 = branco). Deve ficar abaixo de ~0.3 e voltar a 0.
+    let clareamento = 0;
+    const atual = new THREE.Color(), base = new THREE.Color();
+    for (let i = 0; i < baseTorcida.length; i++) {
+      cabecas.getColorAt(i, atual); base.setHex(baseTorcida[i].cor);
+      ['r', 'g', 'b'].forEach(function(c) {
+        if (base[c] < 0.98) clareamento = Math.max(clareamento, (atual[c] - base[c]) / (1 - base[c]));
+      });
+    }
+    return {
+      torcidaClareamento: clareamento,
+      goleiroMinY: caixaTmp.min.y,
+      goleiroRotZ: goleiro.rotation.z,
+      bola: { x: bola.position.x, y: bola.position.y, z: bola.position.z },
+      emAnimacao: emAnimacao,
+      gol: [pontoParaTela({ x: -GOL_MEIA_LARGURA, y: 0 }), pontoParaTela({ x: GOL_MEIA_LARGURA, y: GOL_ALTURA })]
+    };
   }
 
   function destruir() {
@@ -810,11 +882,11 @@ function criarJogoPenalti(containerId, selecaoId) {
     if (observadorContraste) observadorContraste.disconnect();
     cena.traverse(function(o) {
       if (o.geometry) o.geometry.dispose();
-      if (o.material) { (Array.isArray(o.material) ? o.material : [o.material]).forEach(function(m) { m.dispose(); }); }
+      if (o.material) { (Array.isArray(o.material) ? o.material : [o.material]).forEach(function(m) { if (m.map) m.map.dispose(); m.dispose(); }); }
     });
     renderer.dispose();
     if (renderer.domElement.parentNode) renderer.domElement.parentNode.removeChild(renderer.domElement);
   }
 
-  return { modo: '3d', chutar, iniciarMira, moverMiraTela, moverMiraDelta, pararMira, chutarLivre, destruir };
+  return { modo: '3d', chutar, iniciarMira, moverMiraTela, moverMiraDelta, pararMira, chutarLivre, depurar, destruir };
 }

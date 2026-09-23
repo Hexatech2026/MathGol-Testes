@@ -15,6 +15,7 @@ function backupLocal(dados, extra) {
 }
 
 const progressoOk = JSON.stringify({ versao: 1, dados: { fasesDesbloqueadas: ['penaltis', 'falta'], melhorPontuacao: { penaltis: 250 }, melhorGols: { penaltis: 3 } } });
+const progresso = dados => JSON.stringify({ versao: 1, dados });
 const acessOk = JSON.stringify({ altoContraste: true, espacoDislexia: false, narracaoAtiva: true, sfxAtivo: true });
 
 test('backup local valido e aceito e so devolve chaves permitidas', () => {
@@ -123,4 +124,29 @@ test('validarResultadoPartida: limites de gols, pontos, tempo e resumo', () => {
     alterar(r);
     assert.notEqual(V.validarResultadoPartida(r), null, JSON.stringify(r));
   }
+});
+
+test('QA-4 (DEF-17): progresso incompativel com a fase → recusado', () => {
+  const casos = [
+    // Contraexemplo do relatorio: Penaltis tem 3 cobrancas.
+    { fasesDesbloqueadas: ['final'], melhorGols: { penaltis: 7 }, melhorPontuacao: { penaltis: 700 } },
+    { fasesDesbloqueadas: ['final'] },                                   // pula fases
+    { fasesDesbloqueadas: ['penaltis', 'final'], melhorGols: { penaltis: 3, falta: 5 }, melhorPontuacao: { penaltis: 300, falta: 500 } },
+    { fasesDesbloqueadas: ['penaltis', 'falta'], melhorGols: { penaltis: 1 }, melhorPontuacao: { penaltis: 90 } }, // sem gols pra desbloquear
+    { fasesDesbloqueadas: ['penaltis'], melhorGols: { penaltis: 4 } },   // mais gols que cobrancas
+    { fasesDesbloqueadas: ['penaltis'], melhorGols: { penaltis: 1 }, melhorPontuacao: { penaltis: 300 } }, // pontos > gols*100
+    { fasesDesbloqueadas: ['penaltis'], melhorGols: { penaltis: 2 }, melhorPontuacao: { penaltis: 5 } },   // pontos < gols*10
+    { fasesDesbloqueadas: ['penaltis'], melhorGols: { penaltis: 2.5 }, melhorPontuacao: { penaltis: 100 } },
+    { fasesDesbloqueadas: ['penaltis', 'penaltis'] }
+  ];
+  for (const dados of casos) {
+    assert.equal(V.validarProgressao(JSON.parse(progresso(dados))), false, JSON.stringify(dados));
+    assert.equal(V.analisarArquivo(backupLocal({ mathgol_progressao: progresso(dados) })).ok, false, JSON.stringify(dados));
+  }
+});
+
+test('progresso coerente com as 3 fases → aceito', () => {
+  const ok = { fasesDesbloqueadas: ['penaltis', 'falta', 'final'], melhorGols: { penaltis: 2, falta: 3, final: 7 }, melhorPontuacao: { penaltis: 150, falta: 240, final: 700 } };
+  assert.equal(V.validarProgressao({ versao: 1, dados: ok }), true);
+  assert.equal(V.validarProgressao({ fasesDesbloqueadas: ['penaltis'] }), true); // legado sem versao
 });

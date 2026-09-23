@@ -31,26 +31,28 @@ var BancoQuestoes = (function() {
   // - médio: adição, subtração e multiplicação básica.
   // - difícil: multiplicação e divisões exatas.
   var BANCO = {
+    // Resultados distribuidos de 1 a 10 (no maximo 3 questoes com o mesmo
+    // resultado), pra crianca nao "decorar" a resposta mais comum.
     facil: [
       function(){ return q('2 + 3', 'Quanto é 2 mais 3?', 5, [3, 4, 6, 7]); },
-      function(){ return q('1 + 4', 'Quanto é 1 mais 4?', 5, [3, 4, 6, 7]); },
+      function(){ return q('1 + 1', 'Quanto é 1 mais 1?', 2, [0, 1, 3, 4]); },
       function(){ return q('3 + 5', 'Quanto é 3 mais 5?', 8, [6, 7, 9, 10]); },
-      function(){ return q('6 + 2', 'Quanto é 6 mais 2?', 8, [6, 7, 9, 10]); },
-      function(){ return q('7 + 1', 'Quanto é 7 mais 1?', 8, [6, 7, 9, 10]); },
+      function(){ return q('4 + 2', 'Quanto é 4 mais 2?', 6, [4, 5, 7, 8]); },
+      function(){ return q('7 + 2', 'Quanto é 7 mais 2?', 9, [6, 7, 8, 10]); },
       function(){ return q('4 + 4', 'Quanto é 4 mais 4?', 8, [5, 6, 7, 9]); },
-      function(){ return q('5 + 3', 'Quanto é 5 mais 3?', 8, [6, 7, 9, 10]); },
-      function(){ return q('2 + 6', 'Quanto é 2 mais 6?', 8, [5, 7, 9, 10]); },
-      function(){ return q('1 + 7', 'Quanto é 1 mais 7?', 8, [5, 6, 9, 10]); },
+      function(){ return q('5 + 5', 'Quanto é 5 mais 5?', 10, [6, 7, 8, 9]); },
+      function(){ return q('2 + 1', 'Quanto é 2 mais 1?', 3, [1, 2, 4, 5]); },
+      function(){ return q('1 + 3', 'Quanto é 1 mais 3?', 4, [2, 3, 5, 6]); },
       function(){ return q('5 − 2', 'Quanto é 5 menos 2?', 3, [1, 2, 4, 5]); },
       function(){ return q('8 − 3', 'Quanto é 8 menos 3?', 5, [3, 4, 6, 7]); },
-      function(){ return q('7 − 4', 'Quanto é 7 menos 4?', 3, [1, 2, 4, 5]); },
+      function(){ return q('7 − 6', 'Quanto é 7 menos 6?', 1, [0, 2, 3, 4]); },
       function(){ return q('9 − 5', 'Quanto é 9 menos 5?', 4, [2, 3, 5, 6]); },
       function(){ return q('10 − 3', 'Quanto é 10 menos 3?', 7, [5, 6, 8, 9]); },
       function(){ return q('6 − 1', 'Quanto é 6 menos 1?', 5, [3, 4, 6, 7]); },
       function(){ return q('4 + 3', 'Quanto é 4 mais 3?', 7, [5, 6, 8, 9]); },
-      function(){ return q('9 − 6', 'Quanto é 9 menos 6?', 3, [1, 2, 4, 5]); },
+      function(){ return q('9 − 7', 'Quanto é 9 menos 7?', 2, [0, 1, 3, 4]); },
       function(){ return q('1 + 8', 'Quanto é 1 mais 8?', 9, [6, 7, 8, 10]); },
-      function(){ return q('10 − 7', 'Quanto é 10 menos 7?', 3, [1, 2, 4, 5]); },
+      function(){ return q('10 − 4', 'Quanto é 10 menos 4?', 6, [4, 5, 7, 8]); },
       function(){ return q('3 + 3', 'Quanto é 3 mais 3?', 6, [4, 5, 7, 8]); }
     ],
 
@@ -58,7 +60,7 @@ var BancoQuestoes = (function() {
       function(){ return q('7 + 8', 'Quanto é 7 mais 8?', 15, [12, 13, 14, 16]); },
       function(){ return q('9 + 6', 'Quanto é 9 mais 6?', 15, [13, 14, 16, 17]); },
       function(){ return q('12 + 5', 'Quanto é 12 mais 5?', 17, [15, 16, 18, 19]); },
-      function(){ return q('14 − 6', 'Quanto é 14 menos 6?', 8, [6, 7, 9, 10]); },
+      function(){ return q('14 − 5', 'Quanto é 14 menos 5?', 9, [7, 8, 10, 11]); },
       function(){ return q('18 − 9', 'Quanto é 18 menos 9?', 9, [7, 8, 10, 11]); },
       function(){ return q('15 − 7', 'Quanto é 15 menos 7?', 8, [6, 7, 9, 10]); },
       function(){ return q('3 × 4', 'Quanto é 3 vezes 4?', 12, [9, 10, 11, 14]); },
@@ -66,15 +68,15 @@ var BancoQuestoes = (function() {
       function(){ return q('4 × 5', 'Quanto é 4 vezes 5?', 20, [15, 16, 18, 22]); },
       function(){ return q('2 × 5', 'Quanto é 2 vezes 5?', 10, [6, 8, 12, 15]); },
       function(){ return q('11 + 7', 'Quanto é 11 mais 7?', 18, [15, 16, 17, 19]); },
-      function(){ return q('16 − 8', 'Quanto é 16 menos 8?', 8, [5, 6, 7, 9]); },
+      function(){ return q('16 − 9', 'Quanto é 16 menos 9?', 7, [5, 6, 8, 9]); },
       function(){ return q('3 × 3', 'Quanto é 3 vezes 3?', 9, [6, 7, 8, 12]); },
       function(){ return q('4 × 4', 'Quanto é 4 vezes 4?', 16, [12, 14, 15, 18]); },
       function(){ return q('13 + 6', 'Quanto é 13 mais 6?', 19, [16, 17, 18, 20]); },
       function(){ return q('20 − 8', 'Quanto é 20 menos 8?', 12, [10, 11, 13, 14]); },
       function(){ return q('5 × 4', 'Quanto é 5 vezes 4?', 20, [15, 16, 18, 24]); },
       function(){ return q('2 × 4', 'Quanto é 2 vezes 4?', 8, [5, 6, 10, 12]); },
-      function(){ return q('17 − 9', 'Quanto é 17 menos 9?', 8, [6, 7, 9, 10]); },
-      function(){ return q('6 + 9', 'Quanto é 6 mais 9?', 15, [12, 13, 14, 16]); }
+      function(){ return q('17 − 6', 'Quanto é 17 menos 6?', 11, [9, 10, 12, 13]); },
+      function(){ return q('6 + 7', 'Quanto é 6 mais 7?', 13, [11, 12, 14, 15]); }
     ],
 
     dificil: [

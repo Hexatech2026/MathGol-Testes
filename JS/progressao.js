@@ -100,6 +100,33 @@ var Progressao = (function() {
     }
   }
 
+  // Saneia o progresso lido do navegador (DEF-17): mesmos limites da
+  // validacao de backup. Em vez de descartar tudo, corrige o que for
+  // impossivel — recorde acima do que a fase permite, pontos incompativeis
+  // com os gols, fase desbloqueada sem os gols da fase anterior.
+  function sanear() {
+    var gols = {}, pontos = {};
+    FASES.forEach(function(f) {
+      var g = Math.floor(progresso.melhorGols[f.id] || 0);
+      g = Math.min(f.cobrancas, Math.max(0, g));
+      var p = Math.floor(progresso.melhorPontuacao[f.id] || 0);
+      p = Math.min(g * 100, Math.max(0, p));
+      if (g > 0 && p < 10) p = 10 * g;
+      if (g > 0) gols[f.id] = g;
+      if (p > 0) pontos[f.id] = p;
+    });
+    var fases = ['penaltis'];
+    for (var i = 1; i < FASES.length; i++) {
+      var anterior = FASES[i - 1];
+      if (progresso.fasesDesbloqueadas.indexOf(FASES[i].id) === -1) break;
+      if ((gols[anterior.id] || 0) < anterior.golsParaDesbloquear) break;
+      fases.push(FASES[i].id);
+    }
+    progresso.melhorGols = gols;
+    progresso.melhorPontuacao = pontos;
+    progresso.fasesDesbloqueadas = fases;
+  }
+
   function carregar() {
     var bruto;
     try { bruto = JSON.parse(localStorage.getItem(CHAVE_PROGRESSAO)); } catch (e) { bruto = null; }
@@ -114,6 +141,7 @@ var Progressao = (function() {
       // "dados". Migra em vez de descartar o progresso já salvo.
       aplicarDadosSalvos(bruto);
     }
+    sanear();
   }
 
   function salvar() {

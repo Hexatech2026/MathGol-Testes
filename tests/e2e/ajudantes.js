@@ -5,9 +5,12 @@ const fs = require('fs');
 const THREE_LOCAL = fs.readFileSync(path.join(__dirname, '..', '..', 'node_modules', 'three', 'build', 'three.min.js'));
 
 // Bloqueia tudo que e externo. semThree: simula CDN do Three.js fora do ar.
-async function prepararRede(page, { semThree = false } = {}) {
+// travar: lista de trechos de URL cujas requisicoes ficam PENDENTES para
+// sempre (CDN travada, sem erro nem resposta).
+async function prepararRede(page, { semThree = false, travar = [] } = {}) {
   await page.route(/^https?:\/\/(?!localhost)/, route => {
     const url = route.request().url();
+    if (travar.some(t => url.includes(t))) return; // nunca responde
     if (!semThree && url.includes('cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js')) {
       return route.fulfill({ status: 200, contentType: 'text/javascript', body: THREE_LOCAL });
     }
@@ -34,8 +37,13 @@ async function abrirJogo(page, opcoes = {}) {
   if (opcoes.progressao) {
     await page.addInitScript(p => localStorage.setItem('mathgol_progressao', JSON.stringify(p)), opcoes.progressao);
   }
-  await page.goto('/HTML/index.html');
+  // 'domcontentloaded': o evento "load" espera scripts async (CDN travada).
+  await page.goto('/HTML/index.html', { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => typeof iniciarPartida === 'function' && document.querySelector('#tela-menu.tela-ativa'));
+  const travaThree = (opcoes.travar || []).some(t => 'cdn.jsdelivr.net'.includes(t) || t.includes('jsdelivr'));
+  if (!opcoes.semThree && !travaThree) {
+    await page.waitForFunction(() => window.MathGolExternos && window.MathGolExternos.three !== 'carregando');
+  }
   return erros;
 }
 
@@ -73,6 +81,30 @@ async function fixarForca(page, valor) {
   }, valor);
 }
 
+// Fixa o valor que a barra de altura devolve (0 rasteiro, 0.5 meia, 1 cavadinha).
+async function fixarAltura(page, valor) {
+  await page.evaluate(v => {
+    const parar = controleAltura.parar;
+    controleAltura.parar = function() { parar(); return v; };
+  }, valor);
+}
+
+// Confirma a etapa atual pelo teclado depois da trava anti-duplo-clique.
+async function confirmarEtapa(page) {
+  await page.waitForTimeout(520);
+  await page.keyboard.press('Enter');
+}
+
+// Da resposta correta ja respondida ate o chute: mira (centro), altura, forca.
+async function mirarEChutar(page) {
+  await esperarEtapa(page, 'mira');
+  await confirmarEtapa(page);
+  await esperarEtapa(page, 'altura');
+  await confirmarEtapa(page);
+  await esperarEtapa(page, 'forca');
+  await confirmarEtapa(page);
+}
+
 async function responder(page, certa) {
   await page.evaluate(certa => {
     const botoes = Array.from(document.querySelectorAll('.botao-resposta'));
@@ -93,5 +125,5 @@ async function centroDoPalco(page) {
 
 module.exports = {
   prepararRede, monitorarErros, abrirJogo, iniciarPartida, espionar,
-  fixarForca, responder, esperarEtapa, centroDoPalco
+  fixarForca, fixarAltura, confirmarEtapa, mirarEChutar, responder, esperarEtapa, centroDoPalco
 };

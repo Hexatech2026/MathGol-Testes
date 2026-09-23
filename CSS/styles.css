@@ -1880,10 +1880,6 @@ body.alto-contraste .painel-backup {
    O objetivo principal e evitar que a crianca precise rolar a tela pra ver
    a barra de forca: a tela-fase1 fica mais compacta sempre, e ganha
    ainda mais espaco quando o jogo esta em tela cheia. */
-html:fullscreen .tela,
-html:-webkit-full-screen .tela {
-  padding-top: 14px;
-}
 
 .tela-fase1 {
   padding-top: 10px;
@@ -1918,57 +1914,9 @@ html:-webkit-full-screen .tela {
   margin-top: 6px;
 }
 
-/* Em tela cheia, o palco (gol/animacao) cresce usando a largura E a
-   altura disponiveis, sempre em 16:9. O pai (.tela-fase1) deixa de ficar
-   preso nos 640px de .tela. A altura reservada (--reserva-vertical) cobre
-   barra do topo, pergunta, mensagem, barra de forca/respostas e feedback,
-   pra nada disso ficar fora da tela. */
-html:fullscreen .tela-fase1,
-html:-webkit-full-screen .tela-fase1 {
-  width: 100%;
-  max-width: none;
-  padding-top: 8px;
-  padding-bottom: 8px;
-  /* Altura de tudo que nao e o palco (medida com Playwright em 1366x768,
-     1920x1080 e 360x640, na etapa mais alta: mensagem + barra de forca,
-     com folga para o aviso do modo simplificado). */
-  --reserva-vertical: 480px;
-}
-html:fullscreen .topo,
-html:-webkit-full-screen .topo {
-  padding-top: 6px;
-  padding-bottom: 6px;
-}
-@media (max-width: 480px) {
-  html:fullscreen .tela-fase1,
-  html:-webkit-full-screen .tela-fase1 { --reserva-vertical: 505px; }
-}
-html:fullscreen .tela-fase1 .caixa-pergunta,
-html:-webkit-full-screen .tela-fase1 .caixa-pergunta,
-html:fullscreen .tela-fase1 .barra-fase,
-html:-webkit-full-screen .tela-fase1 .barra-fase,
-html:fullscreen .tela-fase1 .area-respostas,
-html:-webkit-full-screen .tela-fase1 .area-respostas {
-  max-width: 900px;
-  margin-left: auto;
-  margin-right: auto;
-}
-html:fullscreen .tela-fase1 .palco-penalti,
-html:-webkit-full-screen .tela-fase1 .palco-penalti {
-  max-width: none;
-  width: min(100%, calc((100vh - var(--reserva-vertical)) * 16 / 9));
-  width: min(100%, calc((100dvh - var(--reserva-vertical)) * 16 / 9));
-  min-width: min(100%, 200px);
-}
-html:fullscreen .tela-fase1 .caixa-pergunta,
-html:-webkit-full-screen .tela-fase1 .caixa-pergunta {
-  padding: 8px 18px;
-  margin-bottom: 6px;
-}
-html:fullscreen .tela-fase1 .pergunta-texto,
-html:-webkit-full-screen .tela-fase1 .pergunta-texto {
-  font-size: clamp(1.7rem, 5.5vw, 2.4rem);
-}
+/* (Tela cheia nao tem regras proprias: o layout adaptativo da partida,
+   no fim deste arquivo, usa a altura real da janela — 100dvh — entao
+   entrar em tela cheia so AUMENTA o campo, nunca diminui.) */
 
 /* ---------- Chips de escolha (personagem + animal) ---------- */
 
@@ -2213,27 +2161,20 @@ html:-webkit-full-screen .tela-fase1 .pergunta-texto {
 /* Superficie do jogo (palco + mensagem + barra de forca). touch-action:
    none SO durante mira/forca, pra nao rolar a pagina ao mirar com o dedo;
    fora dessas etapas a pagina rola normalmente. */
-.superficie-jogo {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  border-radius: var(--raio-grande);
-}
-.superficie-jogo.superficie-interativa {
+#superficie-jogo.superficie-interativa {
   touch-action: none;
   -webkit-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;
   cursor: pointer;
 }
-.superficie-jogo.superficie-interativa .palco-penalti { cursor: crosshair; }
-.superficie-jogo:focus { outline: none; }
-.superficie-jogo:focus-visible {
-  outline: 4px solid var(--azul-ceu);
+#superficie-jogo.superficie-interativa .palco-penalti { cursor: crosshair; }
+#superficie-jogo:focus { outline: none; }
+#superficie-jogo:focus-visible {
+  outline: 3px solid var(--azul-ceu);
   outline-offset: 4px;
 }
-body.alto-contraste .superficie-jogo:focus-visible { outline-color: #000000; }
+body.alto-contraste #superficie-jogo:focus-visible { outline-color: #000000; }
 
 .titulo-fase:focus { outline: none; }
 .titulo-fase:focus-visible,
@@ -2297,8 +2238,12 @@ h1:focus-visible, h2:focus-visible {
   background: #21303B;
   border: 3px solid #FFC63B;
 }
+.cena-2d-goleiro { transform-origin: 50% 100%; }
 .cena-2d-goleiro.mergulho-esquerda { transform: translate(-50%, -100%) rotate(-60deg); }
 .cena-2d-goleiro.mergulho-direita { transform: translate(-50%, -100%) rotate(60deg); }
+.cena-2d-goleiro.mergulho-esquerda.goleiro-no-chao { transform: translate(-50%, -100%) rotate(-90deg); }
+.cena-2d-goleiro.mergulho-direita.goleiro-no-chao { transform: translate(-50%, -100%) rotate(90deg); }
+.cena-2d-bola.bola-cavadinha { transition-timing-function: cubic-bezier(0.2, -0.6, 0.6, 1); }
 .cena-2d-batedor {
   width: 5%;
   height: 16%;
@@ -2328,3 +2273,235 @@ body.alto-contraste .cena-2d-goleiro { background: #FF6600; border-color: #FFFFF
   box-sizing: border-box;
 }
 .bloco-forca .dica-forca { color: var(--grafite); }
+
+
+/* ==========================================================================
+   v7 — Layout adaptativo da partida (DEF-08)
+   Retrato: pergunta → campo → controles, empilhados.
+   Paisagem/desktop: campo a esquerda (grande), pergunta + controles a
+   direita. O campo e dimensionado pela LARGURA e pela ALTURA disponiveis
+   (16:9), sem zoom/transform: nada de reduzir a pagina inteira.
+   ========================================================================== */
+
+/* Fundo decorativo (bola, jogador, "GOL!") e rodape somem durante a
+   partida: nao competem com o jogo nem mostram "GOL!" fora de hora. */
+body.em-partida .campo-animado,
+body.em-partida .fundo-tematico,
+body.em-partida .rodape { display: none; }
+
+.tela.tela-fase1 {
+  max-width: 1900px;
+  width: 100%;
+  padding: 6px 12px 10px;
+  justify-content: flex-start;
+}
+
+.layout-partida {
+  /* Altura de tudo que NAO e o campo na coluna do campo (topo, barra,
+     pergunta, controles, feedback). O campo usa o resto. */
+  --reserva-vertical: 430px;
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    "pergunta"
+    "campo"
+    "painel";
+  gap: 8px;
+  align-items: start;
+  justify-items: center;
+  border-radius: var(--raio-grande);
+}
+.layout-partida .caixa-pergunta { grid-area: pergunta; margin: 0; width: 100%; }
+.layout-partida .palco-penalti {
+  grid-area: campo;
+  max-width: none;
+  margin: 0;
+  width: min(100%, calc((100vh - var(--reserva-vertical)) * 16 / 9));
+  width: min(100%, calc((100dvh - var(--reserva-vertical)) * 16 / 9));
+  min-width: min(100%, 280px);
+  aspect-ratio: 16 / 9;
+}
+.painel-etapa {
+  grid-area: painel;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.painel-etapa .mensagem-etapa,
+.painel-etapa .mensagem-feedback { margin: 0; }
+.painel-etapa .area-respostas { margin: 0; }
+.painel-etapa .aviso-modo-jogo { margin: 0; }
+.tela-fase1 .barra-fase { margin-bottom: 6px; }
+.layout-partida .caixa-pergunta { padding: 8px 14px; }
+.layout-partida .pergunta-texto { font-size: clamp(1.5rem, 7vw, 2.2rem); }
+.layout-partida .botao-ouvir-novamente { margin-top: 4px; padding: 4px 12px; }
+
+/* Barras de altura e forca: mesmo visual, legiveis sobre o fundo. */
+.bloco-barra {
+  width: 100%;
+  max-width: 420px;
+  margin: 0 auto;
+  text-align: center;
+  background: rgba(255,253,246,0.96);
+  border-radius: 16px;
+  padding: 6px 12px 8px;
+  box-sizing: border-box;
+}
+.bloco-barra .dica-forca { color: var(--grafite); }
+.tipo-escolhido { font-weight: 600; }
+.marcador-ideal {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--grafite);
+  background: rgba(255,253,246,0.85);
+  padding: 0 4px;
+  border-radius: 6px;
+  line-height: 1.2;
+}
+.divisoes-altura {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+.divisoes-altura span {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--grafite);
+}
+/* Mesmas fronteiras da regra (1/3 e 2/3 da barra, que vai de 6% a 96%). */
+.divisoes-altura span:nth-child(1) { left: calc(6% + 90% / 3); }
+.divisoes-altura span:nth-child(2) { left: calc(6% + 90% * 2 / 3); }
+.preenchimento-altura {
+  background: linear-gradient(90deg, var(--verde-grama-escuro) 0%, var(--azul-ceu) 55%, var(--amarelo-sol) 100%);
+}
+body.alto-contraste .preenchimento-altura { background: var(--grafite); }
+.legenda-altura {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--grafite);
+  margin-top: 3px;
+}
+
+/* Mira maior e mais legivel; vermelha quando fora do gol; "travada"
+   inequivoca depois de confirmada. */
+.alvo-mira { width: 44px; height: 44px; border-width: 4px; }
+.alvo-mira.mira-fora { border-color: #E0343B; box-shadow: 0 0 0 3px rgba(33,48,59,0.6), 0 0 12px rgba(224,52,59,0.8); }
+.alvo-mira.mira-fora::before, .alvo-mira.mira-fora::after { background: #E0343B; }
+.alvo-mira.mira-travada { border-style: double; border-width: 6px; }
+.alvo-mira.mira-travada::after {
+  content: '✓';
+  left: 50%; top: 50%;
+  width: auto; height: auto;
+  transform: translate(-50%, -50%);
+  background: none;
+  color: var(--amarelo-sol);
+  font-weight: 700;
+  font-size: 1rem;
+}
+
+/* Incentivo depois da defesa: dentro do campo, em area segura. */
+.palco-penalti { position: relative; }
+.incentivo-jogo {
+  position: absolute;
+  left: 50%;
+  top: 12%;
+  transform: translateX(-50%);
+  margin: 0;
+  max-width: 90%;
+  text-align: center;
+  font-family: var(--fonte-titulo);
+  font-weight: 700;
+  font-size: clamp(0.95rem, 3.5vw, 1.4rem);
+  color: var(--grafite);
+  background: rgba(255, 198, 59, 0.95);
+  border: 3px solid var(--grafite);
+  border-radius: 999px;
+  padding: 4px 16px;
+  pointer-events: none;
+  z-index: 2;
+}
+.incentivo-jogo.animar { animation: incentivo-entra 1.6s ease-out both; }
+@keyframes incentivo-entra {
+  0% { opacity: 0; transform: translate(-50%, 10px); }
+  15%, 80% { opacity: 1; transform: translate(-50%, 0); }
+  100% { opacity: 0; transform: translate(-50%, -6px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .incentivo-jogo.animar { animation: none; }
+}
+
+/* Telas baixas: topo compacto. */
+@media (max-height: 520px) {
+  .topo { padding-top: 4px; padding-bottom: 4px; }
+}
+
+/* ---------- Paisagem / desktop: lado a lado ---------- */
+@media (orientation: landscape) and (min-width: 700px) {
+  .layout-partida {
+    --reserva-vertical: 140px;
+    grid-template-columns: minmax(0, 1fr) minmax(260px, 32%);
+    grid-template-rows: auto 1fr;
+    grid-template-areas:
+      "campo pergunta"
+      "campo painel";
+    align-items: start;
+    column-gap: 14px;
+  }
+  .layout-partida .palco-penalti { justify-self: center; }
+  .layout-partida .pergunta-texto { font-size: clamp(1.5rem, 3.2vw, 2.4rem); }
+  .painel-etapa .respostas-alternativas { gap: 6px; }
+}
+@media (orientation: landscape) and (min-width: 700px) and (max-height: 520px) {
+  .layout-partida { --reserva-vertical: 116px; }
+  .tela-fase1 .barra-fase { margin-bottom: 2px; }
+  .layout-partida .caixa-pergunta { padding: 4px 10px; }
+  .layout-partida .pergunta-texto { font-size: 1.4rem; }
+  .bloco-barra { padding: 4px 10px 6px; }
+  .bloco-barra .dica-forca { display: none; }
+  .painel-etapa .botao-resposta { padding: 6px 10px; font-size: 1rem; }
+}
+
+/* Retrato baixo (ex.: 320x568, 360x640): tudo um pouco mais compacto. */
+@media (orientation: portrait) and (max-height: 700px) {
+  .layout-partida { --reserva-vertical: 400px; gap: 6px; }
+  .layout-partida .pergunta-texto { font-size: 1.5rem; }
+  .bloco-barra .dica-forca { display: none; }
+}
+
+/* Aviso do modo simplificado: selo discreto no canto do campo (nao ocupa
+   altura do layout). O erro "nao foi possivel abrir o campo" fica no meio. */
+.palco-penalti .aviso-modo-jogo {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  z-index: 2;
+  margin: 0;
+  font-size: 0.7rem;
+  padding: 2px 10px;
+}
+.palco-penalti .aviso-modo-jogo.aviso-erro {
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 80%;
+  font-size: 0.95rem;
+}
+@media (orientation: landscape) and (min-width: 700px) and (max-height: 520px) {
+  .painel-etapa .mensagem-etapa { font-size: 0.85rem; padding: 3px 12px; }
+  .legenda-altura { font-size: 0.66rem; margin-top: 1px; }
+  .bloco-barra .rotulo-forca { font-size: 0.75rem; margin-bottom: 2px; }
+  .painel-etapa { gap: 4px; }
+}

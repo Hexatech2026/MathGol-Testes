@@ -76,7 +76,10 @@ test('usuario autenticado acessa apenas os proprios documentos', async () => {
   await assertSucceeds(getDocs(collection(db, 'jogadores', 'alice', 'resultados')));
   await assertSucceeds(setDoc(doc(db, 'apelidos', 'alice'), { apelido: 'Fera Tigre', avatarSeed: 'Bola1', atualizadoEm: serverTimestamp() }));
   await assertSucceeds(setDoc(doc(db, 'jogadores', 'alice'), { ultimoAcessoEm: serverTimestamp(), ultimoResultado: resumo() }, { merge: true }));
-  await assertSucceeds(deleteDoc(doc(db, 'jogadores', 'alice', 'resultados', 'abc')));
+  // Politica: nenhum cliente apaga, nem os proprios dados.
+  await assertFails(deleteDoc(doc(db, 'jogadores', 'alice', 'resultados', 'abc')));
+  await assertFails(deleteDoc(doc(db, 'jogadores', 'alice')));
+  await assertFails(deleteDoc(doc(db, 'apelidos', 'alice')));
 });
 
 test('usuario A nao le nem altera dados de B', async () => {

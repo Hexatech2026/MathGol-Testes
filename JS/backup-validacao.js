@@ -94,12 +94,20 @@
       Object.keys(obj).every(function(k) { return typeof obj[k] === 'boolean'; });
   }
 
-  function mapaPorFase(m, max) {
+  var ORDEM_FASES = ['penaltis', 'falta', 'final'];
+  // Gols minimos na fase anterior para uma fase ser desbloqueada.
+  var GOLS_PARA_DESBLOQUEAR = { falta: { fase: 'penaltis', gols: 2 }, final: { fase: 'falta', gols: 3 } };
+
+  function mapaPorFaseInteiro(m, limite) {
     return objetoSimples(m) && Object.keys(m).every(function(k) {
-      return COBRANCAS_POR_FASE[k] && typeof m[k] === 'number' && isFinite(m[k]) && m[k] >= 0 && m[k] <= max;
+      return COBRANCAS_POR_FASE[k] && inteiroEntre(m[k], 0, limite(k));
     });
   }
 
+  // Progresso local coerente com as fases (DEF-17): recordes dentro do que
+  // a fase permite, pontos compativeis com os gols e fases desbloqueadas
+  // em ordem e apoiadas pelos gols da fase anterior. Validacao de formato e
+  // coerencia — nao e prova de autenticidade (o dado mora no navegador).
   function validarProgressao(obj) {
     if (!objetoSimples(obj)) return false;
     var dados = obj;
@@ -108,12 +116,28 @@
       dados = obj.dados;
     }
     if (!objetoSimples(dados) || !somenteChaves(dados, ['fasesDesbloqueadas', 'melhorPontuacao', 'melhorGols'])) return false;
-    if (dados.fasesDesbloqueadas !== undefined) {
-      if (!Array.isArray(dados.fasesDesbloqueadas) || dados.fasesDesbloqueadas.length > 3 ||
-          !dados.fasesDesbloqueadas.every(function(id) { return !!COBRANCAS_POR_FASE[id]; })) return false;
+
+    var gols = dados.melhorGols || {};
+    var pontos = dados.melhorPontuacao || {};
+    if (!mapaPorFaseInteiro(gols, function(f) { return COBRANCAS_POR_FASE[f]; })) return false;
+    if (!mapaPorFaseInteiro(pontos, function(f) { return COBRANCAS_POR_FASE[f] * 100; })) return false;
+    var coerente = Object.keys(COBRANCAS_POR_FASE).every(function(f) {
+      var g = gols[f] || 0, p = pontos[f] || 0;
+      if (p > g * 100) return false;      // cada gol vale no maximo 100
+      if (g > 0 && p < 10) return false;   // e no minimo 10
+      return true;
+    });
+    if (!coerente) return false;
+
+    var fases = dados.fasesDesbloqueadas;
+    if (fases !== undefined) {
+      if (!Array.isArray(fases) || fases.length === 0 || fases.length > 3) return false;
+      for (var i = 0; i < fases.length; i++) {
+        if (fases[i] !== ORDEM_FASES[i]) return false; // em ordem, sem pular, sem repetir
+        var requisito = GOLS_PARA_DESBLOQUEAR[fases[i]];
+        if (requisito && (gols[requisito.fase] || 0) < requisito.gols) return false;
+      }
     }
-    if (dados.melhorPontuacao !== undefined && !mapaPorFase(dados.melhorPontuacao, 700)) return false;
-    if (dados.melhorGols !== undefined && !mapaPorFase(dados.melhorGols, 7)) return false;
     return true;
   }
 
@@ -221,7 +245,8 @@
     validarBackupFirebase: validarBackupFirebase,
     validarResultadoPartida: validarResultadoPartida,
     validarPerfil: validarPerfil,
-    copiarResultado: copiarResultado
+    copiarResultado: copiarResultado,
+    validarProgressao: validarProgressao
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = ValidacaoBackup;

@@ -17,7 +17,12 @@
 //   - Um unico fluxo de Pointer Events (sem click + touchend duplicados):
 //     um toque = exatamente uma transicao. Teclado: setas movem a mira,
 //     Enter/Espaco confirmam.
-//   - Etapa "altura" removida (nao afetava o resultado).
+//   - Etapa "altura" (tipo de chute) com efeito REAL no resultado:
+//     rasteiro / meia-altura / cavadinha (ver regras-chute.js). Ordem:
+//     resposta → mira → altura → forca → chute (a faixa ideal da forca
+//     depende do tipo escolhido).
+//   - Trava de entrada: logo depois de mudar de etapa, cliques/toques/Enter
+//     sao ignorados por um instante (duplo clique nao pula etapas).
 //   - Sem WebGL/Three.js: modo simplificado 2D com a MESMA regra (nunca
 //     mais gol automatico).
 //   - Firebase: identidade = Firebase Auth anonimo (uid), nao mais um token
@@ -54,6 +59,7 @@ var ETAPA = {
   RESPOSTA: 'resposta',     // aguardando a crianca responder a conta
   TRANSICAO: 'transicao',   // acertou: pequena pausa antes da mira
   MIRA: 'mira',
+  ALTURA: 'altura',
   FORCA: 'forca',
   CHUTE: 'chute',           // animacao em andamento
   FINALIZADA: 'finalizada'  // resultado registrado; aguardando a proxima
@@ -71,6 +77,14 @@ var categoriaAvatarAtiva = CATEGORIAS_AVATAR[0].id;
 
 // Passo da mira pelo teclado (metros no plano do gol).
 var PASSO_MIRA_TECLADO = { x: 0.3, y: 0.2 };
+
+// Depois que uma etapa comeca, entradas sao ignoradas por este tempo. Um
+// duplo clique/toque (segundo clique em ~100–400 ms) confirma so UMA etapa;
+// a proxima exige um toque novo e deliberado.
+var TRAVA_ENTRADA_MS = 450;
+
+var NOME_TIPO = { rasteiro: 'rasteiro', meia: 'meia-altura', cavadinha: 'cavadinha' };
+var FRASES_INCENTIVO = ['Quase! Tenta de novo!', 'Boa tentativa!', 'Não desista!', 'Você consegue!', 'Na próxima vai!'];
 
 // Rotulos amigaveis das zonas do gol (resumo da tela de resultado, HU-07).
 // So existe zona no caminho de resposta errada / tempo esgotado.
@@ -150,9 +164,10 @@ function invalidarSessao() {
   cicloPartida.timeouts = [];
 }
 
-// ---------- Barra de forca ----------
-// Oscila sozinha entre 0 e 1; um toque/clique/Enter trava o valor atual.
+// ---------- Barras de altura e de forca ----------
+// Oscilam sozinhas entre 0 e 1; um toque/clique/Enter trava o valor atual.
 var FORCA_CICLO_MS = 1750;
+var ALTURA_CICLO_MS = 1900;
 
 function criarControleBarraOscilante(idPreenchimento, cicloMs) {
   var ativa = false;
@@ -185,16 +200,21 @@ function criarControleBarraOscilante(idPreenchimento, cicloMs) {
 }
 
 var controleForca = criarControleBarraOscilante('preenchimento-forca', FORCA_CICLO_MS);
+var controleAltura = criarControleBarraOscilante('preenchimento-altura', ALTURA_CICLO_MS);
 
 function iniciarBarraForca() { controleForca.iniciar(); }
 function pararBarraForca() { return controleForca.parar(); }
+function iniciarBarraAltura() { controleAltura.iniciar(); }
+function pararBarraAltura() { return controleAltura.parar(); }
 
-// Desenha na barra a faixa de forca ideal (mesmos limites da regra).
-function desenharFaixaIdealForca() {
+// Desenha na barra a faixa de forca ideal DO TIPO de chute escolhido
+// (mesmos limites da regra: cavadinha pede forca menor, rasteiro maior).
+function desenharFaixaIdealForca(tipoId) {
   var faixa = document.getElementById('faixa-ideal-forca');
   if (!faixa || typeof RegrasChute === 'undefined') return;
-  var ini = 6 + RegrasChute.FORCA_IDEAL.min * 90;
-  var fim = 6 + RegrasChute.FORCA_IDEAL.max * 90;
+  var tipo = RegrasChute.TIPOS[tipoId] || RegrasChute.TIPOS.meia;
+  var ini = 6 + tipo.forcaIdeal.min * 90;
+  var fim = 6 + tipo.forcaIdeal.max * 90;
   faixa.style.left = ini + '%';
   faixa.style.width = (fim - ini) + '%';
 }
@@ -246,6 +266,8 @@ function mostrarTela(idTela, opcoes) {
 
   var botaoOuvir = document.getElementById('botao-ouvir-novamente');
   if (botaoOuvir) botaoOuvir.hidden = (idTela !== 'tela-fase1');
+  // Durante a partida o fundo animado (e o "GOL!" decorativo) some.
+  document.body.classList.toggle('em-partida', idTela === 'tela-fase1');
 
   // Leva o foco (e o leitor de tela) para o titulo da nova tela.
   if (!opcoes || opcoes.focar !== false) {
@@ -262,6 +284,7 @@ function encerrarJogoEmAndamento() {
   pararTimer();
   cancelarEtapaInterativa();
   pararBarraForca();
+  pararBarraAltura();
   estado.etapa = ETAPA.OCIOSA;
   if (estado.jogoPenalti) {
     try { estado.jogoPenalti.pararMira(); } catch (e) {}
@@ -270,10 +293,12 @@ function encerrarJogoEmAndamento() {
   }
   var camada = document.getElementById('camada-mira');
   if (camada) camada.hidden = true;
-  var bloco = document.getElementById('bloco-forca');
-  if (bloco) bloco.hidden = true;
-  var msg = document.getElementById('mensagem-etapa');
-  if (msg) msg.hidden = true;
+  ['bloco-forca', 'bloco-altura', 'mensagem-etapa', 'incentivo-jogo'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.hidden = true;
+  });
+  var tela = document.getElementById('tela-fase1');
+  if (tela) tela.classList.remove('foco-campo');
 }
 
 function voltarTelaAnterior() {
@@ -804,6 +829,9 @@ function mostrarEtapaRespostas() {
   document.getElementById('mensagem-etapa').hidden = true;
   document.getElementById('camada-mira').hidden = true;
   document.getElementById('bloco-forca').hidden = true;
+  document.getElementById('bloco-altura').hidden = true;
+  document.getElementById('incentivo-jogo').hidden = true;
+  document.getElementById('tela-fase1').classList.remove('foco-campo');
 }
 
 function esconderEtapaRespostas() {
@@ -845,7 +873,7 @@ function initFase1() {
       if (estado.perguntaAtual) Narracao.falar(estado.perguntaAtual.textoFalado);
     });
   }
-  desenharFaixaIdealForca();
+  desenharFaixaIdealForca('meia');
 }
 
 // ---------- Resposta ----------
@@ -916,6 +944,14 @@ function iniciarEtapaInterativa(opcoes) {
   var idSessao = cicloPartida.sessaoJogoId;
   var ponteiroAtivo = null;
   var travada = false;
+  var liberadaEm = performance.now() + TRAVA_ENTRADA_MS;
+  // Usa o horario em que a entrada ACONTECEU (ev.timeStamp), nao o horario
+  // em que foi processada: num aparelho lento o 2o toque de um duplo toque
+  // pode ser entregue tarde, mas continua sendo um duplo toque.
+  function aindaTravada(ev) {
+    var quando = (ev && typeof ev.timeStamp === 'number' && ev.timeStamp > 0) ? ev.timeStamp : performance.now();
+    return quando < liberadaEm;
+  }
 
   function limpar() {
     superficie.removeEventListener('pointerdown', aoPointerDown);
@@ -943,6 +979,10 @@ function iniciarEtapaInterativa(opcoes) {
   function aoPointerDown(ev) {
     if (travada || !ev.isPrimary) return;
     if (ev.pointerType === 'mouse' && ev.button !== 0) return;
+    // Botoes dentro da superficie (ex.: "Ouvir novamente") fazem so o papel deles.
+    if (ev.target && ev.target.closest && ev.target.closest('button')) return;
+    // Trava anti-duplo-clique: o 2o clique de um duplo clique nao conta.
+    if (aindaTravada(ev)) return;
     ponteiroAtivo = ev.pointerId;
     try { superficie.setPointerCapture(ev.pointerId); } catch (e) {}
     if (opcoes.aoMover) opcoes.aoMover(ev.clientX, ev.clientY);
@@ -970,8 +1010,9 @@ function iniciarEtapaInterativa(opcoes) {
     var tecla = ev.key;
     var confirma = tecla === 'Enter' || tecla === ' ' || tecla === 'Spacebar';
     if (confirma) {
+      if (ev.target && ev.target !== superficie && ev.target.closest && ev.target.closest('button')) return;
       ev.preventDefault();
-      if (!ev.repeat) confirmar();
+      if (!ev.repeat && !aindaTravada(ev)) confirmar();
       return;
     }
     if (!opcoes.aoSeta) return;
@@ -1008,6 +1049,7 @@ function avancarParaMira(tempoUsadoMs) {
   if (estado.etapa !== ETAPA.TRANSICAO || !estado.jogoPenalti) return;
   estado.etapa = ETAPA.MIRA;
   esconderEtapaRespostas();
+  document.getElementById('tela-fase1').classList.add('foco-campo');
   var msg = document.getElementById('mensagem-etapa');
   msg.hidden = false;
   msg.textContent = 'Escolha onde chutar! 🎯';
@@ -1017,9 +1059,12 @@ function avancarParaMira(tempoUsadoMs) {
   camada.hidden = false;
   var alvo = document.getElementById('alvo-mira');
 
-  jogo.iniciarMira(function(pos) {
+  alvo.classList.remove('mira-travada', 'mira-fora');
+  jogo.iniciarMira(function(pos, ponto) {
     alvo.style.left = pos.leftPercent + '%';
     alvo.style.top = pos.topPercent + '%';
+    // Mira fora do gol fica vermelha (chute sai com qualquer forca).
+    alvo.classList.toggle('mira-fora', !!ponto && !RegrasChute.dentroDaAreaValida(ponto));
   });
 
   iniciarEtapaInterativa({
@@ -1028,51 +1073,81 @@ function avancarParaMira(tempoUsadoMs) {
     aoSeta: function(dx, dy) { jogo.moverMiraDelta(dx * PASSO_MIRA_TECLADO.x, dy * PASSO_MIRA_TECLADO.y); },
     aoConfirmar: function() {
       var ponto = jogo.pararMira();
-      camada.hidden = true;
+      // A mira continua visivel, travada, durante altura e forca.
+      alvo.classList.add('mira-travada');
       SFX.clique();
-      avancarParaForca(ponto, tempoUsadoMs);
+      avancarParaAltura(ponto, tempoUsadoMs);
+    }
+  });
+}
+
+// Etapa: altura = tipo de chute (rasteiro / meia-altura / cavadinha).
+// Muda o resultado de verdade: ver RegrasChute.TIPOS.
+function avancarParaAltura(pontoMira, tempoUsadoMs) {
+  if (estado.etapa !== ETAPA.MIRA) return;
+  estado.etapa = ETAPA.ALTURA;
+  var msg = document.getElementById('mensagem-etapa');
+  msg.textContent = 'Rasteiro, meia-altura ou cavadinha? ⬇️⚽☁️';
+  var bloco = document.getElementById('bloco-altura');
+  bloco.hidden = false;
+  iniciarBarraAltura();
+
+  iniciarEtapaInterativa({
+    instrucoes: 'Escolha o tipo de chute na barra: rasteiro à esquerda, meia-altura no meio, cavadinha à direita. Toque, clique ou aperte Enter para travar.',
+    aoConfirmar: function() {
+      var altura = pararBarraAltura();
+      bloco.hidden = true;
+      SFX.clique();
+      avancarParaForca(pontoMira, altura, tempoUsadoMs);
     }
   });
 }
 
 // Etapa: forca (barra oscilante; um toque/clique/Enter trava).
-function avancarParaForca(pontoMira, tempoUsadoMs) {
-  if (estado.etapa !== ETAPA.MIRA) return;
+function avancarParaForca(pontoMira, altura, tempoUsadoMs) {
+  if (estado.etapa !== ETAPA.ALTURA) return;
   estado.etapa = ETAPA.FORCA;
+  var tipo = RegrasChute.tipoPorAltura(altura);
   var msg = document.getElementById('mensagem-etapa');
   msg.textContent = 'Escolha a força do chute! 💪';
+  document.getElementById('tipo-escolhido').textContent = '— ' + tipo.nome;
+  desenharFaixaIdealForca(tipo.id);
   var bloco = document.getElementById('bloco-forca');
   bloco.hidden = false;
   iniciarBarraForca();
 
+  var dicaTipo = tipo.id === 'cavadinha' ? ' Cavadinha pede força fraquinha.'
+    : (tipo.id === 'rasteiro' ? ' Rasteiro pede força forte.' : '');
   iniciarEtapaInterativa({
-    instrucoes: 'A barra de força está enchendo. Toque, clique ou aperte Enter quando ela estiver na faixa verde.',
+    instrucoes: 'Chute ' + NOME_TIPO[tipo.id] + '. A barra de força está enchendo: toque, clique ou aperte Enter quando ela estiver na faixa marcada "ideal".' + dicaTipo,
     aoConfirmar: function() {
       var forca = pararBarraForca();
       bloco.hidden = true;
       msg.hidden = true;
       SFX.clique();
-      chutarComMiraEForca(pontoMira, forca, tempoUsadoMs);
+      chutarComMiraEForca(pontoMira, forca, altura, tempoUsadoMs);
     }
   });
 }
 
-function chutarComMiraEForca(pontoMira, forca, tempoUsadoMs) {
+function chutarComMiraEForca(pontoMira, forca, altura, tempoUsadoMs) {
   if (estado.etapa !== ETAPA.FORCA) return;
   estado.etapa = ETAPA.CHUTE;
   document.getElementById('instrucoes-jogo').textContent = '';
+  document.getElementById('camada-mira').hidden = true;
   var detalhesBase = { respostaCorreta: true, zonaEscolhida: null, estourouTempo: false, tempoUsadoMs: tempoUsadoMs };
   var aoFinalizar = vincularSessao(function(r) {
     finalizarCobranca({
       respostaCorreta: true,
       bolaDentro: !!(r && r.gol),
       motivo: r && r.motivo,
+      tipoChute: r && r.tipo,
       zonaEscolhida: null,
       estourouTempo: false,
       tempoUsadoMs: tempoUsadoMs
     });
   });
-  var iniciou = estado.jogoPenalti && estado.jogoPenalti.chutarLivre(pontoMira, forca, aoFinalizar);
+  var iniciou = estado.jogoPenalti && estado.jogoPenalti.chutarLivre(pontoMira, forca, altura, aoFinalizar);
   if (!iniciou) {
     // Nunca vira gol automatico: sem animacao, a bola nao entrou.
     agendarNaSessao(function() { finalizarCobranca(Object.assign({ bolaDentro: false, motivo: 'lado' }, detalhesBase)); }, 500);
@@ -1112,7 +1187,13 @@ function finalizarCobranca(detalhes) {
     Narracao.falar(NARRACAO_FORA[motivo]);
   } else {
     SFX.defesa();
-    feedback.textContent = detalhes.estourouTempo ? 'Tempo esgotado! O goleiro defendeu!' : 'O goleiro defendeu!';
+    var frase = FRASES_INCENTIVO[Math.floor(Math.random() * FRASES_INCENTIVO.length)];
+    feedback.textContent = (detalhes.estourouTempo ? 'Tempo esgotado! O goleiro defendeu! ' : 'O goleiro defendeu! ') + frase;
+    // Incentivo visual dentro do campo, em area segura (nao sai do quadro).
+    var incentivo = document.getElementById('incentivo-jogo');
+    incentivo.textContent = frase;
+    incentivo.hidden = false;
+    incentivo.classList.remove('animar'); void incentivo.offsetWidth; incentivo.classList.add('animar');
     Narracao.falar(detalhes.estourouTempo ? 'Tempo esgotado! O goleiro defendeu.' : 'O goleiro defendeu!');
   }
 
@@ -1121,6 +1202,7 @@ function finalizarCobranca(detalhes) {
     zonaCorreta: estado.zonaCorreta,
     resultado: resultado,
     motivoFora: resultado === 'fora' ? (detalhes.motivo || 'lado') : null,
+    tipoChute: detalhes.tipoChute || null,
     estourouTempo: !!detalhes.estourouTempo,
     pontos: pontosGanhos,
     tempoUsado: tempoUsadoSegundos
@@ -1168,6 +1250,7 @@ function renderizarListaCobrancas() {
         : (cobranca.motivoFora === 'alto' ? 'chute por cima do gol' : 'chute para fora')) : 'defesa');
     var textoCompleto = 'Cobrança ' + (indice + 1) + ' — ' + resultadoTexto;
     if (zonaTexto) textoCompleto = 'Cobrança ' + (indice + 1) + ' — ' + zonaTexto + ' — ' + resultadoTexto;
+    if (cobranca.tipoChute && NOME_TIPO[cobranca.tipoChute]) textoCompleto += ' (' + NOME_TIPO[cobranca.tipoChute] + ')';
     if (cobranca.estourouTempo) textoCompleto += ' (tempo esgotado)';
 
     var texto = document.createElement('span');
@@ -1614,11 +1697,16 @@ document.addEventListener('DOMContentLoaded', function() {
   initBackup();
   mostrarTela('tela-menu', { focar: false });
 
-  if (window.FirebaseMathGol) {
-    window.FirebaseMathGol.carregarConfiguracoes().then(function(config) {
-      aplicarConfiguracoesRemotas(config);
-    }).catch(function(erro) {
-      console.warn('Configuracoes remotas indisponiveis; usando padrao:', erro);
-    });
-  }
 });
+
+// O Firebase chega depois (import dinamico em carregar-externos.js): quando
+// ficar pronto, aplica as configuracoes remotas validadas.
+function carregarConfiguracoesRemotas() {
+  if (!window.FirebaseMathGol) return;
+  window.FirebaseMathGol.carregarConfiguracoes().then(function(config) {
+    aplicarConfiguracoesRemotas(config);
+  }).catch(function(erro) {
+    console.warn('Configuracoes remotas indisponiveis; usando padrao:', erro);
+  });
+}
+document.addEventListener('mathgol:firebase-pronto', carregarConfiguracoesRemotas);

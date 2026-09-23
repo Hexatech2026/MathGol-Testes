@@ -10,7 +10,9 @@
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<!-- Fontes sem bloquear a página: se o Google Fonts travar, o jogo abre
+     com as fontes do sistema (media="print" + onload troca para "all"). -->
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
 
 <link rel="stylesheet" href="../CSS/styles.css">
 </head>
@@ -209,41 +211,58 @@
       <span id="timer-display" class="timer-display timer-verde">15s</span>
       <span id="pontuacao-display" class="pontuacao-display">0 <img class="icone-cruzeiro" src="../Imagens/estrela-cruzeiro.png" alt="estrelinhas Cruzeiro"></span>
     </div>
-    <div class="caixa-pergunta">
-      <p id="pergunta-texto" class="pergunta-texto" aria-live="polite" aria-atomic="true">--</p>
-      <button id="botao-ouvir-novamente" class="botao-ouvir-novamente" type="button" aria-label="Ouvir a pergunta novamente" hidden>🔊 Ouvir novamente</button>
-    </div>
-    <p id="aviso-modo-jogo" class="aviso-modo-jogo" role="status" hidden></p>
 
-    <!-- Superficie interativa do jogo: recebe Pointer Events (mouse, toque,
-         caneta) e teclado nas etapas de mira e forca. -->
-    <div id="superficie-jogo" class="superficie-jogo" tabindex="-1"
+    <!-- Layout adaptativo: em retrato, pergunta → campo → controles; em
+         paisagem/desktop, campo à esquerda e pergunta + controles à direita.
+         A superfície inteira recebe Pointer Events e teclado nas etapas de
+         mira, altura e força (botões dentro dela são ignorados). -->
+    <div id="superficie-jogo" class="layout-partida" tabindex="-1"
          role="group" aria-label="Campo do pênalti" aria-describedby="instrucoes-jogo">
+      <div class="caixa-pergunta">
+        <p id="pergunta-texto" class="pergunta-texto" aria-live="polite" aria-atomic="true">--</p>
+        <button id="botao-ouvir-novamente" class="botao-ouvir-novamente" type="button" aria-label="Ouvir a pergunta novamente" hidden>🔊 Ouvir novamente</button>
+      </div>
+
       <div class="palco-penalti">
         <div id="jogo-penalti"></div>
         <div id="camada-mira" class="camada-mira" hidden>
           <div id="alvo-mira" class="alvo-mira" aria-hidden="true"></div>
         </div>
+        <p id="incentivo-jogo" class="incentivo-jogo" aria-hidden="true" hidden></p>
+        <p id="aviso-modo-jogo" class="aviso-modo-jogo" role="status" hidden></p>
       </div>
 
-      <p id="mensagem-etapa" class="mensagem-etapa" aria-live="polite" aria-atomic="true" hidden>--</p>
-      <p id="instrucoes-jogo" class="somente-leitor-tela" aria-live="polite"></p>
+      <div class="painel-etapa">
+        <p id="mensagem-etapa" class="mensagem-etapa" aria-live="polite" aria-atomic="true" hidden>--</p>
+        <p id="instrucoes-jogo" class="somente-leitor-tela" aria-live="polite"></p>
 
-      <div class="bloco-forca" id="bloco-forca" hidden>
-        <span class="rotulo-forca">Força</span>
-        <div class="trilho-forca" aria-hidden="true">
-          <div id="faixa-ideal-forca" class="faixa-ideal-forca"></div>
-          <div id="preenchimento-forca" class="preenchimento-forca"></div>
+        <div class="bloco-barra bloco-altura" id="bloco-altura" hidden>
+          <span class="rotulo-forca">Tipo de chute (altura)</span>
+          <div class="trilho-forca trilho-altura" aria-hidden="true">
+            <div class="divisoes-altura"><span></span><span></span></div>
+            <div id="preenchimento-altura" class="preenchimento-forca preenchimento-altura"></div>
+          </div>
+          <div class="legenda-altura" aria-hidden="true">
+            <span>⬇️ Rasteiro</span><span>⚽ Meia-altura</span><span>☁️ Cavadinha</span>
+          </div>
         </div>
-        <span class="dica-forca">Pare na faixa verde! Toque, clique ou aperte Enter.</span>
+
+        <div class="bloco-barra bloco-forca" id="bloco-forca" hidden>
+          <span class="rotulo-forca">Força <span id="tipo-escolhido" class="tipo-escolhido"></span></span>
+          <div class="trilho-forca" aria-hidden="true">
+            <div id="faixa-ideal-forca" class="faixa-ideal-forca"><span class="marcador-ideal">ideal</span></div>
+            <div id="preenchimento-forca" class="preenchimento-forca"></div>
+          </div>
+          <span id="dica-forca" class="dica-forca">Pare na faixa verde "ideal"! Toque, clique ou aperte Enter.</span>
+        </div>
+
+        <div id="area-respostas" class="area-respostas">
+          <div id="respostas-alternativas" class="respostas-alternativas"></div>
+        </div>
+
+        <p id="mensagem-feedback" class="mensagem-feedback" aria-live="polite" aria-atomic="true"></p>
       </div>
     </div>
-
-    <div id="area-respostas" class="area-respostas">
-      <div id="respostas-alternativas" class="respostas-alternativas"></div>
-    </div>
-
-    <p id="mensagem-feedback" class="mensagem-feedback" aria-live="polite" aria-atomic="true"></p>
   </section>
 
   <section id="tela-resultado" class="tela">
@@ -423,14 +442,10 @@
   </div>
 </div>
 
-<!-- Firebase (módulo ES — é adiado: roda depois dos scripts clássicos
-     abaixo e antes do DOMContentLoaded. Se o CDN falhar, o jogo segue
-     sem salvar na nuvem). -->
-<script type="module" src="../JS/firebase-config.js"></script>
-
-<!-- Three.js r149 (CDN, build UMD). Se falhar, ou se não houver WebGL,
-     o jogo usa o modo simplificado 2D (JS/game-2d.js) com a mesma regra. -->
-<script src="https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js"></script>
+<!-- Dependências externas (Three.js e Firebase) são carregadas SEM bloquear
+     a página por JS/carregar-externos.js: se um CDN travar, o menu abre
+     normalmente; sem Three.js o jogo usa o modo simplificado 2D e sem
+     Firebase ele só não salva na nuvem. -->
 
 <!-- Scripts do jogo (ordem importa) -->
 <script src="../JS/regras-chute.js"></script>
@@ -445,6 +460,7 @@
 <script src="../JS/game-2d.js"></script>
 <script src="../JS/progressao.js"></script>
 <script src="../JS/main.js"></script>
+<script src="../JS/carregar-externos.js"></script>
 
 <!-- Alterna a foto da equipe no modal de créditos (sem depender do main.js) -->
 <script>

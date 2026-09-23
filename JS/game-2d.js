@@ -9,7 +9,7 @@
 //
 //   criarJogoPenalti2D(containerId, selecaoId) -> {
 //     modo: '2d', chutar, iniciarMira, moverMiraTela, moverMiraDelta,
-//     pararMira, chutarLivre, destruir
+//     pararMira, chutarLivre(ponto, forca, altura, cb), destruir
 //   }
 //
 // Todos os timers internos ficam registrados e sao cancelados em
@@ -104,7 +104,8 @@ function criarJogoPenalti2D(containerId, selecaoId) {
     posicionar(bola, MARCA.left, MARCA.top, 0);
     var baseGoleiro = paraTela({ x: 0, y: 0 });
     posicionar(goleiro, baseGoleiro.leftPercent, baseGoleiro.topPercent, 0);
-    goleiro.classList.remove('mergulho-esquerda', 'mergulho-direita');
+    goleiro.classList.remove('mergulho-esquerda', 'mergulho-direita', 'goleiro-no-chao');
+    bola.classList.remove('bola-cavadinha');
     posicionar(batedor, 44, 98, 0);
     cena.classList.remove('cena-2d-gol-marcado');
   }
@@ -121,6 +122,11 @@ function criarJogoPenalti2D(containerId, selecaoId) {
       posicionar(bola, destinoTela.leftPercent, destinoTela.topPercent, d(TEMPO.VOO));
       depois(d(TEMPO.VOO), function() {
         emAnimacao = false;
+        // Goleiro termina deitado no gramado (nunca abaixo da linha do chao).
+        goleiro.classList.add('goleiro-no-chao');
+        // Deitado, a "espessura" do corpo (7% da largura = ~12,4% da altura
+        // num palco 16:9) fica metade acima da linha do chao: sobe metade.
+        posicionar(goleiro, poseGoleiroTela.leftPercent, CHAO - 6.2, d(260));
         aoTerminarVoo();
         depois(reduzMovimento ? 60 : TEMPO.ANTES_DE_RESETAR, resetar);
       });
@@ -169,9 +175,11 @@ function criarJogoPenalti2D(containerId, selecaoId) {
   }
 
   // ---------- Chute livre (resposta correta) ----------
-  function chutarLivre(ponto, forca, aoFinalizar) {
+  function chutarLivre(ponto, forca, altura, aoFinalizar) {
+    if (typeof altura === 'function' && aoFinalizar === undefined) { aoFinalizar = altura; altura = undefined; }
     if (emAnimacao || !vivo) return false;
-    var r = RegrasChute.calcularResultadoChute(ponto, forca, RegrasChute.aleatorio);
+    var r = RegrasChute.calcularResultadoChute(ponto, forca, altura, RegrasChute.aleatorio);
+    bola.classList.toggle('bola-cavadinha', r.tipo === 'cavadinha');
     var destinoTela;
     if (r.motivo === 'fraco') {
       // Bola morre rolando antes da linha do gol.
@@ -186,7 +194,7 @@ function criarJogoPenalti2D(containerId, selecaoId) {
     var poseGoleiro = paraTela({ x: lado * 2.4, y: 0.6 });
     animarCobranca(destinoTela, poseGoleiro, null, function() {
       if (r.dentro) cena.classList.add('cena-2d-gol-marcado');
-      if (aoFinalizar) aoFinalizar({ gol: r.dentro, fora: !r.dentro, motivo: r.motivo });
+      if (aoFinalizar) aoFinalizar({ gol: r.dentro, fora: !r.dentro, motivo: r.motivo, tipo: r.tipo });
     });
     return true;
   }

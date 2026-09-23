@@ -96,12 +96,18 @@ service cloud.firestore {
 
     // ---------- Dados privados de cada jogador ----------
 
+    // Politica (conciliada com o relatorio de QA): o dono so pode LER o
+    // proprio documento (get) e LISTAR o proprio historico (usado pelo
+    // backup). Ninguem lista a colecao "jogadores" e nenhum cliente apaga:
+    // exclusao de dados e feita pela equipe (Console/Admin SDK) a pedido.
     match /jogadores/{uid} {
-      allow read, delete: if ehDono(uid);
+      allow get: if ehDono(uid);
       allow create, update: if ehDono(uid) && jogadorValido(request.resource.data);
+      allow list, delete: if false;
 
       match /resultados/{resultadoId} {
-        allow read, delete: if ehDono(uid);
+        allow get, list: if ehDono(uid);
+        allow delete: if false;
         allow create, update: if ehDono(uid)
           && resultadoId.matches('^[A-Za-z0-9_-]{1,64}$')
           && resultadoValido(request.resource.data);
@@ -109,7 +115,8 @@ service cloud.firestore {
     }
 
     match /apelidos/{uid} {
-      allow read, delete: if ehDono(uid);
+      allow get: if ehDono(uid);
+      allow list, delete: if false;
       allow create, update: if ehDono(uid) && apelidoValido(request.resource.data);
     }
 

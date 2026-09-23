@@ -2,7 +2,8 @@
 const { test, expect } = require('@playwright/test');
 const A = require('./ajudantes');
 
-const TODAS_LIBERADAS = { versao: 1, dados: { fasesDesbloqueadas: ['penaltis', 'falta', 'final'], melhorPontuacao: {}, melhorGols: {} } };
+// Progresso coerente (a leitura local saneia fases sem os gols que as liberam).
+const TODAS_LIBERADAS = { versao: 1, dados: { fasesDesbloqueadas: ['penaltis', 'falta', 'final'], melhorPontuacao: { penaltis: 150, falta: 240 }, melhorGols: { penaltis: 2, falta: 3 } } };
 
 test('14. fullscreen rejeitado nao gera Promise rejection e restaura o botao', async ({ page }) => {
   await page.addInitScript(() => {
@@ -133,7 +134,10 @@ test.describe('16. layout sem rolagem horizontal', () => {
 
       await A.responder(page, true);
       await A.esperarEtapa(page, 'mira');
-      await page.keyboard.press('Enter');
+      await A.confirmarEtapa(page);
+      await A.esperarEtapa(page, 'altura');
+      await semRolagem('partida (altura)');
+      await A.confirmarEtapa(page);
       await A.esperarEtapa(page, 'forca');
       await semRolagem('partida (forca)');
       await page.evaluate(() => { estado.resultadosCobrancas = [{ resultado: 'gol', estourouTempo: false, tempoUsado: 2, pontos: 90 }]; });
@@ -144,41 +148,56 @@ test.describe('16. layout sem rolagem horizontal', () => {
   }
 });
 
-for (const vp of [{ width: 1366, height: 768 }, { width: 360, height: 640 }, { width: 1920, height: 1080 }]) {
-  test(`fullscreen real ${vp.width}x${vp.height}: palco em 16:9 e controles dentro da tela`, async ({ page }) => {
+// QA-5 (DEF-08): mede o campo em janela e em tela cheia, em retrato e
+// paisagem, nas etapas de resposta, altura e forca. Controles sempre dentro
+// da altura visivel; tela cheia nunca diminui o campo.
+async function medirPartida(page) {
+  return page.evaluate(() => {
+    const r = s => document.querySelector(s).getBoundingClientRect();
+    const visiveis = ['.caixa-pergunta', '#area-respostas', '#bloco-altura', '#bloco-forca', '#mensagem-feedback']
+      .filter(s => r(s).height > 0).map(s => ({ s, top: r(s).top, bottom: r(s).bottom }));
+    return { pw: r('.palco-penalti').width, ph: r('.palco-penalti').height, visiveis,
+      vw: innerWidth, vh: innerHeight, sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth };
+  });
+}
+function conferirDentroDaTela(m) {
+  expect(Math.abs(m.pw / m.ph - 16 / 9)).toBeLessThan(0.02);
+  for (const v of m.visiveis) {
+    expect(v.top, v.s).toBeGreaterThanOrEqual(0);
+    expect(v.bottom, `${v.s} abaixo da dobra`).toBeLessThanOrEqual(m.vh + 1);
+  }
+  expect(m.sw).toBeLessThanOrEqual(m.cw);
+}
+
+for (const vp of [
+  { width: 360, height: 640 }, { width: 390, height: 844 }, { width: 844, height: 390 },
+  { width: 1366, height: 768 }, { width: 1920, height: 1080 }, { width: 768, height: 1024 }
+]) {
+  test(`QA-5 ${vp.width}x${vp.height}: campo em janela e tela cheia, controles visiveis em todas as etapas`, async ({ page }) => {
     await page.setViewportSize(vp);
-    const erros = await A.abrirJogo(page, { semThree: true }); // com o aviso do modo 2D (pior caso)
+    const erros = await A.abrirJogo(page, { semThree: true }); // aviso do modo 2D visivel = pior caso de altura
     await A.iniciarPartida(page, { pausa: 60000 });
+    const janela = await medirPartida(page);
+    conferirDentroDaTela(janela);
+    if (vp.width >= 1366) expect(janela.pw / vp.width, 'campo >= 60% da largura').toBeGreaterThanOrEqual(0.6);
+    if (vp.width < 700) expect(janela.pw).toBeGreaterThanOrEqual(vp.width - 40); // retrato: largura toda
+
     await page.click('#botao-tela-cheia');
     const entrou = await page.waitForFunction(() => !!document.fullscreenElement, null, { timeout: 3000 }).then(() => true, () => false);
     test.skip(!entrou, 'navegador de teste nao entrou em tela cheia');
     await page.waitForTimeout(300);
-    const medir = () => page.evaluate(() => {
-      const r = s => document.querySelector(s).getBoundingClientRect();
-      const visiveis = ['.caixa-pergunta', '#area-respostas', '#bloco-forca', '#mensagem-feedback']
-        .filter(s => r(s).height > 0).map(s => ({ s, top: r(s).top, bottom: r(s).bottom }));
-      return { pw: r('.palco-penalti').width, ph: r('.palco-penalti').height, tw: r('.tela-fase1').width,
-        visiveis, vh: innerHeight, sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth };
-    });
-    const conferir = m => {
-      expect(Math.abs(m.pw / m.ph - 16 / 9)).toBeLessThan(0.02);
-      for (const v of m.visiveis) {
-        expect(v.top, v.s).toBeGreaterThanOrEqual(0);
-        expect(v.bottom, v.s).toBeLessThanOrEqual(m.vh);
-      }
-      expect(m.sw).toBeLessThanOrEqual(m.cw);
-    };
-    const m1 = await medir();
-    if (vp.width > 700) {
-      expect(m1.tw).toBeGreaterThan(640); // .tela-fase1 nao fica presa em 640px
-      expect(m1.pw).toBeGreaterThan(480); // palco cresceu
-    }
-    conferir(m1);
+    const cheia = await medirPartida(page);
+    expect(cheia.pw, 'tela cheia nao pode diminuir o campo').toBeGreaterThanOrEqual(janela.pw - 1);
+    conferirDentroDaTela(cheia);
+
     await A.responder(page, true);
     await A.esperarEtapa(page, 'mira');
-    await page.keyboard.press('Enter');
+    await A.confirmarEtapa(page);
+    await A.esperarEtapa(page, 'altura');
+    conferirDentroDaTela(await medirPartida(page));
+    await A.confirmarEtapa(page);
     await A.esperarEtapa(page, 'forca');
-    conferir(await medir());
+    conferirDentroDaTela(await medirPartida(page));
     expect(erros).toEqual([]);
   });
 }

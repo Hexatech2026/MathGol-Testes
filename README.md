@@ -1,7 +1,8 @@
 # MathGol
 
 Jogo de pênaltis com matemática para crianças do fundamental. A criança
-responde uma conta e, se acertar, escolhe **onde** chutar e com **que força**.
+responde uma conta e, se acertar, escolhe **onde** chutar, **que tipo de
+chute** (rasteiro, meia-altura ou cavadinha) e com **que força**.
 
 ```text
 PERGUNTA
@@ -9,24 +10,44 @@ PERGUNTA
 │  └─ Defesa do goleiro
 └─ Resposta correta
    ├─ Escolha da mira
+   ├─ Escolha da altura (tipo de chute)
    ├─ Escolha da força
    └─ Chute
       ├─ Bola dentro → gol
       └─ Bola fora → fora
 ```
 
-Resposta correta impede a defesa do goleiro, mas **não garante gol**: mira e
-força decidem. A regra fica em uma função pura, `JS/regras-chute.js`,
+Resposta correta impede a defesa do goleiro, mas **não garante gol**: mira,
+tipo de chute e força decidem. A regra fica em uma função pura, `JS/regras-chute.js`,
 compartilhada pela cena 3D, pelo modo simplificado 2D e pelos testes.
+
+### Tipos de chute (barra de altura)
+
+A altura **muda o resultado de verdade** (não é só animação):
+
+| Tipo (barra) | Efeito | Faixa ideal de força |
+|---|---|---|
+| ⬇️ Rasteiro (esquerda) | bola baixa: não sobe acima de 0,9 m (não pega o ângulo), desvia menos para o lado | 45%–85% (pede força) |
+| ⚽ Meia-altura (meio) | a bola vai onde a criança mirou | 35%–75% |
+| ☁️ Cavadinha (direita) | bola sobe e cai ~0,35 m acima da mira, um pouco mais para o centro; mirar alto passa por cima | 15%–50% (pede toque leve) |
+
+A faixa "ideal" aparece marcada na barra de força (com texto, não só cor) e
+muda conforme o tipo escolhido.
+
+### Força
 
 | Força | O que acontece |
 |---|---|
-| Dentro da faixa verde (35%–75%) | a bola vai exatamente onde a criança mirou |
+| Dentro da faixa ideal do tipo | a bola vai para o ponto calculado pelo tipo |
 | Fraca demais | a bola perde altura e pode não chegar ao gol |
 | Forte demais | a bola sobe e pode passar por cima do travessão |
 | Fora da faixa | a bola também desvia para o lado (mirar colado na trave fica arriscado) |
 
-No centro do gol, força mínima e força máxima **sempre** vão para fora.
+Garantias testadas: no centro do gol, força mínima e máxima **sempre** vão
+para fora em todos os tipos; mira fora do gol é fora com qualquer força; e a
+força ideal é sempre a melhor escolha (uma força ruim nunca "salva" um
+chute). A bola conta como dentro só se passar **inteira** (o raio da bola
+é descontado das traves e do travessão).
 
 Sem nome real, sem e-mail e sem cadastro: a nuvem usa **login anônimo** do
 Firebase.
@@ -37,7 +58,7 @@ Firebase.
 index.html   entrada na raiz → redireciona para HTML/index.html (link relativo)
 HTML/        index.html (o jogo)
 CSS/         styles.css
-JS/          regras-chute.js, backup-validacao.js, data.js, avatar-data.js,
+JS/          regras-chute.js, backup-validacao.js, carregar-externos.js, data.js, avatar-data.js,
              questions.js, banco-questoes.js, narration.js, sfx.js,
              game.js, game-2d.js, progressao.js, main.js,
              firebase-config.js, seed-firestore.js
@@ -77,23 +98,41 @@ Pênaltis!", "Fim da fase Falta!", "Fim da Final!").
 
 ## Controles
 
-- **Mouse**: mova para mirar, clique para confirmar; clique para travar a força.
-- **Toque**: toque (ou arraste o dedo e solte) para mirar; toque para travar a força.
+- **Mouse**: mova para mirar, clique para confirmar; clique para travar a altura e a força.
+- **Toque**: toque (ou arraste o dedo e solte) para mirar; toque para travar altura e força.
   Cada toque avança exatamente uma etapa.
-- **Teclado**: setas movem a mira; **Enter** ou **Espaço** confirmam mira e força.
+- **Teclado**: setas movem a mira; **Enter** ou **Espaço** confirmam cada etapa.
+- Logo depois de mudar de etapa, entradas são ignoradas por 0,45 s: um
+  duplo clique/toque confirma só uma etapa.
+- A mira fica vermelha quando está fora do gol e ganha um ✓ quando travada.
+
+## Layout
+
+- **Retrato** (celular em pé): pergunta → campo → controles, com o campo na
+  largura toda.
+- **Paisagem / desktop**: campo grande à esquerda (≈66% da largura em
+  1366×768 e 1920×1080), pergunta e controles à direita.
+- O campo é dimensionado pela largura **e** pela altura da janela, então a
+  tela cheia só aumenta o campo. Não há zoom nem `transform: scale`, e o
+  pinch-to-zoom continua liberado.
+- Durante a partida o fundo animado (e o "GOL!" decorativo) e o rodapé
+  somem.
 
 ## Modo 3D, modo simplificado e modo offline
 
 | Situação | O que acontece |
 |---|---|
 | Three.js carregou e há WebGL | cena 3D |
-| Three.js não carregou (CDN fora / sem internet) ou WebGL indisponível | **modo simplificado 2D**, com aviso discreto "Modo simplificado ativo (sem 3D)". Mesma regra: mira e força continuam valendo |
+| Three.js não carregou (CDN fora, **travado** ou sem internet) ou WebGL indisponível | **modo simplificado 2D**, com aviso discreto "Modo simplificado ativo (sem 3D)". Mesma regra: mira, altura e força continuam valendo |
 | Nem o modo 2D consegue abrir | a partida **não começa** e aparece uma mensagem clara. Nunca há gol automático |
 | Firebase indisponível | o jogo funciona normalmente; só não salva na nuvem (progresso e recordes ficam no navegador) |
 
-O jogo **não funciona 100% offline** na primeira visita: os scripts do
-Firebase, a fonte e os avatares vêm de CDNs (lista abaixo). Sem internet, o
-Three.js não carrega e o jogo entra no modo simplificado.
+Nenhum CDN bloqueia a abertura do jogo: o Three.js é carregado com
+`async`, o Firebase por `import()` dinâmico (`JS/carregar-externos.js`) e as
+fontes sem bloquear a renderização. Se um CDN travar (sem responder), o menu
+abre normalmente, a partida usa o modo simplificado e a nuvem fica
+desligada. O jogo **não funciona 100% offline** na primeira visita: os
+próprios arquivos do jogo precisam ser baixados.
 
 ### Dependências externas (CDN)
 
@@ -113,6 +152,10 @@ Three.js não carrega e o jogo entra no modo simplificado.
   um `uid`; esse `uid` é o id dos documentos do jogador.
 - As regras (`Config/firestore.rules`) só deixam cada usuário acessar:
   `jogadores/{uid}`, `jogadores/{uid}/resultados/{id}` e `apelidos/{uid}`.
+- Política de leitura/exclusão: o dono só **lê** o próprio documento e
+  **lista** o próprio histórico (necessário para o backup). Ninguém lista a
+  coleção `jogadores` e **nenhum cliente apaga** dados; exclusão é feita pela
+  equipe (Console/Admin SDK), a pedido.
 - Toda escrita é validada nas regras: campos permitidos, tipos, tamanho de
   textos e limites plausíveis de gols, pontos e tempo. Campo inesperado é
   recusado.
@@ -173,7 +216,10 @@ O que fazer com eles:
 | ☁️ Exportar Dados do Firebase | `.json` com perfil (apelido + avatar) e histórico de resultados do usuário logado. Sem `uid` e sem token |
 | 📤 Restaurar Backup | valida e restaura |
 
-A restauração: limita o arquivo a 256 KB, confere `versao` e `tipo`, aceita
+A restauração (e também a leitura normal do progresso local) confere a
+coerência com as fases: recorde de gols até o número de cobranças da fase,
+pontos entre 10 e 100 por gol, fases desbloqueadas em ordem e só com os gols
+que as liberam. A restauração também: limita o arquivo a 256 KB, confere `versao` e `tipo`, aceita
 só as chaves da lista acima (chave desconhecida = arquivo recusado; o antigo
 `mathgol_token` é ignorado), valida o formato de cada valor e de cada
 resultado, exige que `resultados` seja uma lista, não altera o objeto lido do

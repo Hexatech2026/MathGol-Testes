@@ -1,20 +1,21 @@
-// data.js - listas fixas (fallback) para apelido, selecoes, dificuldades.
+// data.js - listas fixas (fallback) para apelido, seleções, dificuldades.
+// Textos visíveis sempre com acentuação correta (DEF-22).
 // A crianca ESCOLHE um personagem + um animal pra montar o apelido (nao
 // digita nada). Listas podem vir do Firestore via carregarConfiguracoes().
 
 let PERSONAGENS = [
-  'Capitao', 'Fera', 'Relampago', 'Craque', 'Foguete',
-  'Furacao', 'Campeao', 'Guerreiro', 'Fenomeno', 'Trovao',
+  'Capitão', 'Fera', 'Relâmpago', 'Craque', 'Foguete',
+  'Furacão', 'Campeão', 'Guerreiro', 'Fenômeno', 'Trovão',
   'Meteoro', 'Torpedo', 'Escudo', 'Cometa', 'Raio',
-  'Capita', 'Estrela', 'Campea', 'Guerreira', 'Fenix',
-  'Centelha', 'Valente', 'Coragem', 'Vitoria', 'Aurora',
-  'Heroina', 'Lenda', 'Chama', 'Brilho', 'Medalha'
+  'Capitã', 'Estrela', 'Campeã', 'Guerreira', 'Fênix',
+  'Centelha', 'Valente', 'Coragem', 'Vitória', 'Aurora',
+  'Heroína', 'Lenda', 'Chama', 'Brilho', 'Medalha'
 ];
 
 let ANIMAIS = [
-  'Tigre', 'Aguia', 'Onca', 'Leao', 'Gaviao',
-  'Puma', 'Lobo', 'Falcao', 'Pantera', 'Tubarao',
-  'Golfinho', 'Coruja', 'Raposa', 'Jaguar', 'Fenix',
+  'Tigre', 'Águia', 'Onça', 'Leão', 'Gavião',
+  'Puma', 'Lobo', 'Falcão', 'Pantera', 'Tubarão',
+  'Golfinho', 'Coruja', 'Raposa', 'Jaguar', 'Fênix',
   'Coelho', 'Lince', 'Arara', 'Borboleta', 'Flamingo'
 ];
 
@@ -22,21 +23,21 @@ let SELECOES = [
   { id: 'brasil',     nome: 'Brasil',     bandeira: 'br',     corPrimaria: '#2E9E5B', corSecundaria: '#FFC63B' },
   { id: 'argentina',  nome: 'Argentina',  bandeira: 'ar',     corPrimaria: '#6EC1E4', corSecundaria: '#FFFDF6' },
   { id: 'alemanha',   nome: 'Alemanha',   bandeira: 'de',     corPrimaria: '#21303B', corSecundaria: '#E0343B' },
-  { id: 'franca',     nome: 'Franca',     bandeira: 'fr',     corPrimaria: '#3A5FCD', corSecundaria: '#E0343B' },
-  { id: 'japao',      nome: 'Japao',      bandeira: 'jp',     corPrimaria: '#FFFDF6', corSecundaria: '#E0343B' },
+  { id: 'franca',     nome: 'França',     bandeira: 'fr',     corPrimaria: '#3A5FCD', corSecundaria: '#E0343B' },
+  { id: 'japao',      nome: 'Japão',      bandeira: 'jp',     corPrimaria: '#FFFDF6', corSecundaria: '#E0343B' },
   { id: 'portugal',   nome: 'Portugal',   bandeira: 'pt',     corPrimaria: '#2E9E5B', corSecundaria: '#E0343B' },
   { id: 'espanha',    nome: 'Espanha',    bandeira: 'es',     corPrimaria: '#E0343B', corSecundaria: '#FFC63B' },
-  { id: 'italia',     nome: 'Italia',     bandeira: 'it',     corPrimaria: '#3A5FCD', corSecundaria: '#FFFDF6' },
+  { id: 'italia',     nome: 'Itália',     bandeira: 'it',     corPrimaria: '#3A5FCD', corSecundaria: '#FFFDF6' },
   { id: 'inglaterra', nome: 'Inglaterra', bandeira: 'gb-eng', corPrimaria: '#FFFDF6', corSecundaria: '#E0343B' },
-  { id: 'colombia',   nome: 'Colombia',   bandeira: 'co',     corPrimaria: '#FFC63B', corSecundaria: '#3A5FCD' },
-  { id: 'mexico',     nome: 'Mexico',     bandeira: 'mx',     corPrimaria: '#2E9E5B', corSecundaria: '#FFFDF6' },
+  { id: 'colombia',   nome: 'Colômbia',   bandeira: 'co',     corPrimaria: '#FFC63B', corSecundaria: '#3A5FCD' },
+  { id: 'mexico',     nome: 'México',     bandeira: 'mx',     corPrimaria: '#2E9E5B', corSecundaria: '#FFFDF6' },
   { id: 'coreia',     nome: 'Coreia',     bandeira: 'kr',     corPrimaria: '#E0343B', corSecundaria: '#3A5FCD' }
 ];
 
 let DIFICULDADES = [
-  { id: 'facil',   nome: 'Facil',   descricao: '+ e - ate 10',        icone: '1' },
-  { id: 'medio',   nome: 'Medio',   descricao: '+ - ate 20 e tabuada', icone: '2' },
-  { id: 'dificil', nome: 'Dificil', descricao: 'x e /',                icone: '3' }
+  { id: 'facil',   nome: 'Fácil',   descricao: '+ e − até 10',         icone: '1' },
+  { id: 'medio',   nome: 'Médio',   descricao: '+ − até 20 e tabuada', icone: '2' },
+  { id: 'dificil', nome: 'Difícil', descricao: '× e ÷',                icone: '3' }
 ];
 
 // ---------- Validacao das configuracoes remotas (Firestore) ----------
@@ -128,46 +129,46 @@ function aplicarConfiguracoesRemotas(config) {
 const MENSAGENS_RESULTADO = {
   0: [
     'Valeu por jogar! Bora treinar mais e voltar pra fazer gol!',
-    'Hoje o goleiro tava inspirado! Tenta de novo, voce consegue!',
-    'Nao desiste! Cada tentativa te deixa mais craque!',
-    'O importante e tentar! Vamos de novo?'
+    'Hoje o goleiro tava inspirado! Tenta de novo, você consegue!',
+    'Não desiste! Cada tentativa te deixa mais craque!',
+    'O importante é tentar! Vamos de novo?'
   ],
   1: [
-    'Bom comeco! Voce ja fez um gol, bora buscar mais!',
-    'Um gol e so o aquecimento! Tenta de novo pra fazer mais!',
-    'Ja ta no caminho certo! Mais uma rodada e voce arrebenta!',
-    'Boa! Um gol ja e vitoria! Quer tentar fazer dois agora?'
+    'Bom começo! Você já fez um gol, bora buscar mais!',
+    'Um gol é só o aquecimento! Tenta de novo pra fazer mais!',
+    'Já tá no caminho certo! Mais uma rodada e você arrebenta!',
+    'Boa! Um gol já é vitória! Quer tentar fazer dois agora?'
   ],
   2: [
-    'Quase perfeito! Faltou so um golzinho! Tenta de novo!',
-    'Dois gols! Ta quase la, falta so um pra fase perfeita!',
-    'Impressionante! Mais uma tentativa e voce fecha com 3!',
-    'Show! Dois de tres! Bora buscar a fase perfeita?'
+    'Quase perfeito! Faltou só um golzinho! Tenta de novo!',
+    'Dois gols! Tá quase lá, falta só um pra fase perfeita!',
+    'Impressionante! Mais uma tentativa e você fecha com 3!',
+    'Show! Dois de três! Bora buscar a fase perfeita?'
   ],
   3: [
-    'FASE PERFEITA! Voce e o Craque das Contas!',
-    'Tres de tres! Ninguem segura voce! Bora pro proximo desafio!',
-    'Perfeito! Acho que esse nivel ta facil demais pra voce!',
-    'Goleada! Manda bem assim no proximo nivel tambem!',
-    'Hat-trick de contas certas! Voce e fera demais!'
+    'FASE PERFEITA! Você é o Craque das Contas!',
+    'Três de três! Ninguém segura você! Bora pro próximo desafio!',
+    'Perfeito! Acho que esse nível tá fácil demais pra você!',
+    'Goleada! Manda bem assim no próximo nível também!',
+    'Hat-trick de contas certas! Você é fera demais!'
   ]
 };
 
-// Mensagens genericas (sem numero fixo) para fases com 5 ou 7 cobrancas.
-// As de MENSAGENS_RESULTADO citam "tres" e so valem para 3 cobrancas.
+// Mensagens genéricas (sem número fixo) para fases com 5 ou 7 cobranças.
+// As de MENSAGENS_RESULTADO citam "três" e só valem para 3 cobranças.
 const MENSAGENS_RESULTADO_GERAIS = {
   zero: MENSAGENS_RESULTADO[0],
   poucos: [
-    'Bom comeco! Voce ja balancou a rede, bora buscar mais!',
-    'Ja ta no caminho certo! Mais uma rodada e voce arrebenta!'
+    'Bom começo! Você já balançou a rede, bora buscar mais!',
+    'Já tá no caminho certo! Mais uma rodada e você arrebenta!'
   ],
   quase: [
-    'Muito bem! Mais da metade das cobrancas viraram gol!',
+    'Muito bem! Mais da metade das cobranças viraram gol!',
     'Show! Falta pouco pra fase perfeita!'
   ],
   perfeito: [
-    'FASE PERFEITA! Voce e o Craque das Contas!',
-    'Nenhuma cobranca perdida! Ninguem segura voce!'
+    'FASE PERFEITA! Você é o Craque das Contas!',
+    'Nenhuma cobrança perdida! Ninguém segura você!'
   ]
 };
 
