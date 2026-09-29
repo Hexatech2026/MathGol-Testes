@@ -1,12 +1,7 @@
 // progressao.js — sistema de progressao entre fases.
-// TODAS as fases usam a mesma mecanica de cobranca de penalti (resposta →
-// mira → forca → chute). O que muda de uma fase pra outra e so:
-// quantidade de cobrancas, tempo para responder e nivel das contas.
-// Fase 1: Penaltis (3 cobrancas, 15 s)
-// Fase 2: Falta    (5 cobrancas, 12 s, contas sobem 1 nivel)
-// Fase 3: Final    (7 cobrancas, 10 s, contas sobem mais 1 nivel)
-// Obs.: "Falta" e so o nome da fase; nao existe mecanica de cobranca de
-// falta (barreira etc.).
+// Fase 1: Penaltis (3 cobrancas) — ja existe
+// Fase 2: Falta (5 cobrancas, timer menor, dificuldade sobe)
+// Fase 3: Final (7 cobrancas, timer curto, dificuldade maxima)
 //
 // Desbloqueia a proxima fase ao fazer >= 2 gols na fase atual.
 // Progresso salvo em localStorage (e Firebase quando disponivel).
@@ -29,7 +24,6 @@ var Progressao = (function() {
       nome: 'Pênaltis',
       icone: '⚽',
       descricao: '3 cobranças — aqueça o pé!',
-      tituloResultado: 'Fim da fase Pênaltis!',
       cobrancas: 3,
       timerMax: 15,
       golsParaDesbloquear: 2, // gols minimos para desbloquear a proxima
@@ -39,19 +33,17 @@ var Progressao = (function() {
       id: 'falta',
       nome: 'Falta',
       icone: '🥅',
-      descricao: '5 cobranças — menos tempo, contas mais difíceis!',
-      tituloResultado: 'Fim da fase Falta!',
+      descricao: '5 cobranças — goleiro mais esperto!',
       cobrancas: 5,
       timerMax: 12,
       golsParaDesbloquear: 3,
-      dificuldadeForcar: null // o nivel sobe via ESCALAR_DIFICULDADE
+      dificuldadeForcar: null // sobe 1 nivel automaticamente
     },
     {
       id: 'final',
       nome: 'Final',
       icone: '🏆',
       descricao: '7 cobranças — vale o título!',
-      tituloResultado: 'Fim da Final!',
       cobrancas: 7,
       timerMax: 10,
       golsParaDesbloquear: null, // ultima fase
@@ -100,33 +92,6 @@ var Progressao = (function() {
     }
   }
 
-  // Saneia o progresso lido do navegador (DEF-17): mesmos limites da
-  // validacao de backup. Em vez de descartar tudo, corrige o que for
-  // impossivel — recorde acima do que a fase permite, pontos incompativeis
-  // com os gols, fase desbloqueada sem os gols da fase anterior.
-  function sanear() {
-    var gols = {}, pontos = {};
-    FASES.forEach(function(f) {
-      var g = Math.floor(progresso.melhorGols[f.id] || 0);
-      g = Math.min(f.cobrancas, Math.max(0, g));
-      var p = Math.floor(progresso.melhorPontuacao[f.id] || 0);
-      p = Math.min(g * 100, Math.max(0, p));
-      if (g > 0 && p < 10) p = 10 * g;
-      if (g > 0) gols[f.id] = g;
-      if (p > 0) pontos[f.id] = p;
-    });
-    var fases = ['penaltis'];
-    for (var i = 1; i < FASES.length; i++) {
-      var anterior = FASES[i - 1];
-      if (progresso.fasesDesbloqueadas.indexOf(FASES[i].id) === -1) break;
-      if ((gols[anterior.id] || 0) < anterior.golsParaDesbloquear) break;
-      fases.push(FASES[i].id);
-    }
-    progresso.melhorGols = gols;
-    progresso.melhorPontuacao = pontos;
-    progresso.fasesDesbloqueadas = fases;
-  }
-
   function carregar() {
     var bruto;
     try { bruto = JSON.parse(localStorage.getItem(CHAVE_PROGRESSAO)); } catch (e) { bruto = null; }
@@ -141,7 +106,6 @@ var Progressao = (function() {
       // "dados". Migra em vez de descartar o progresso já salvo.
       aplicarDadosSalvos(bruto);
     }
-    sanear();
   }
 
   function salvar() {

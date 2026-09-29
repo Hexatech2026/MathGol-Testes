@@ -18,17 +18,17 @@ var CATEGORIAS_AVATAR = [
   },
   {
     id: 'herois',
-    nome: 'Heróis',
+    nome: 'Herois',
     seeds: ['Flash','Trovao','Raio','Escudo','Fenix','Cometa','Estrela','Meteoro']
   },
   {
     id: 'diversao',
-    nome: 'Diversão',
+    nome: 'Diversao',
     seeds: ['Pizza','Foguete','Arcoiris','Sorvete','Dinossauro','Unicornio','Pirata','Astronauta']
   },
   {
     id: 'numeros',
-    nome: 'Números',
+    nome: 'Numeros',
     seeds: ['Numero7','Numero10','Numero9','Numero1','Numero11','Numero5','Numero3','Numero8']
   },
   {
