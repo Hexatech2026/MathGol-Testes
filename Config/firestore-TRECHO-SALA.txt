@@ -1,0 +1,23 @@
+// Acrescente este bloco ao seu firestore.rules, DENTRO de
+// match /databases/{database}/documents { ... }, antes do "nega tudo mais".
+
+    // HU-14 — Sala do Professor. Quem sabe o codigo entra; o professor
+    // dita o codigo para a turma. Mesmo modelo anonimo do resto do jogo.
+    //
+    // RESSALVA (card R03): "dono" guarda o uid do professor, mas NAO e
+    // checado aqui — qualquer cliente com o codigo pode trocar o nivel da
+    // sala, e a lista de alunos e legivel por quem tiver o codigo.
+    // Para turma real, trocar por:
+    //   allow update: if request.auth != nulo
+    //                 && resource.data.dono == request.auth.uid;
+    // Enquanto o conteudo e apelido + placar (sem nome real, sem e-mail),
+    // o risco e baixo e esta consciente.
+    match /salas/{codigo} {
+      allow read: if true;
+      allow create, update: if true;
+      allow delete: if false;
+
+      match /alunos/{uid} {
+        allow read, write: if true;
+      }
+    }

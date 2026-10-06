@@ -10,14 +10,16 @@
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<!-- Fontes sem bloquear a página: se o Google Fonts travar, o jogo abre
+     com as fontes do sistema (media="print" + onload troca para "all"). -->
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
 
-<link rel="stylesheet" href="../CSS/styles.css?v=5">
+<link rel="stylesheet" href="../CSS/styles.css">
 </head>
 <body>
 
 <div class="campo-animado" aria-hidden="true">
-  <svg class="cena-gol" viewBox="0 0 400 900" preserveAspectRatio="xMidYMid slice">
+  <svg class="cena-gol" viewBox="0 0 400 900" preserveAspectRatio="xMidYMax slice">
     <defs>
       <linearGradient id="ceuGrad" x1="0" y1="0" x2="0" y2="1">
         <stop offset="0%" stop-color="#0B1E3D"/>
@@ -128,7 +130,14 @@
         <img id="logo-mini" class="marca-logo" src="../Imagens/hexatech-logo.png" alt="HexaTech">
       </button>
     </div>
-    <button id="botao-acessibilidade" class="botao-icone" type="button" aria-label="Abrir opções de acessibilidade">♿</button>
+    <div class="topo-direita">
+      <button id="botao-saldo" class="botao-saldo" type="button" aria-label="Seus Cruzeiros: 0. Abrir a Loja">
+        <img class="icone-cruzeiro" src="../Imagens/estrela-cruzeiro.png" alt="">
+        <span id="saldo-topo" class="saldo-topo-valor">0</span>
+      </button>
+      <button id="botao-tela-cheia" class="botao-icone" type="button" aria-label="Entrar em tela cheia" aria-pressed="false">⛶</button>
+      <button id="botao-acessibilidade" class="botao-icone" type="button" aria-label="Abrir opções de acessibilidade">♿</button>
+    </div>
   </div>
 
   <section id="tela-menu" class="tela tela-menu">
@@ -144,12 +153,14 @@
     <p class="subtitulo subtitulo-curto">Chuta, acerta e faz o gol! ⚽</p>
     <div class="pilha-botoes">
       <button id="botao-jogar" class="botao botao-cta" type="button">Jogar</button>
-      <button id="botao-loja" class="botao botao-loja" type="button">
-        🛒 Loja
-        <span class="selo-saldo"><img class="icone-cruzeiro" src="../Imagens/estrela-cruzeiro.png" alt=""><span data-saldo-cruzeiros>--</span></span>
-      </button>
-      <button id="botao-entrar-sala" class="botao botao-secundario" type="button">🚪 Entrar numa sala</button>
-      <button id="botao-professor" class="botao botao-secundario" type="button">🧑‍🏫 Sou professor</button>
+      <div class="linha-botoes-menu">
+        <button id="botao-tutorial" class="botao botao-menu-tutorial" type="button">❓ Como jogar</button>
+        <button id="botao-loja" class="botao botao-menu-loja" type="button">🛒 Loja</button>
+      </div>
+      <div class="linha-botoes-menu">
+        <button id="botao-entrar-sala" class="botao botao-secundario" type="button">🚪 Entrar na sala</button>
+        <button id="botao-professor" class="botao botao-secundario" type="button">🧑‍🏫 Sou professor</button>
+      </div>
       <button id="botao-creditos" class="botao botao-secundario" type="button">Créditos</button>
       <button id="botao-backup" class="botao botao-secundario" type="button">💾 Backup</button>
     </div>
@@ -157,11 +168,11 @@
   </section>
 
   <section id="tela-entrar-sala" class="tela">
-    <h2>🚪 Entrar numa sala</h2>
+    <h2 data-titulo-tela>🚪 Entrar na sala</h2>
     <p class="texto-apoio">Peça o código da sala para a sua professora ou professor e digite aqui.</p>
-    <input id="input-sala" class="campo-codigo campo-codigo-grande" type="text" maxlength="7"
+    <input id="input-sala" class="campo-codigo-sala" type="text" maxlength="7"
            placeholder="ABC-123" aria-label="Código da sala" autocomplete="off" spellcheck="false">
-    <p id="aviso-entrar-sala" class="loja-aviso" aria-live="polite"></p>
+    <p id="aviso-entrar-sala" class="aviso-sala" role="status" aria-live="polite"></p>
     <div class="pilha-botoes" style="margin-top: 18px;">
       <button id="botao-confirmar-sala" class="botao botao-cta" type="button">Entrar</button>
       <button id="botao-voltar-entrar-sala" class="botao" type="button">Voltar</button>
@@ -169,15 +180,17 @@
   </section>
 
   <section id="tela-professor" class="tela tela-professor">
-    <h2>🧑‍🏫 Sala do Professor</h2>
+    <h2 data-titulo-tela>🧑‍🏫 Sala do Professor</h2>
 
     <div id="prof-sem-sala">
       <p class="texto-apoio">Crie uma sala, dite o código para a turma e escolha o nível das contas.</p>
+
       <label class="rotulo-campo" for="input-nome-turma">Nome da turma</label>
-      <input id="input-nome-turma" class="campo-texto" type="text" maxlength="30" placeholder="3º ano B" autocomplete="off">
+      <input id="input-nome-turma" class="campo-sala" type="text" maxlength="30"
+             placeholder="3º ano B" autocomplete="off">
 
       <label class="rotulo-campo" for="select-nivel-sala">Nível das contas</label>
-      <select id="select-nivel-sala" class="campo-texto"></select>
+      <select id="select-nivel-sala" class="campo-sala"></select>
 
       <fieldset class="grupo-tipos">
         <legend class="rotulo-campo">Só estes tipos de conta (opcional)</legend>
@@ -186,18 +199,17 @@
 
       <div class="pilha-botoes" style="margin-top: 16px;">
         <button id="botao-criar-sala" class="botao botao-cta" type="button">Criar sala</button>
-        <button id="botao-abrir-sala" class="botao botao-secundario" type="button">Abrir sala existente</button>
       </div>
-      <p id="aviso-prof" class="loja-aviso" aria-live="polite"></p>
+      <p id="aviso-prof" class="aviso-sala" role="status" aria-live="polite"></p>
     </div>
 
     <div id="prof-com-sala" hidden>
       <p class="texto-apoio">Dite este código para a turma:</p>
-      <p id="codigo-sala" class="codigo-craque codigo-sala">------</p>
+      <p id="codigo-sala" class="codigo-sala">------</p>
       <p id="prof-nivel-atual" class="texto-apoio"></p>
 
       <label class="rotulo-campo" for="select-nivel-ativo">Trocar o nível da turma</label>
-      <select id="select-nivel-ativo" class="campo-texto"></select>
+      <select id="select-nivel-ativo" class="campo-sala"></select>
 
       <h3 class="subtitulo-secao">Turma <span id="prof-contagem" class="contagem-alunos">(0)</span></h3>
       <ul id="lista-alunos" class="lista-alunos" aria-live="polite"></ul>
@@ -205,37 +217,6 @@
       <div class="pilha-botoes" style="margin-top: 16px;">
         <button id="botao-fechar-painel" class="botao" type="button">Voltar ao menu</button>
       </div>
-    </div>
-  </section>
-
-  <section id="tela-loja" class="tela tela-loja">
-    <div class="loja-topo">
-      <h2>🛒 Loja</h2>
-      <p class="carteira">
-        <img class="icone-cruzeiro" src="../Imagens/estrela-cruzeiro.png" alt="Cruzeiros">
-        <strong data-saldo-cruzeiros>--</strong> Cruzeiros
-      </p>
-    </div>
-    <p class="loja-dica">Faça gols pra ganhar Cruzeiros e comprar times, nomes e avatares novos.</p>
-
-    <div id="abas-loja" class="abas-loja" role="tablist"></div>
-    <div id="grade-loja" class="grade-loja"></div>
-    <p id="loja-aviso" class="loja-aviso" aria-live="polite"></p>
-
-    <div class="caixa-codigo">
-      <h3 class="subtitulo-secao">🔑 Seu código do craque</h3>
-      <p class="codigo-explica">Anote esse código. Se você jogar em outro computador, digite ele pra voltar com seus Cruzeiros e tudo que comprou.</p>
-      <p id="codigo-craque" class="codigo-craque">------</p>
-      <div class="linha-codigo">
-        <input id="input-codigo" class="campo-codigo" type="text" maxlength="7" placeholder="ABC-123"
-               aria-label="Digite o código do craque de outro computador" autocomplete="off" spellcheck="false">
-        <button id="botao-usar-codigo" class="botao botao-secundario" type="button">Usar código</button>
-      </div>
-      <p id="codigo-aviso" class="loja-aviso" aria-live="polite"></p>
-    </div>
-
-    <div class="pilha-botoes" style="margin-top: 20px;">
-      <button id="botao-sair-loja" class="botao" type="button">Voltar ao menu</button>
     </div>
   </section>
 
@@ -257,8 +238,9 @@
     <div id="lista-animais" class="lista-chips"></div>
 
     <h3 class="subtitulo-secao">Avatar</h3>
-    <div id="abas-avatar" class="abas-avatar"></div>
     <div id="grade-avatares" class="grade-avatares"></div>
+
+    <button id="botao-loja-apelido" class="botao-link-loja" type="button">🛒 Mais nomes e avatares na Loja</button>
 
     <div class="pilha-botoes" style="margin-top: 20px;">
       <button id="botao-confirmar-apelido" class="botao" type="button" disabled>Confirmar</button>
@@ -267,8 +249,12 @@
 
   <section id="tela-selecao" class="tela">
     <h2>Escolha seu time</h2>
+    <h3 class="subtitulo-secao">🌎 Seleções</h3>
     <div id="grade-selecoes" class="grade-cartoes"></div>
-    <div class="pilha-botoes" style="margin-top: 24px;">
+    <h3 id="titulo-clubes" class="subtitulo-secao subtitulo-clubes" hidden>🇧🇷 Brasileirão Série A</h3>
+    <div id="grade-clubes" class="grade-cartoes" hidden></div>
+    <button id="botao-loja-selecao" class="botao-link-loja" type="button">🛒 Comprar mais seleções e times do Brasileirão</button>
+    <div class="pilha-botoes" style="margin-top: 20px;">
       <button id="botao-confirmar-selecao" class="botao" type="button" disabled>Confirmar ✅</button>
     </div>
   </section>
@@ -289,41 +275,117 @@
     </div>
   </section>
 
-  <section id="tela-fase1" class="tela">
+  <section id="tela-fase1" class="tela tela-fase1">
     <div class="barra-fase">
-      <span id="titulo-fase" class="titulo-fase">⚽ Pênaltis</span>
-      <div id="cabecalho-fase" class="cabecalho-fase"></div>
+      <span id="titulo-fase" class="titulo-fase" data-titulo-tela>⚽ Pênaltis</span>
+      <div id="cabecalho-fase" class="cabecalho-fase" role="img" aria-label="Cobranças"></div>
       <span id="timer-display" class="timer-display timer-verde">15s</span>
-      <span id="pontuacao-display" class="pontuacao-display">0 <img class="icone-cruzeiro" src="../Imagens/estrela-cruzeiro.png" alt="estrelinhas Cruzeiro"></span>
+      <span id="pontuacao-display" class="pontuacao-display">0 <img class="icone-cruzeiro" src="../Imagens/estrela-cruzeiro.png" alt="Cruzeiros"></span>
     </div>
-    <div class="caixa-pergunta">
-      <p id="pergunta-texto" class="pergunta-texto" aria-live="polite" aria-atomic="true">--</p>
-      <button id="botao-ouvir-novamente" class="botao-ouvir-novamente" type="button" aria-label="Ouvir a pergunta novamente" hidden>🔊 Ouvir novamente</button>
-    </div>
-    <div class="palco-penalti">
-      <div id="jogo-penalti"></div>
-      <div id="zonas-gol" class="zonas-gol">
-        <button class="botao-zona zona-topo-esquerda" type="button" data-zona="topo-esquerda">--</button>
-        <button class="botao-zona zona-topo-direita" type="button" data-zona="topo-direita">--</button>
-        <button class="botao-zona zona-meio" type="button" data-zona="meio">--</button>
-        <button class="botao-zona zona-baixo-esquerda" type="button" data-zona="baixo-esquerda">--</button>
-        <button class="botao-zona zona-baixo-direita" type="button" data-zona="baixo-direita">--</button>
+
+    <!-- Layout adaptativo: em retrato, pergunta → campo → controles; em
+         paisagem/desktop, campo à esquerda e pergunta + controles à direita.
+         A superfície inteira recebe Pointer Events e teclado nas etapas de
+         mira, altura e força (botões dentro dela são ignorados). -->
+    <div id="superficie-jogo" class="layout-partida" tabindex="-1"
+         role="group" aria-label="Campo do pênalti" aria-describedby="instrucoes-jogo">
+      <div class="caixa-pergunta">
+        <p id="pergunta-texto" class="pergunta-texto" aria-live="polite" aria-atomic="true">--</p>
+        <button id="botao-ouvir-novamente" class="botao-ouvir-novamente" type="button" aria-label="Ouvir a pergunta novamente" hidden>🔊 Ouvir novamente</button>
+      </div>
+
+      <div class="palco-penalti">
+        <div id="jogo-penalti"></div>
+        <div id="camada-mira" class="camada-mira" hidden>
+          <div id="alvo-mira" class="alvo-mira" aria-hidden="true"></div>
+        </div>
+        <p id="incentivo-jogo" class="incentivo-jogo" aria-hidden="true" hidden></p>
+        <p id="aviso-modo-jogo" class="aviso-modo-jogo" role="status" hidden></p>
+      </div>
+
+      <div class="painel-etapa">
+        <p id="mensagem-etapa" class="mensagem-etapa" aria-live="polite" aria-atomic="true" hidden>--</p>
+        <p id="instrucoes-jogo" class="somente-leitor-tela" aria-live="polite"></p>
+
+        <div class="bloco-barra bloco-altura" id="bloco-altura" hidden>
+          <span class="rotulo-forca">Tipo de chute (altura)</span>
+          <div class="trilho-forca trilho-altura" aria-hidden="true">
+            <div class="divisoes-altura"><span></span><span></span></div>
+            <div id="preenchimento-altura" class="preenchimento-forca preenchimento-altura"></div>
+          </div>
+          <div class="legenda-altura" aria-hidden="true">
+            <span>⬇️ Rasteiro</span><span>⚽ Meia-altura</span><span>☁️ Cavadinha</span>
+          </div>
+        </div>
+
+        <div class="bloco-barra bloco-forca" id="bloco-forca" hidden>
+          <span class="rotulo-forca">Força <span id="tipo-escolhido" class="tipo-escolhido"></span></span>
+          <div class="trilho-forca" aria-hidden="true">
+            <div id="faixa-ideal-forca" class="faixa-ideal-forca"><span class="marcador-ideal">ideal</span></div>
+            <div id="preenchimento-forca" class="preenchimento-forca"></div>
+          </div>
+          <span id="dica-forca" class="dica-forca">Pare na faixa verde "ideal"! Toque, clique ou aperte Enter.</span>
+        </div>
+
+        <div id="area-respostas" class="area-respostas">
+          <div id="respostas-alternativas" class="respostas-alternativas"></div>
+        </div>
+
+        <p id="mensagem-feedback" class="mensagem-feedback" aria-live="polite" aria-atomic="true"></p>
       </div>
     </div>
-    <p id="mensagem-feedback" class="mensagem-feedback" aria-live="polite" aria-atomic="true"></p>
   </section>
 
   <section id="tela-resultado" class="tela">
-    <h2>Fim da Fase 1!</h2>
+    <h2 id="titulo-resultado">Fim da fase Pênaltis!</h2>
     <p id="placar-final" class="placar-grande">0 / 3</p>
-    <p id="pontuacao-final" class="pontuacao-resultado">0 <img class="icone-cruzeiro" src="../Imagens/estrela-cruzeiro.png" alt="">Cruzeiro</p>
+    <p id="pontuacao-final" class="pontuacao-resultado">0 <img class="icone-cruzeiro" src="../Imagens/estrela-cruzeiro.png" alt="">Cruzeiros</p>
+    <p id="ganho-carteira" class="ganho-carteira" aria-live="polite"></p>
     <p id="resumo-resultado" class="resumo-resultado" aria-live="polite" aria-atomic="true">--</p>
     <ul id="lista-cobrancas" class="lista-cobrancas" aria-label="Resumo de cada cobrança"></ul>
     <p id="mensagem-desbloqueio" class="mensagem-desbloqueio" aria-live="polite" aria-atomic="true"></p>
     <div class="pilha-botoes">
       <button id="botao-proxima-fase" class="botao botao-cta" type="button">Escolher fase 🏟️</button>
+      <button id="botao-loja-resultado" class="botao botao-menu-loja" type="button">🛒 Gastar na Loja</button>
       <button id="botao-voltar-menu" class="botao" type="button">Voltar ao menu</button>
     </div>
+  </section>
+
+  <section id="tela-loja" class="tela tela-loja">
+    <h2 data-titulo-tela>🛒 Loja do Craque</h2>
+    <p class="saldo-loja">
+      Você tem
+      <span class="saldo-loja-chip"><img class="icone-cruzeiro" src="../Imagens/estrela-cruzeiro.png" alt=""><strong id="saldo-loja-valor">0</strong></span>
+      <span id="saldo-loja-moeda">Cruzeiros</span>
+    </p>
+    <p class="dica-loja">Faça gols para ganhar Cruzeiros: quanto mais rápido responder, mais você ganha!</p>
+    <div id="abas-loja" class="abas-loja" role="group" aria-label="Categorias da Loja">
+      <button type="button" class="aba-loja aba-ativa" data-aba="selecao" aria-pressed="true">🌎 Seleções</button>
+      <button type="button" class="aba-loja" data-aba="clube" aria-pressed="false">🇧🇷 Brasileirão</button>
+      <button type="button" class="aba-loja" data-aba="avatar" aria-pressed="false">🙂 Avatares</button>
+      <button type="button" class="aba-loja" data-aba="nome" aria-pressed="false">🏷️ Nomes</button>
+    </div>
+    <p id="status-loja" class="status-loja" role="status" aria-live="polite"></p>
+    <div id="grade-loja" class="grade-loja"></div>
+    <div class="pilha-botoes" style="margin-top: 20px;">
+      <button id="botao-sair-loja" class="botao" type="button">Voltar</button>
+    </div>
+  </section>
+
+  <section id="tela-tutorial" class="tela tela-tutorial">
+    <h2 data-titulo-tela>❓ Como jogar</h2>
+    <div class="cartao-tutorial">
+      <p id="passo-tutorial-contador" class="passo-contador">Passo 1 de 6</p>
+      <div id="ilustracao-tutorial" class="ilustracao-tutorial" aria-hidden="true"></div>
+      <h3 id="passo-tutorial-titulo" class="passo-titulo">--</h3>
+      <p id="passo-tutorial-texto" class="passo-texto" aria-live="polite">--</p>
+      <div id="pontos-tutorial" class="pontos-tutorial" aria-hidden="true"></div>
+    </div>
+    <div class="controles-tutorial">
+      <button id="botao-tutorial-anterior" class="botao botao-tutorial-nav" type="button">← Voltar</button>
+      <button id="botao-tutorial-proximo" class="botao botao-cta-simples botao-tutorial-nav" type="button">Próximo →</button>
+    </div>
+    <button id="botao-tutorial-pular" class="botao-link-loja" type="button">Pular tutorial</button>
   </section>
 
 </div>
@@ -333,9 +395,9 @@
   <img class="rodape-logo" src="../Imagens/hexatech-logo.png" alt="HexaTech">
 </footer>
 
-<div id="sobreposicao-acessibilidade" class="sobreposicao">
-  <div class="painel-acessibilidade">
-    <h2 style="text-align:left; margin-bottom:16px;">Acessibilidade</h2>
+<div id="sobreposicao-acessibilidade" class="sobreposicao" aria-hidden="true">
+  <div class="painel-acessibilidade" role="dialog" aria-modal="true" aria-labelledby="titulo-acessibilidade">
+    <h2 id="titulo-acessibilidade" style="text-align:left; margin-bottom:16px;">Acessibilidade</h2>
     <div class="linha-opcao">
       <label for="opcao-alto-contraste">Alto contraste</label>
       <span class="alternador"><input type="checkbox" id="opcao-alto-contraste"><span class="trilho-alternador"></span></span>
@@ -359,9 +421,9 @@
 </div>
 
 <!-- Modal de créditos -->
-<div id="sobreposicao-creditos" class="sobreposicao">
-  <div class="painel-creditos">
-    <h2 style="text-align:center; margin-bottom:6px;">🏆 Créditos</h2>
+<div id="sobreposicao-creditos" class="sobreposicao" aria-hidden="true">
+  <div class="painel-creditos" role="dialog" aria-modal="true" aria-labelledby="titulo-creditos">
+    <h2 id="titulo-creditos" style="text-align:center; margin-bottom:6px;">🏆 Créditos</h2>
     <p class="creditos-subtitulo">Desenvolvido por</p>
     <ul class="lista-devs">
 
@@ -446,15 +508,26 @@
       </li>
 
     </ul>
-    <figure class="foto-equipe">
-      <img src="../Imagens/Nos.jpg" alt="Foto da equipe HexaTech" class="foto-equipe-img">
-      <figcaption class="foto-equipe-legenda">A equipe HexaTech 👋</figcaption>
-    </figure>
+
+    <button id="botao-ver-equipe" class="botao-ver-equipe" type="button"
+            aria-expanded="false" aria-controls="bloco-foto-equipe">
+      <svg class="icone-sobre-mim" viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="8.2" r="3.2" fill="none" stroke="currentColor" stroke-width="2"/>
+        <path d="M5 20c0-3.6 3.1-6.2 7-6.2s7 2.6 7 6.2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      <span class="rotulo-ver-equipe">Ver equipe</span>
+    </button>
+    <div id="bloco-foto-equipe" class="bloco-foto-equipe" hidden>
+      <figure class="foto-equipe">
+        <img src="../Imagens/Nos.jpg" alt="Foto da equipe HexaTech" class="foto-equipe-img">
+        <figcaption class="foto-equipe-legenda">A equipe HexaTech 👋</figcaption>
+      </figure>
+    </div>
+
     <div class="creditos-instituicao">
       <span class="inst-icone">🎓</span>
       <span class="inst-nome">Faculdade Cruzeiro Do Sul<br>Unidade Paulista</span>
     </div>
-    <p class="creditos-equipe">Equipe <strong>HexaTech</strong></p>
     <div class="pilha-botoes" style="margin-top: 18px;">
       <button id="botao-fechar-creditos" class="botao" type="button">Fechar</button>
     </div>
@@ -462,16 +535,23 @@
 </div>
 
 <!-- Modal de backup -->
-<div id="sobreposicao-backup" class="sobreposicao">
-  <div class="painel-backup">
-    <h2 style="text-align:center; margin-bottom:12px;">💾 Backup</h2>
+<div id="sobreposicao-backup" class="sobreposicao" aria-hidden="true">
+  <div class="painel-backup" role="dialog" aria-modal="true" aria-labelledby="titulo-backup">
+    <h2 id="titulo-backup" style="text-align:center; margin-bottom:12px;">💾 Backup</h2>
     <p class="backup-descricao">Exporte seus dados do jogo ou faça backup do banco de dados.</p>
     <div class="pilha-botoes-backup">
       <button id="botao-backup-local" class="botao botao-cta" type="button">📥 Exportar Progresso Local</button>
       <button id="botao-backup-firebase" class="botao" type="button">☁️ Exportar Dados do Firebase</button>
       <button id="botao-restaurar-backup" class="botao" type="button">📤 Restaurar Backup</button>
     </div>
-    <input type="file" id="input-restaurar" accept=".json" style="display:none">
+    <input type="file" id="input-restaurar" accept=".json,application/json" hidden>
+    <div id="confirmar-restauracao" class="confirmar-restauracao" hidden>
+      <p id="texto-confirmar-restauracao" class="texto-confirmar-restauracao">Restaurar este backup vai substituir o progresso salvo neste navegador. Quer continuar?</p>
+      <div class="pilha-botoes">
+        <button id="botao-confirmar-restauracao" class="botao botao-cta-simples" type="button">Sim, restaurar</button>
+        <button id="botao-cancelar-restauracao" class="botao botao-cancelar" type="button">Cancelar</button>
+      </div>
+    </div>
     <p id="backup-status" class="backup-status" aria-live="polite"></p>
     <div class="pilha-botoes" style="margin-top: 14px;">
       <button id="botao-fechar-backup" class="botao" type="button">Fechar</button>
@@ -479,25 +559,58 @@
   </div>
 </div>
 
-<!-- Firebase (módulo ES — carrega antes dos scripts do jogo) -->
-<script type="module" src="../JS/firebase-config.js?v=5"></script>
+<!-- Modal de confirmação de compra (Loja) -->
+<div id="sobreposicao-compra" class="sobreposicao" aria-hidden="true">
+  <div class="painel-compra" role="dialog" aria-modal="true" aria-labelledby="titulo-compra" aria-describedby="texto-compra">
+    <h2 id="titulo-compra" style="text-align:center; margin-bottom:10px;">Comprar?</h2>
+    <div id="visual-compra" class="visual-compra" aria-hidden="true"></div>
+    <p id="texto-compra" class="texto-compra">--</p>
+    <div class="pilha-botoes">
+      <button id="botao-confirmar-compra" class="botao botao-cta-simples" type="button">Sim, comprar!</button>
+      <button id="botao-cancelar-compra" class="botao botao-cancelar" type="button">Agora não</button>
+    </div>
+  </div>
+</div>
 
-<!-- Three.js r149 (CDN, build UMD — degrada graciosamente se falhar) -->
-<script src="https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js"></script>
+<!-- Dependências externas (Three.js e Firebase) são carregadas SEM bloquear
+     a página por JS/carregar-externos.js: se um CDN travar, o menu abre
+     normalmente; sem Three.js o jogo usa o modo simplificado 2D e sem
+     Firebase ele só não salva na nuvem. -->
 
 <!-- Scripts do jogo (ordem importa) -->
-<script src="../JS/data.js?v=5"></script>
-<script src="../JS/niveis.js?v=5"></script>
-<script src="../JS/sala.js?v=5"></script>
-<script src="../JS/loja-dados.js?v=5"></script>
-<script src="../JS/loja.js?v=5"></script>
-<script src="../JS/avatar-data.js?v=5"></script>
-<script src="../JS/questions.js?v=5"></script>
-<script src="../JS/banco-questoes.js?v=5"></script>
-<script src="../JS/narration.js?v=5"></script>
-<script src="../JS/sfx.js?v=5"></script>
-<script src="../JS/game.js?v=5"></script>
-<script src="../JS/progressao.js?v=5"></script>
-<script src="../JS/main.js?v=5"></script>
+<script src="../JS/regras-chute.js"></script>
+<script src="../JS/backup-validacao.js"></script>
+<script src="../JS/data.js"></script>
+<script src="../JS/niveis.js"></script>
+<script src="../JS/sala.js"></script>
+<script src="../JS/avatar-data.js"></script>
+<script src="../JS/carteira.js"></script>
+<script src="../JS/questions.js"></script>
+<script src="../JS/banco-questoes.js"></script>
+<script src="../JS/narration.js"></script>
+<script src="../JS/sfx.js"></script>
+<script src="../JS/game.js"></script>
+<script src="../JS/game-2d.js"></script>
+<script src="../JS/progressao.js"></script>
+<script src="../JS/main.js"></script>
+<script src="../JS/loja.js"></script>
+<script src="../JS/tutorial.js"></script>
+<script src="../JS/carregar-externos.js"></script>
+
+<!-- Alterna a foto da equipe no modal de créditos (sem depender do main.js) -->
+<script>
+(function () {
+  var botao = document.getElementById('botao-ver-equipe');
+  var bloco = document.getElementById('bloco-foto-equipe');
+  var rotulo = botao ? botao.querySelector('.rotulo-ver-equipe') : null;
+  if (!botao || !bloco) return;
+  botao.addEventListener('click', function () {
+    var aberto = botao.getAttribute('aria-expanded') === 'true';
+    botao.setAttribute('aria-expanded', String(!aberto));
+    bloco.hidden = aberto;
+    if (rotulo) rotulo.textContent = aberto ? 'Ver equipe' : 'Ocultar equipe';
+  });
+})();
+</script>
 </body>
 </html>

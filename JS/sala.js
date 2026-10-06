@@ -1,22 +1,25 @@
 // sala.js — HU-14: Sala do Professor.
 //
-// COMO FUNCIONA
-// O professor cria uma sala e recebe um código curto (ABC-123), no mesmo
-// molde do "código do craque" da loja. Ele dita o código; cada criança
-// digita e entra. A partir daí o nível das contas é o que o professor
-// escolheu, e os resultados de cada criança aparecem no painel dele.
+// O professor cria uma sala e recebe um codigo curto (ABC-123). Ele dita o
+// codigo; cada crianca digita e entra. A partir dai o nivel das contas e o
+// que o professor escolheu, e os resultados aparecem no painel dele.
 //
-// Sem login, sem e-mail, sem nome real — o apelido montado no jogo é o que
-// identifica a criança no painel. A sala é a única coisa compartilhada.
+// Sem login proprio, sem e-mail, sem nome real: a identidade continua sendo
+// o uid anonimo do Firebase Auth, igual ao resto do jogo. O apelido montado
+// no jogo e o que identifica a crianca no painel.
 //
-// O código da sala fica em localStorage só pra não precisar digitar de novo
-// a cada partida no mesmo computador. A verdade está sempre no Firestore.
+// O codigo da sala fica em localStorage so pra nao precisar digitar de novo
+// a cada partida no mesmo computador. A verdade esta sempre no Firestore.
+//
+// IMPORTANTE: o Firebase chega tarde (import dinamico em
+// carregar-externos.js), entao nada aqui assume que window.FirebaseMathGol
+// ja existe — cada funcao confere antes de usar.
 
 var Sala = (function() {
 
   var CHAVE = 'mathgol_sala';
 
-  var atual = null;       // { codigo, nome, nivel, tipos }
+  var atual = null;            // { codigo, nome, nivel, tipos }
   var cancelarObserva = null;
 
   // ---------- Estado ----------
@@ -26,8 +29,8 @@ var Sala = (function() {
   function nome() { return atual ? atual.nome : null; }
   function nivelDaSala() { return atual ? atual.nivel : null; }
 
-  // Filtros que o banco de questões entende. Sala sem tipos marcados = o
-  // nível manda sozinho.
+  // Filtros que o banco de questoes entende. Sala sem tipos marcados = o
+  // nivel manda sozinho.
   function filtrosDaSala() {
     if (!atual || !atual.tipos || !atual.tipos.length) return null;
     return { tipos: atual.tipos };
@@ -44,24 +47,32 @@ var Sala = (function() {
     try { return localStorage.getItem(CHAVE); } catch (e) { return null; }
   }
 
-  // ---------- Criança entra ----------
+  function temFirebase() {
+    return !!(window.FirebaseMathGol && window.FirebaseMathGol.buscarSala);
+  }
 
-  async function entrar(codigoDigitado, token, aluno) {
-    if (!window.FirebaseMathGol) return { ok: false, motivo: 'offline' };
+  // ---------- Lado da crianca ----------
 
-    var sala = await window.FirebaseMathGol.buscarSala(codigoDigitado);
-    if (!sala) return { ok: false, motivo: 'nao-encontrada' };
+  function entrar(codigoDigitado, aluno) {
+    if (!temFirebase()) return Promise.resolve({ ok: false, motivo: 'offline' });
 
-    atual = {
-      codigo: sala.codigo,
-      nome: sala.nome || 'Turma',
-      nivel: sala.nivel || 1,
-      tipos: Array.isArray(sala.tipos) ? sala.tipos : []
-    };
-    lembrar(atual.codigo);
+    return window.FirebaseMathGol.buscarSala(codigoDigitado).then(function(sala) {
+      if (!sala) return { ok: false, motivo: 'nao-encontrada' };
 
-    if (token) await window.FirebaseMathGol.entrarNaSala(atual.codigo, token, aluno || {});
-    return { ok: true, sala: atual };
+      atual = {
+        codigo: sala.codigo,
+        nome: sala.nome || 'Turma',
+        nivel: sala.nivel || 1,
+        tipos: Array.isArray(sala.tipos) ? sala.tipos : []
+      };
+      lembrar(atual.codigo);
+
+      return window.FirebaseMathGol.entrarNaSala(atual.codigo, aluno || {})
+        .then(function() { return { ok: true, sala: atual }; });
+    }).catch(function(erro) {
+      console.warn('Nao foi possivel entrar na sala:', erro);
+      return { ok: false, motivo: 'offline' };
+    });
   }
 
   function sair() {
@@ -70,45 +81,57 @@ var Sala = (function() {
     pararDeObservar();
   }
 
-  // Reabre a sala guardada no navegador, se ainda existir no servidor.
-  async function restaurar(token) {
+  // Reabre a sala guardada neste navegador, se ainda existir no servidor.
+  // Chamada quando o Firebase fica pronto, nao no DOMContentLoaded.
+  function restaurar() {
     var guardado = codigoLembrado();
-    if (!guardado || !window.FirebaseMathGol) return false;
-    var r = await entrar(guardado, token, {});
-    if (!r.ok) lembrar(null); // sala apagada ou código inválido: esquece
-    return r.ok;
+    if (!guardado || !temFirebase()) return Promise.resolve(false);
+    return entrar(guardado, {}).then(function(r) {
+      if (!r.ok) lembrar(null); // sala apagada ou codigo invalido: esquece
+      return r.ok;
+    });
   }
 
   // Manda o resultado da fase pro painel do professor.
-  async function reportarResultado(token, dados) {
-    if (!atual || !token || !window.FirebaseMathGol) return false;
-    return await window.FirebaseMathGol.entrarNaSala(atual.codigo, token, dados);
+  function reportarResultado(dados) {
+    if (!atual || !temFirebase()) return Promise.resolve(false);
+    return window.FirebaseMathGol.entrarNaSala(atual.codigo, dados);
   }
 
-  // ---------- Professor ----------
+  // ---------- Lado do professor ----------
 
-  async function criar(tokenProfessor, dados) {
-    if (!window.FirebaseMathGol) return null;
-    var codigoNovo = await window.FirebaseMathGol.criarSala(tokenProfessor, dados);
-    if (!codigoNovo) return null;
-    return { codigo: codigoNovo, nome: dados.nome, nivel: dados.nivel, tipos: dados.tipos || [] };
+  function criar(dados) {
+    if (!temFirebase()) return Promise.resolve(null);
+    return window.FirebaseMathGol.criarSala(dados).then(function(codigoNovo) {
+      if (!codigoNovo) return null;
+      return {
+        codigo: codigoNovo,
+        nome: dados.nome,
+        nivel: dados.nivel,
+        tipos: dados.tipos || []
+      };
+    });
   }
 
-  async function mudarNivel(codigoSala, nivel, tipos) {
-    if (!window.FirebaseMathGol) return false;
-    var ok = await window.FirebaseMathGol.atualizarSala(codigoSala, { nivel: nivel, tipos: tipos || [] });
-    if (ok && atual && atual.codigo === codigoSala) {
-      atual.nivel = nivel;
-      atual.tipos = tipos || [];
-    }
-    return ok;
+  function mudarNivel(codigoSala, nivel, tipos) {
+    if (!temFirebase()) return Promise.resolve(false);
+    return window.FirebaseMathGol.atualizarSala(codigoSala, {
+      nivel: nivel,
+      tipos: tipos || []
+    }).then(function(ok) {
+      if (ok && atual && atual.codigo === codigoSala) {
+        atual.nivel = nivel;
+        atual.tipos = tipos || [];
+      }
+      return ok;
+    });
   }
 
-  // Lista ao vivo. SEMPRE cancelar ao sair da tela — por isso o módulo
-  // guarda o cancelamento em vez de devolver pra quem chamou esquecer.
+  // Lista ao vivo. O cancelamento fica guardado aqui dentro de proposito:
+  // listener de Firestore esquecido aberto consome leitura sem parar.
   function observar(codigoSala, aoMudar) {
     pararDeObservar();
-    if (!window.FirebaseMathGol) return;
+    if (!temFirebase()) return;
     cancelarObserva = window.FirebaseMathGol.observarAlunos(codigoSala, aoMudar);
   }
 

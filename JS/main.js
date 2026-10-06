@@ -1,10 +1,32 @@
-// main.js - orquestra navegacao, timer de chute, pontuacao por velocidade.
+// main.js - orquestra navegacao, timer de resposta, pontuacao por velocidade.
 // Apelido TRAVADO: crianca escolhe 1 personagem + 1 animal (sem digitar).
-// v2: + efeitos sonoros (sfx.js), banco de questoes (banco-questoes.js),
-//       sistema de progressao entre fases (progressao.js).
-// v3: + acessibilidade revisada (HU-08), persistencia estruturada e
-//       versionada do resultado (HU-07) e bloqueio anti-clique-residual
-//       na fase de penalti.
+//
+// Fluxo da cobranca (regra em regras-chute.js, compartilhada com o 3D, o
+// modo simplificado 2D e os testes):
+//
+//   PERGUNTA
+//   ├─ resposta errada ou tempo esgotado → defesa do goleiro
+//   └─ resposta correta → mira → forca → chute → gol (bola dentro) | fora
+//
+// Resposta correta impede a defesa, mas NAO garante gol.
+//
+// v6 (correcoes de QA):
+//   - Ciclo de vida da partida com sessaoJogoId: todo timeout/callback
+//     assincrono e vinculado a sessao e ignorado se ela ja acabou (voltar,
+//     logo, reiniciar, resultado). finalizarCobranca e idempotente.
+//   - Um unico fluxo de Pointer Events (sem click + touchend duplicados):
+//     um toque = exatamente uma transicao. Teclado: setas movem a mira,
+//     Enter/Espaco confirmam.
+//   - Etapa "altura" (tipo de chute) com efeito REAL no resultado:
+//     rasteiro / meia-altura / cavadinha (ver regras-chute.js). Ordem:
+//     resposta → mira → altura → forca → chute (a faixa ideal da forca
+//     depende do tipo escolhido).
+//   - Trava de entrada: logo depois de mudar de etapa, cliques/toques/Enter
+//     sao ignorados por um instante (duplo clique nao pula etapas).
+//   - Sem WebGL/Three.js: modo simplificado 2D com a MESMA regra (nunca
+//     mais gol automatico).
+//   - Firebase: identidade = Firebase Auth anonimo (uid), nao mais um token
+//     no localStorage.
 
 var estado = {
   personagemEscolhido: null,
@@ -13,40 +35,60 @@ var estado = {
   avatarSeed: AVATAR_PADRAO.seed,
   selecaoId: null,
   dificuldadeId: null,
-  nivelId: 1,
   faseAtual: 'penaltis',
   cobrancaAtual: 0,
   gols: 0,
   pontuacao: 0,
-  // HU-07: cada cobranca agora fica registrada como objeto estruturado
-  // (zona escolhida, zona correta, resultado, se estourou o tempo, pontos
-  // e tempo usado), nao mais como string solta ("gol"/"defesa").
+  // HU-07: cada cobranca fica registrada como objeto estruturado.
+  // resultado: 'gol' | 'defesa' | 'fora'.
   resultadosCobrancas: [],
   perguntaAtual: null,
   zonaCorreta: null,
   jogoPenalti: null,
-  token: null,
   timerInicio: 0,
   timerInterval: null,
   timerSegundos: 15,
-  // Trava para garantir que cada cobranca finalize exatamente uma vez,
-  // mesmo se o tempo esgotar bem no instante de um clique (secao 5 do
-  // documento de melhorias).
-  cobrancaFinalizada: false
+  ultimoSegundoAlertado: null,
+  // Etapa da cobranca atual (ver ETAPA). Protege contra dupla finalizacao
+  // e contra respostas/toques fora de hora.
+  etapa: 'ociosa'
+};
+
+var ETAPA = {
+  OCIOSA: 'ociosa',         // sem partida em andamento
+  RESPOSTA: 'resposta',     // aguardando a crianca responder a conta
+  TRANSICAO: 'transicao',   // acertou: pequena pausa antes da mira
+  MIRA: 'mira',
+  ALTURA: 'altura',
+  FORCA: 'forca',
+  CHUTE: 'chute',           // animacao em andamento
+  FINALIZADA: 'finalizada'  // resultado registrado; aguardando a proxima
 };
 
 var TOTAL_COBRANCAS = 3;
 var TIMER_MAX = 15;
 
-// Tempo que o resultado ("GOOOL!" / "O goleiro defendeu!") fica na tela
-// antes de carregar a proxima pergunta. Acompanha o ritmo mais lento da
-// animacao do penalti (ver TEMPO em game.js): tem que ser maior que
-// TEMPO.ANTES_DE_RESETAR pra bola ja estar de volta na marca.
-var PAUSA_ENTRE_COBRANCAS = 2400;
-var categoriaAvatarAtiva = CATEGORIAS_AVATAR[0].id;
+// Pausa entre a resposta correta e o inicio da mira.
+// v1.5: animacoes mais rapidas (antes 500 ms).
+var PAUSA_ANTES_DA_MIRA = 300;
+// Tempo que o resultado fica na tela antes da proxima pergunta. Tem que ser
+// maior que TEMPO.ANTES_DE_RESETAR (game.js) pra bola ja estar na marca.
+// v1.5: 2200 → 1500 ms (ANTES_DE_RESETAR agora e 1200 ms).
+var PAUSA_ENTRE_COBRANCAS = 1500;
 
-// Rotulos amigaveis das zonas do gol, usados no resumo de cobrancas da
-// tela de resultado (HU-07) e em mensagens acessiveis por texto.
+// Passo da mira pelo teclado (metros no plano do gol).
+var PASSO_MIRA_TECLADO = { x: 0.3, y: 0.2 };
+
+// Depois que uma etapa comeca, entradas sao ignoradas por este tempo. Um
+// duplo clique/toque (segundo clique em ~100–400 ms) confirma so UMA etapa;
+// a proxima exige um toque novo e deliberado.
+var TRAVA_ENTRADA_MS = 450;
+
+var NOME_TIPO = { rasteiro: 'rasteiro', meia: 'meia-altura', cavadinha: 'cavadinha' };
+var FRASES_INCENTIVO = ['Quase! Tenta de novo!', 'Boa tentativa!', 'Não desista!', 'Você consegue!', 'Na próxima vai!'];
+
+// Rotulos amigaveis das zonas do gol (resumo da tela de resultado, HU-07).
+// So existe zona no caminho de resposta errada / tempo esgotado.
 var ROTULO_ZONA = {
   'topo-esquerda': 'canto superior esquerdo',
   'topo-direita': 'canto superior direito',
@@ -55,9 +97,128 @@ var ROTULO_ZONA = {
   'baixo-direita': 'canto inferior direito'
 };
 
-// Schema versionado do ultimo resultado salvo (HU-07): tolera dados
-// antigos/corrompidos sem quebrar a leitura futura desse registro.
-var VERSAO_ULTIMO_RESULTADO = 1;
+// Schema versionado do ultimo resultado salvo localmente (HU-07).
+var VERSAO_ULTIMO_RESULTADO = 2;
+
+// Ordem fixa das 5 alternativas <-> 5 zonas (usada no caminho de defesa).
+var ORDEM_ZONAS = ['topo-esquerda', 'topo-direita', 'meio', 'baixo-esquerda', 'baixo-direita'];
+
+// Mensagens do chute que nao entrou, por motivo (regras-chute.js).
+var MENSAGEM_FORA = {
+  fraco: 'Chute fraquinho! A bola não chegou ao gol. ❌',
+  alto: 'Forte demais! Passou por cima do gol. ❌',
+  lado: 'Pra fora! ❌'
+};
+var NARRACAO_FORA = {
+  fraco: 'Chute fraco! A bola não chegou.',
+  alto: 'Forte demais! Por cima do gol.',
+  lado: 'Pra fora!'
+};
+
+// ======================================================================
+// Ciclo de vida da partida
+// ======================================================================
+// Toda partida tem um sessaoJogoId. Timeouts e callbacks assincronos
+// (animacoes do game.js/game-2d.js) sao vinculados ao id da sessao em que
+// foram criados; se a sessao mudou (saiu, reiniciou, foi pro resultado),
+// eles simplesmente nao fazem nada. Os timeouts tambem ficam registrados
+// para serem cancelados de uma vez em encerrarJogoEmAndamento().
+
+var cicloPartida = {
+  sessaoJogoId: 0,
+  timeouts: []
+};
+
+function telaAtivaId() {
+  var t = document.querySelector('.tela.tela-ativa');
+  return t ? t.id : null;
+}
+
+// Protecao principal: id da sessao. A tela ativa e so uma checagem extra.
+function sessaoValida(idSessao) {
+  return idSessao === cicloPartida.sessaoJogoId && telaAtivaId() === 'tela-fase1';
+}
+
+function agendarNaSessao(fn, ms) {
+  var idSessao = cicloPartida.sessaoJogoId;
+  var handle = setTimeout(function() {
+    var i = cicloPartida.timeouts.indexOf(handle);
+    if (i !== -1) cicloPartida.timeouts.splice(i, 1);
+    if (!sessaoValida(idSessao)) return;
+    fn();
+  }, ms);
+  cicloPartida.timeouts.push(handle);
+  return handle;
+}
+
+function vincularSessao(fn) {
+  var idSessao = cicloPartida.sessaoJogoId;
+  return function() {
+    if (!sessaoValida(idSessao)) return undefined;
+    return fn.apply(this, arguments);
+  };
+}
+
+function invalidarSessao() {
+  cicloPartida.sessaoJogoId++;
+  cicloPartida.timeouts.forEach(clearTimeout);
+  cicloPartida.timeouts = [];
+}
+
+// ---------- Barras de altura e de forca ----------
+// Oscilam sozinhas entre 0 e 1; um toque/clique/Enter trava o valor atual.
+var FORCA_CICLO_MS = 1750;
+var ALTURA_CICLO_MS = 1900;
+
+function criarControleBarraOscilante(idPreenchimento, cicloMs) {
+  var ativa = false;
+  var rafId = 0;
+  var valorAtual = 0;
+  var inicioTempo = 0;
+  return {
+    iniciar: function() {
+      ativa = true;
+      valorAtual = 0;
+      inicioTempo = performance.now();
+      var el = document.getElementById(idPreenchimento);
+      function quadro(agora) {
+        if (!ativa) return;
+        var progresso = ((agora - inicioTempo) % cicloMs) / cicloMs;
+        // Onda 0..1 comecando de baixo.
+        valorAtual = (Math.sin(progresso * Math.PI * 2 - Math.PI / 2) + 1) / 2;
+        if (el) el.style.width = (6 + valorAtual * 90) + '%';
+        rafId = requestAnimationFrame(quadro);
+      }
+      rafId = requestAnimationFrame(quadro);
+    },
+    parar: function() {
+      ativa = false;
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = 0;
+      return valorAtual;
+    }
+  };
+}
+
+var controleForca = criarControleBarraOscilante('preenchimento-forca', FORCA_CICLO_MS);
+var controleAltura = criarControleBarraOscilante('preenchimento-altura', ALTURA_CICLO_MS);
+
+function iniciarBarraForca() { controleForca.iniciar(); }
+function pararBarraForca() { return controleForca.parar(); }
+function iniciarBarraAltura() { controleAltura.iniciar(); }
+function pararBarraAltura() { return controleAltura.parar(); }
+
+// Desenha na barra a faixa de forca ideal DO TIPO de chute escolhido
+// (mesmos limites da regra: cavadinha pede forca menor, rasteiro maior).
+function desenharFaixaIdealForca(tipoId) {
+  var faixa = document.getElementById('faixa-ideal-forca');
+  if (!faixa || typeof RegrasChute === 'undefined') return;
+  var tipo = RegrasChute.TIPOS[tipoId] || RegrasChute.TIPOS.meia;
+  var ini = 6 + tipo.forcaIdeal.min * 90;
+  var fim = 6 + tipo.forcaIdeal.max * 90;
+  faixa.style.left = ini + '%';
+  faixa.style.width = (fim - ini) + '%';
+}
 
 // URL SEMPRE com pixel-art, nunca outro estilo. Seed muda = rosto muda.
 function gerarUrlAvatar(seed) {
@@ -72,12 +233,17 @@ function gerarAvatarFallbackLocal(seed) {
   return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
 }
 
+// Marca 1 item selecionado num grupo (visual + aria-pressed).
+function marcarSelecionado(container, seletor, classe, escolhido) {
+  container.querySelectorAll(seletor).forEach(function(el) {
+    var ativo = el === escolhido;
+    el.classList.toggle(classe, ativo);
+    el.setAttribute('aria-pressed', ativo ? 'true' : 'false');
+  });
+}
+
 // ---------- Navegacao ----------
 
-// Mapa de "tela anterior" pra cada tela — usado pelo botao de voltar (←).
-// tela-fase1 volta pra escolha de fase (abandona a cobranca atual).
-// tela-resultado tambem volta pra escolha de fase, junto com os botoes
-// dedicados que ja existem la (Escolher fase / Voltar ao menu).
 var TELA_ANTERIOR = {
   'tela-apelido':    'tela-menu',
   'tela-selecao':    'tela-apelido',
@@ -85,42 +251,87 @@ var TELA_ANTERIOR = {
   'tela-fases':      'tela-dificuldade',
   'tela-fase1':      'tela-fases',
   'tela-resultado':  'tela-fases',
-  'tela-loja':       'tela-menu',
   'tela-entrar-sala':'tela-menu',
   'tela-professor':  'tela-menu'
 };
 
-function mostrarTela(idTela) {
-  // Cancela qualquer fala pendente/em andamento ao trocar de tela — evita
-  // narracao de uma tela "vazando" para a proxima (secao 1, Narracao).
+// opcoes.focar === false: nao move o foco (ex.: carga inicial da pagina).
+function mostrarTela(idTela, opcoes) {
   Narracao.cancelar();
   document.querySelectorAll('.tela').forEach(function(t) { t.classList.remove('tela-ativa'); });
-  document.getElementById(idTela).classList.add('tela-ativa');
+  var tela = document.getElementById(idTela);
+  tela.classList.add('tela-ativa');
   var logo = document.getElementById('logo-mini');
   var botaoVoltar = document.getElementById('botao-voltar');
   var naTelaPrincipal = idTela === 'tela-menu';
   if (logo) logo.classList.toggle('escondido', naTelaPrincipal);
   if (botaoVoltar) botaoVoltar.classList.toggle('escondido', naTelaPrincipal);
 
-  // Botao "Ouvir novamente" so faz sentido durante a rodada de perguntas.
   var botaoOuvir = document.getElementById('botao-ouvir-novamente');
   if (botaoOuvir) botaoOuvir.hidden = (idTela !== 'tela-fase1');
+  // Durante a partida o fundo animado (e o "GOL!" decorativo) some.
+  document.body.classList.toggle('em-partida', idTela === 'tela-fase1');
+  atualizarSaldoTopo();
+
+  // Leva o foco (e o leitor de tela) para o titulo da nova tela.
+  if (!opcoes || opcoes.focar !== false) {
+    var titulo = tela.querySelector('[data-titulo-tela]') || tela.querySelector('h1, h2');
+    if (titulo) {
+      if (!titulo.hasAttribute('tabindex')) titulo.setAttribute('tabindex', '-1');
+      try { titulo.focus({ preventScroll: true }); } catch (e) { titulo.focus(); }
+    }
+  }
 }
 
-// Para o timer e desmonta a cena 3D (Three.js), se estiver rodando — usado sempre
-// que se sai da tela-fase1 sem terminar a cobranca (voltar ou ir ao menu).
 function encerrarJogoEmAndamento() {
+  invalidarSessao();
   pararTimer();
-  if (estado.jogoPenalti) { estado.jogoPenalti.destruir(); estado.jogoPenalti = null; }
+  cancelarEtapaInterativa();
+  pararBarraForca();
+  pararBarraAltura();
+  estado.etapa = ETAPA.OCIOSA;
+  if (estado.jogoPenalti) {
+    try { estado.jogoPenalti.pararMira(); } catch (e) {}
+    estado.jogoPenalti.destruir();
+    estado.jogoPenalti = null;
+  }
+  var camada = document.getElementById('camada-mira');
+  if (camada) camada.hidden = true;
+  ['bloco-forca', 'bloco-altura', 'mensagem-etapa', 'incentivo-jogo'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.hidden = true;
+  });
+  var tela = document.getElementById('tela-fase1');
+  if (tela) tela.classList.remove('foco-campo');
+}
+
+// Telas que podem ser abertas de varios lugares (Loja e Tutorial) guardam
+// de onde vieram; o "voltar" leva de volta pra la (e redesenha a tela,
+// pra ja mostrar o que foi comprado).
+var origemTela = { 'tela-loja': 'tela-menu', 'tela-tutorial': 'tela-menu' };
+
+function reabrirTela(idTela) {
+  if (idTela === 'tela-apelido') { irParaApelido(); return; }
+  if (idTela === 'tela-selecao') { irParaSelecao(); return; }
+  if (idTela === 'tela-fases') { irParaFases(); return; }
+  if (idTela === 'tela-resultado') { atualizarGanhoCarteira(); }
+  mostrarTela(idTela);
 }
 
 function voltarTelaAnterior() {
   var telaAtual = document.querySelector('.tela.tela-ativa');
   if (!telaAtual) return;
+  if (origemTela[telaAtual.id]) {
+    SFX.clique();
+    if (telaAtual.id === 'tela-tutorial' && typeof Tutorial !== 'undefined') Tutorial.marcarVisto();
+    reabrirTela(origemTela[telaAtual.id]);
+    return;
+  }
   var anteriorId = TELA_ANTERIOR[telaAtual.id];
   if (!anteriorId) return;
   SFX.clique();
   if (telaAtual.id === 'tela-fase1') encerrarJogoEmAndamento();
+  if (anteriorId === 'tela-fases') { irParaFases(); return; }
   mostrarTela(anteriorId);
 }
 
@@ -140,67 +351,165 @@ function initNavegacaoTopo() {
 function initMenu() {
   document.getElementById('botao-jogar').addEventListener('click', function() {
     SFX.clique();
+    // Primeira vez: mostra o tutorial antes de montar o craque.
+    if (typeof Tutorial !== 'undefined' && !Tutorial.jaVisto()) {
+      Tutorial.abrir('tela-menu', { aoTerminar: irParaApelido });
+      return;
+    }
     irParaApelido();
   });
+  var botaoTutorial = document.getElementById('botao-tutorial');
+  if (botaoTutorial) botaoTutorial.addEventListener('click', function() {
+    SFX.clique();
+    if (typeof Tutorial !== 'undefined') Tutorial.abrir('tela-menu');
+  });
+}
+
+// ---------- Saldo de Cruzeiros (topo) ----------
+
+function atualizarSaldoTopo() {
+  var valor = document.getElementById('saldo-topo');
+  var botao = document.getElementById('botao-saldo');
+  if (!valor || !botao || typeof Carteira === 'undefined') return;
+  var saldo = Carteira.saldo();
+  valor.textContent = String(saldo);
+  botao.setAttribute('aria-label', 'Seus ' + Carteira.formatar(saldo) + '. Abrir a Loja');
+  // Na propria Loja o saldo ja aparece grande; na partida, ha o placar.
+  var ativa = telaAtivaId();
+  botao.hidden = ativa === 'tela-loja' || ativa === 'tela-fase1';
+}
+
+function initSaldoTopo() {
+  var botao = document.getElementById('botao-saldo');
+  if (botao) botao.addEventListener('click', function() {
+    SFX.clique();
+    var atual = telaAtivaId();
+    if (typeof Loja !== 'undefined' && atual && atual !== 'tela-fase1') Loja.abrir(atual);
+  });
+  if (typeof Carteira !== 'undefined') Carteira.aoMudar(atualizarSaldoTopo);
+  atualizarSaldoTopo();
+}
+
+// ---------- Tela cheia (Fullscreen API) ----------
+
+function elementoTelaCheiaAtual() {
+  return document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement || null;
+}
+
+// Chama a API e SEMPRE devolve uma Promise tratada: navegadores antigos
+// (webkit/ms) retornam undefined; os novos retornam uma Promise que pode
+// ser rejeitada (ex.: sem gesto do usuario, iframe sem permissao).
+function chamarApiTelaCheia(fn, alvo) {
+  try {
+    return Promise.resolve(fn.call(alvo));
+  } catch (erro) {
+    return Promise.reject(erro);
+  }
+}
+
+function alternarTelaCheia() {
+  var botao = document.getElementById('botao-tela-cheia');
+  if (!botao || botao.getAttribute('aria-busy') === 'true') return;
+  SFX.clique();
+  var raiz = document.documentElement;
+  var entrar = !elementoTelaCheiaAtual();
+  var fn = entrar
+    ? (raiz.requestFullscreen || raiz.webkitRequestFullscreen || raiz.msRequestFullscreen)
+    : (document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen);
+  if (!fn) return;
+
+  botao.setAttribute('aria-busy', 'true');
+  chamarApiTelaCheia(fn, entrar ? raiz : document)
+    .catch(function(erro) {
+      console.warn('Tela cheia nao disponivel agora:', erro);
+    })
+    .then(function() {
+      botao.removeAttribute('aria-busy');
+      atualizarBotaoTelaCheia();
+    });
+}
+
+function atualizarBotaoTelaCheia() {
+  var botao = document.getElementById('botao-tela-cheia');
+  if (!botao) return;
+  var ativo = !!elementoTelaCheiaAtual();
+  botao.textContent = ativo ? '⤢' : '⛶';
+  botao.setAttribute('aria-label', ativo ? 'Sair da tela cheia' : 'Entrar em tela cheia');
+  botao.setAttribute('aria-pressed', ativo ? 'true' : 'false');
+}
+
+function initTelaCheia() {
+  var botao = document.getElementById('botao-tela-cheia');
+  if (!botao) return;
+  var raiz = document.documentElement;
+  var suportado = raiz.requestFullscreen || raiz.webkitRequestFullscreen || raiz.msRequestFullscreen;
+  if (!suportado) { botao.hidden = true; return; } // navegador sem suporte — some em vez de falhar
+  botao.addEventListener('click', alternarTelaCheia);
+  ['fullscreenchange', 'webkitfullscreenchange', 'msfullscreenchange'].forEach(function(evento) {
+    document.addEventListener(evento, atualizarBotaoTelaCheia);
+  });
+  ['fullscreenerror', 'webkitfullscreenerror'].forEach(function(evento) {
+    document.addEventListener(evento, atualizarBotaoTelaCheia);
+  });
+  atualizarBotaoTelaCheia();
 }
 
 // ---------- Apelido: crianca ESCOLHE personagem + animal ----------
 
 function irParaApelido() {
+  // Se um item escolhido deixou de existir (ex.: backup restaurado), limpa.
+  if (estado.personagemEscolhido && personagensDisponiveis().indexOf(estado.personagemEscolhido) === -1) estado.personagemEscolhido = null;
+  if (estado.animalEscolhido && animaisDisponiveis().indexOf(estado.animalEscolhido) === -1) estado.animalEscolhido = null;
+  if (avataresDisponiveis().map(function(a) { return a.seed; }).indexOf(estado.avatarSeed) === -1) estado.avatarSeed = AVATAR_PADRAO.seed;
   renderizarListaPersonagens();
   renderizarListaAnimais();
-  renderizarAbasAvatar();
   renderizarGradeAvatares();
   atualizarPreviewApelido();
   atualizarPreviewAvatar();
   mostrarTela('tela-apelido');
 }
 
-// Monta a lista de chips (personagens ou animais). Os que ainda não foram
-// comprados aparecem com cadeado e levam pra loja em vez de sumirem — a
-// criança precisa ver que existem pra querer juntar Cruzeiros.
-function renderizarChipsEscolha(containerId, lista, tipo, aoEscolher, escolhidoAtual) {
-  var container = document.getElementById(containerId);
-  container.innerHTML = '';
-  lista.forEach(function(nome) {
-    var liberado = Loja.liberado(tipo, nome);
+// Grátis + comprados na Loja (na ordem: grátis primeiro).
+function itemComprado(idItem) {
+  return typeof Carteira !== 'undefined' && Carteira.possui(idItem);
+}
+function personagensDisponiveis() {
+  return PERSONAGENS.concat(PERSONAGENS_LOJA.filter(function(n) { return itemComprado('nome:' + n); }));
+}
+function animaisDisponiveis() {
+  return ANIMAIS.concat(ANIMAIS_LOJA.filter(function(n) { return itemComprado('nome:' + n); }));
+}
+function avataresDisponiveis() {
+  return AVATARES_GRATIS.concat(AVATARES_LOJA.filter(function(a) { return itemComprado('avatar:' + a.seed); }));
+}
+function timeDisponivel(time) {
+  return !(time.preco > 0) || itemComprado(idItemTime(time));
+}
+
+function renderizarListaChips(idContainer, itens, campoEstado, comprados) {
+  var container = document.getElementById(idContainer);
+  container.textContent = '';
+  itens.forEach(function(texto) {
     var btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'chip-escolha' + (liberado ? '' : ' item-travado');
-    btn.textContent = nome;
-
-    if (!liberado) {
-      btn.setAttribute('aria-label', nome + ' — bloqueado. Compre na loja por ' + precoDoItem(tipo) + ' Cruzeiros.');
-      btn.addEventListener('click', function() {
-        SFX.clique();
-        abaLojaAtiva = (tipo === 'personagem') ? 'personagens' : 'animais';
-        irParaLoja();
-      });
-      container.appendChild(btn);
-      return;
-    }
-
-    if (escolhidoAtual === nome) btn.classList.add('chip-ativo');
+    btn.className = 'chip-escolha';
+    btn.textContent = texto;
+    if (comprados && comprados.indexOf(texto) !== -1) btn.classList.add('chip-comprado');
+    var ativo = estado[campoEstado] === texto;
+    btn.classList.toggle('chip-ativo', ativo);
+    btn.setAttribute('aria-pressed', ativo ? 'true' : 'false');
     btn.addEventListener('click', function() {
       SFX.clique();
-      aoEscolher(nome);
-      container.querySelectorAll('.chip-escolha').forEach(function(c) { c.classList.remove('chip-ativo'); });
-      btn.classList.add('chip-ativo');
+      estado[campoEstado] = texto;
+      marcarSelecionado(container, '.chip-escolha', 'chip-ativo', btn);
       atualizarPreviewApelido();
     });
     container.appendChild(btn);
   });
 }
 
-function renderizarListaPersonagens() {
-  renderizarChipsEscolha('lista-personagens', PERSONAGENS, 'personagem',
-    function(p) { estado.personagemEscolhido = p; }, estado.personagemEscolhido);
-}
-
-function renderizarListaAnimais() {
-  renderizarChipsEscolha('lista-animais', ANIMAIS, 'animal',
-    function(a) { estado.animalEscolhido = a; }, estado.animalEscolhido);
-}
+function renderizarListaPersonagens() { renderizarListaChips('lista-personagens', personagensDisponiveis(), 'personagemEscolhido', PERSONAGENS_LOJA); }
+function renderizarListaAnimais() { renderizarListaChips('lista-animais', animaisDisponiveis(), 'animalEscolhido', ANIMAIS_LOJA); }
 
 function atualizarPreviewApelido() {
   var texto = '';
@@ -211,7 +520,7 @@ function atualizarPreviewApelido() {
   } else if (estado.animalEscolhido) {
     texto = '??? ' + estado.animalEscolhido;
   } else {
-    texto = 'Escolha acima';
+    texto = 'Escolha abaixo';
   }
   estado.apelido = (estado.personagemEscolhido && estado.animalEscolhido)
     ? estado.personagemEscolhido + ' ' + estado.animalEscolhido : '';
@@ -230,62 +539,32 @@ function atualizarPreviewAvatar() {
   img.src = url;
 }
 
-function renderizarAbasAvatar() {
-  var container = document.getElementById('abas-avatar');
-  container.innerHTML = '';
-  CATEGORIAS_AVATAR.forEach(function(cat) {
-    var btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'aba-avatar';
-    if (cat.id === categoriaAvatarAtiva) btn.classList.add('aba-ativa');
-    btn.textContent = cat.nome;
-    btn.addEventListener('click', function() {
-      SFX.clique();
-      categoriaAvatarAtiva = cat.id;
-      container.querySelectorAll('.aba-avatar').forEach(function(a) { a.classList.remove('aba-ativa'); });
-      btn.classList.add('aba-ativa');
-      renderizarGradeAvatares();
-    });
-    container.appendChild(btn);
-  });
-}
-
+// v1.5: uma grade so (sem abas), com os avatares gratis + os comprados.
 function renderizarGradeAvatares() {
   var container = document.getElementById('grade-avatares');
-  container.innerHTML = '';
-  var cat = CATEGORIAS_AVATAR.find(function(c) { return c.id === categoriaAvatarAtiva; });
-  if (!cat) return;
-  cat.seeds.forEach(function(seed) {
-    var liberado = Loja.liberado('avatar', seed);
+  container.textContent = '';
+  avataresDisponiveis().forEach(function(avatar) {
+    var seed = avatar.seed;
     var btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'item-avatar' + (liberado ? '' : ' item-travado');
-
+    btn.className = 'item-avatar';
+    var ativo = estado.avatarSeed === seed;
+    btn.classList.toggle('avatar-selecionado', ativo);
+    btn.setAttribute('aria-pressed', ativo ? 'true' : 'false');
+    btn.setAttribute('aria-label', 'Avatar ' + avatar.nome);
     var img = document.createElement('img');
     img.src = gerarUrlAvatar(seed);
-    img.alt = liberado ? seed : '';
+    img.alt = '';
     img.loading = 'lazy';
     img.onerror = function() { this.onerror = null; this.src = gerarAvatarFallbackLocal(seed); };
     btn.appendChild(img);
-
-    if (!liberado) {
-      btn.setAttribute('aria-label', seed + ' — bloqueado. Compre na loja por ' + precoDoItem('avatar') + ' Cruzeiros.');
-      btn.addEventListener('click', function() {
-        SFX.clique();
-        abaLojaAtiva = 'avatares';
-        irParaLoja();
-      });
-      container.appendChild(btn);
-      return;
-    }
-
-    if (estado.avatarSeed === seed) btn.classList.add('avatar-selecionado');
     btn.addEventListener('click', function() {
       SFX.clique();
       estado.avatarSeed = seed;
-      container.querySelectorAll('.item-avatar').forEach(function(i) { i.classList.remove('avatar-selecionado'); });
-      btn.classList.add('avatar-selecionado');
+      marcarSelecionado(container, '.item-avatar', 'avatar-selecionado', btn);
       atualizarPreviewAvatar();
+      var preview = document.getElementById('avatar-apelido');
+      if (preview) { preview.classList.remove('pulo'); void preview.offsetWidth; preview.classList.add('pulo'); }
     });
     container.appendChild(btn);
   });
@@ -295,128 +574,187 @@ function initApelido() {
   document.getElementById('botao-confirmar-apelido').addEventListener('click', function() {
     if (!estado.apelido) return;
     SFX.selecionar();
-    if (window.FirebaseMathGol && estado.token) {
-      window.FirebaseMathGol.salvarPerfil(estado.token, {
+    // Nao bloqueia o jogo: o firebase-config.js aguarda a autenticacao
+    // anonima ficar pronta (com tempo limite) antes de gravar.
+    if (window.FirebaseMathGol) {
+      window.FirebaseMathGol.salvarPerfil({
         apelido: estado.apelido,
         avatarSeed: estado.avatarSeed
       });
     }
     irParaSelecao();
   });
+  var botaoLoja = document.getElementById('botao-loja-apelido');
+  if (botaoLoja) botaoLoja.addEventListener('click', function() {
+    SFX.clique();
+    if (typeof Loja !== 'undefined') Loja.abrir('tela-apelido', 'nome');
+  });
 }
 
 // ---------- Selecao ----------
 
+var BANDEIRAS_POR_ID = {
+  brasil:'br', argentina:'ar', alemanha:'de', franca:'fr', japao:'jp',
+  portugal:'pt', espanha:'es', italia:'it', inglaterra:'gb-eng',
+  colombia:'co', mexico:'mx', coreia:'kr'
+};
+
+// Escudo generico do clube: duas cores do time + sigla. NAO e o escudo
+// oficial (marca registrada); so ajuda a crianca a reconhecer o time.
+function criarEscudoClube(time, classeExtra) {
+  var escudo = document.createElement('span');
+  escudo.className = 'escudo-clube' + (classeExtra ? ' ' + classeExtra : '');
+  escudo.setAttribute('aria-hidden', 'true');
+  var c1 = COR_VALIDA.test(time.corPrimaria || '') ? time.corPrimaria : '#21303B';
+  var c2 = COR_VALIDA.test(time.corSecundaria || '') ? time.corSecundaria : '#FFFDF6';
+  escudo.style.setProperty('--cor-1', c1);
+  escudo.style.setProperty('--cor-2', c2);
+  var sigla = document.createElement('span');
+  sigla.className = 'escudo-sigla';
+  sigla.textContent = (time.sigla || time.nome.slice(0, 3)).toUpperCase();
+  // Texto claro ou escuro conforme a cor de fundo da faixa da sigla.
+  sigla.style.color = corEhClara(c1) ? '#111111' : '#FFFFFF';
+  escudo.appendChild(sigla);
+  return escudo;
+}
+
+function corEhClara(hex) {
+  var n = parseInt(hex.slice(1), 16);
+  var r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  return (0.299 * r + 0.587 * g + 0.114 * b) > 160;
+}
+
+function criarBandeira(codigo, classe) {
+  var img = document.createElement('img');
+  img.className = classe || 'cartao-bandeira';
+  img.src = 'https://flagcdn.com/w80/' + codigo + '.png';
+  img.srcset = 'https://flagcdn.com/w160/' + codigo + '.png 2x';
+  img.alt = '';
+  img.onerror = function() { this.onerror = null; this.hidden = true; };
+  return img;
+}
+
+// Visual do time: bandeira (selecao) ou escudo generico (clube).
+function criarVisualTime(time, classeBandeira) {
+  if (time.categoria === 'clube') return criarEscudoClube(time);
+  var codigo = time.bandeira || BANDEIRAS_POR_ID[time.id] || '';
+  return codigoBandeiraValido(codigo) ? criarBandeira(codigo, classeBandeira) : null;
+}
+
 function irParaSelecao() {
   var grade = document.getElementById('grade-selecoes');
-  grade.innerHTML = '';
+  var gradeClubes = document.getElementById('grade-clubes');
+  var tituloClubes = document.getElementById('titulo-clubes');
+  var botaoConfirmar = document.getElementById('botao-confirmar-selecao');
+  grade.textContent = '';
+  gradeClubes.textContent = '';
 
-  var BANDEIRAS_POR_ID = {
-    brasil:'br', argentina:'ar', alemanha:'de', franca:'fr', japao:'jp',
-    portugal:'pt', espanha:'es', italia:'it', inglaterra:'gb-eng',
-    colombia:'co', mexico:'mx', coreia:'kr'
-  };
+  // Se o time escolhido antes nao estiver mais disponivel, desmarca.
+  var escolhido = SELECOES.find(function(t) { return t.id === estado.selecaoId; });
+  if (!escolhido || !timeDisponivel(escolhido)) estado.selecaoId = null;
 
-  // Monta um cartao de time (selecao ou clube). Bloqueado = so aparece pra
-  // criança saber que existe, com cadeado e caminho pra loja.
-  function montarCartaoTime(time, tipo, miniatura) {
-    var liberado = Loja.liberado(tipo, time.id);
+  var todasAsGrades = document.getElementById('tela-selecao');
+  var totalClubes = 0;
+
+  // SELECOES ja chega validada (data.js → validarSelecao). Mesmo assim,
+  // nada aqui concatena texto em HTML: so createElement/textContent.
+  SELECOES.forEach(function(sel) {
+    if (!timeDisponivel(sel)) return;
+    var ehClube = sel.categoria === 'clube';
     var cartao = document.createElement('button');
-    cartao.className = 'cartao' + (liberado ? '' : ' cartao-travado');
+    cartao.className = 'cartao' + (ehClube ? ' cartao-clube' : '');
     cartao.type = 'button';
-    cartao.innerHTML = miniatura + '<span class="cartao-titulo">' + time.nome + '</span>';
+    var ativo = estado.selecaoId === sel.id;
+    cartao.classList.toggle('cartao-selecionado', ativo);
+    cartao.setAttribute('aria-pressed', ativo ? 'true' : 'false');
 
-    if (!liberado) {
-      cartao.setAttribute('aria-label', time.nome + ' — bloqueado. Compre na loja por ' + precoDoItem(tipo) + ' Cruzeiros.');
-      cartao.addEventListener('click', function() {
-        SFX.clique();
-        abaLojaAtiva = (tipo === 'clube') ? 'clubes' : 'selecoes';
-        irParaLoja();
-      });
-      grade.appendChild(cartao);
-      return;
-    }
+    var visual = criarVisualTime(sel);
+    if (visual) cartao.appendChild(visual);
+    var titulo = document.createElement('span');
+    titulo.className = 'cartao-titulo';
+    titulo.textContent = sel.nome;
+    cartao.appendChild(titulo);
 
     cartao.addEventListener('click', function() {
       SFX.clique();
-      grade.querySelectorAll('.cartao').forEach(function(c) { c.classList.remove('cartao-selecionado'); });
-      cartao.classList.add('cartao-selecionado');
-      estado.selecaoId = time.id;
-      document.getElementById('botao-confirmar-selecao').disabled = false;
+      marcarSelecionado(todasAsGrades, '.cartao', 'cartao-selecionado', cartao);
+      estado.selecaoId = sel.id;
+      botaoConfirmar.disabled = false;
     });
-    grade.appendChild(cartao);
-  }
-
-  SELECOES.forEach(function(sel) {
-    var codigo = sel.bandeira || BANDEIRAS_POR_ID[sel.id] || '';
-    var mini = '';
-    if (codigo) {
-      mini += '<img class="cartao-bandeira" src="https://flagcdn.com/w80/' + codigo + '.png"';
-      mini += ' srcset="https://flagcdn.com/w160/' + codigo + '.png 2x"';
-      mini += ' alt=""';
-      mini += ' onerror="this.onerror=null;this.src=\'\';">';
-    }
-    montarCartaoTime(sel, 'selecao', mini);
+    if (ehClube) { gradeClubes.appendChild(cartao); totalClubes++; }
+    else grade.appendChild(cartao);
   });
-
-  // Clubes do Brasileirao entram na mesma tela, depois das selecoes.
-  CLUBES_BRASILEIRAO.forEach(function(clube) {
-    montarCartaoTime(clube, 'clube', Loja.escudo(clube, 48));
-  });
-  document.getElementById('botao-confirmar-selecao').disabled = true;
+  gradeClubes.hidden = totalClubes === 0;
+  tituloClubes.hidden = totalClubes === 0;
+  botaoConfirmar.disabled = !estado.selecaoId;
   mostrarTela('tela-selecao');
 }
 
 function initSelecao() {
   document.getElementById('botao-confirmar-selecao').addEventListener('click', function() {
+    if (!estado.selecaoId) return;
     SFX.selecionar();
     irParaDificuldade();
+  });
+  var botaoLoja = document.getElementById('botao-loja-selecao');
+  if (botaoLoja) botaoLoja.addEventListener('click', function() {
+    SFX.clique();
+    if (typeof Loja !== 'undefined') Loja.abrir('tela-selecao', 'clube');
   });
 }
 
 // ---------- Dificuldade ----------
 
-// Tela de nivel. Antes eram 3 cartoes (facil/medio/dificil); agora sao os 12
-// degraus de niveis.js, cada um dizendo o tipo de conta e o tamanho dos
-// numeros — o professor consegue apontar o nivel certo pra cada turma.
+function criarSpan(classe, texto) {
+  var s = document.createElement('span');
+  s.className = classe;
+  s.textContent = texto;
+  return s;
+}
+
+// Escolha do nivel.
 //
-// Se a crianca entrou numa sala, o professor ja escolheu o nivel: a tela
-// mostra qual e e segue direto, em vez de deixar ela trocar.
+// Antes esta tela listava DIFICULDADES (facil/medio/dificil). Com so tres
+// degraus, a escalada entre fases era um abismo: quem escolhia facil somava
+// 2 + 3 na fase 1 e encarava 7 x 9 e divisao na fase 3. Agora lista os 12
+// niveis de niveis.js, cada um dizendo o tipo de conta e o tamanho dos
+// numeros.
+//
+// estado.dificuldadeId continua sendo o campo usado pelo resto do codigo —
+// so passou a guardar um numero (1..12) em vez de 'facil'/'medio'/'dificil'.
+// Progressao.dificuldadeEfetiva() aceita os dois formatos, entao progresso
+// salvo antes desta mudanca continua valendo.
 function irParaDificuldade() {
+  // Numa sala, quem manda no nivel e o professor: nao faz sentido deixar a
+  // crianca escolher outro.
   if (Sala.estaNaSala() && Sala.nivelDaSala()) {
-    estado.nivelId = Sala.nivelDaSala();
-    estado.dificuldadeId = estado.nivelId;
+    estado.dificuldadeId = Sala.nivelDaSala();
     irParaFases();
     return;
   }
 
   var grade = document.getElementById('grade-dificuldades');
-  grade.innerHTML = '';
-
+  grade.textContent = '';
   NIVEIS.forEach(function(nv) {
     var cartao = document.createElement('button');
     cartao.className = 'cartao cartao-nivel';
     cartao.type = 'button';
-    cartao.innerHTML =
-      '<span class="cartao-icone-dificuldade">' + nv.id + '</span>' +
-      '<span class="cartao-titulo">' + nv.nome + '</span>' +
-      '<span class="cartao-descricao">' + nv.descricao + '</span>' +
-      '<span class="etiqueta-tipo">' + nv.tipos.map(function(t) {
-        return TIPOS_OPERACAO[t].simbolo;
-      }).join(' ') + '</span>';
+    cartao.setAttribute('aria-pressed', 'false');
     cartao.setAttribute('aria-label', rotuloNivel(nv.id) + '. ' + nv.descricao);
-
+    cartao.appendChild(criarSpan('cartao-icone-dificuldade', String(nv.id)));
+    cartao.appendChild(criarSpan('cartao-titulo', nv.nome));
+    cartao.appendChild(criarSpan('cartao-descricao', nv.descricao));
+    cartao.appendChild(criarSpan('etiqueta-tipo', nv.tipos.map(function(t) {
+      return TIPOS_OPERACAO[t].simbolo;
+    }).join(' ')));
     cartao.addEventListener('click', function() {
       SFX.clique();
-      grade.querySelectorAll('.cartao').forEach(function(c) { c.classList.remove('cartao-selecionado'); });
-      cartao.classList.add('cartao-selecionado');
-      estado.nivelId = nv.id;
-      estado.dificuldadeId = nv.id; // mantido pro resto do codigo que ainda le esse campo
+      marcarSelecionado(grade, '.cartao', 'cartao-selecionado', cartao);
+      estado.dificuldadeId = nv.id;
       document.getElementById('botao-confirmar-dificuldade').disabled = false;
     });
     grade.appendChild(cartao);
   });
-
   document.getElementById('botao-confirmar-dificuldade').disabled = true;
   mostrarTela('tela-dificuldade');
 }
@@ -428,11 +766,19 @@ function initDificuldade() {
   });
 }
 
-// ---------- Tela de Fases (NOVO) ----------
+// ---------- Tela de Fases ----------
+
+function criarIconeCruzeiro(alt) {
+  var img = document.createElement('img');
+  img.className = 'icone-cruzeiro';
+  img.src = '../Imagens/estrela-cruzeiro.png';
+  img.alt = alt || '';
+  return img;
+}
 
 function irParaFases() {
   var grade = document.getElementById('grade-fases');
-  grade.innerHTML = '';
+  grade.textContent = '';
 
   var fases = Progressao.obterFases();
   fases.forEach(function(fase) {
@@ -440,30 +786,42 @@ function irParaFases() {
     var cartao = document.createElement('button');
     cartao.className = 'cartao cartao-fase';
     cartao.type = 'button';
-    if (!desbloqueada) cartao.classList.add('cartao-bloqueado');
+    if (!desbloqueada) {
+      cartao.classList.add('cartao-bloqueado');
+      cartao.disabled = true;
+      cartao.setAttribute('aria-disabled', 'true');
+    } else {
+      cartao.setAttribute('aria-pressed', 'false');
+    }
 
     var melhorPts = Progressao.melhorPontuacao(fase.id);
     var melhorG = Progressao.melhorGols(fase.id);
     var estrelas = '';
-    if (melhorG > 0) {
-      for (var i = 0; i < Math.min(melhorG, fase.cobrancas); i++) estrelas += '⭐';
+    for (var i = 0; i < Math.min(melhorG, fase.cobrancas); i++) estrelas += '⭐';
+
+    cartao.appendChild(criarSpan('cartao-icone-dificuldade', desbloqueada ? fase.icone : '🔒'));
+    cartao.appendChild(criarSpan('cartao-titulo', fase.nome));
+    cartao.appendChild(criarSpan('cartao-descricao', desbloqueada ? fase.descricao : 'Complete a fase anterior!'));
+    if (estrelas) {
+      var spanEstrelas = criarSpan('cartao-estrelas', estrelas);
+      spanEstrelas.setAttribute('aria-label', 'Melhor resultado: ' + melhorG + ' de ' + fase.cobrancas + ' gols');
+      cartao.appendChild(spanEstrelas);
+    }
+    if (melhorPts > 0) {
+      var recorde = criarSpan('cartao-descricao', 'Recorde: ' + melhorPts + ' ');
+      recorde.appendChild(criarIconeCruzeiro(''));
+      recorde.appendChild(document.createTextNode(melhorPts === 1 ? 'Cruzeiro' : 'Cruzeiros'));
+      cartao.appendChild(recorde);
     }
 
-    var conteudo = '<span class="cartao-icone-dificuldade">' + (desbloqueada ? fase.icone : '🔒') + '</span>';
-    conteudo += '<span class="cartao-titulo">' + fase.nome + '</span>';
-    conteudo += '<span class="cartao-descricao">' + (desbloqueada ? fase.descricao : 'Complete a fase anterior!') + '</span>';
-    if (estrelas) conteudo += '<span class="cartao-estrelas">' + estrelas + '</span>';
-    if (melhorPts > 0) conteudo += '<span class="cartao-descricao">Recorde: ' + melhorPts + ' <img class="icone-cruzeiro" src="../Imagens/estrela-cruzeiro.png" alt="">Cruzeiro</span>';
-    cartao.innerHTML = conteudo;
-
-    cartao.addEventListener('click', function() {
-      if (!desbloqueada) return;
-      SFX.selecionar();
-      grade.querySelectorAll('.cartao').forEach(function(c) { c.classList.remove('cartao-selecionado'); });
-      cartao.classList.add('cartao-selecionado');
-      estado.faseAtual = fase.id;
-      document.getElementById('botao-confirmar-fase').disabled = false;
-    });
+    if (desbloqueada) {
+      cartao.addEventListener('click', function() {
+        SFX.selecionar();
+        marcarSelecionado(grade, '.cartao:not(.cartao-bloqueado)', 'cartao-selecionado', cartao);
+        estado.faseAtual = fase.id;
+        document.getElementById('botao-confirmar-fase').disabled = false;
+      });
+    }
     grade.appendChild(cartao);
   });
   document.getElementById('botao-confirmar-fase').disabled = true;
@@ -473,17 +831,39 @@ function irParaFases() {
 function initFases() {
   document.getElementById('botao-confirmar-fase').addEventListener('click', function() {
     SFX.selecionar();
-    iniciarFase1();
+    iniciarPartida();
   });
 }
 
-// ---------- Fase 1: timer + pontuacao por velocidade ----------
+// ======================================================================
+// Partida (usada por TODAS as fases: Penaltis, Falta e Final)
+// ======================================================================
 
-var ORDEM_ZONAS = ['topo-esquerda', 'topo-direita', 'meio', 'baixo-esquerda', 'baixo-direita'];
+// Cria a cena: 3D quando possivel; senao, modo simplificado 2D com a
+// mesma regra. Se nem o 2D abrir, devolve null e a partida NAO comeca.
+function criarCenaDaPartida() {
+  var container = document.getElementById('jogo-penalti');
+  container.textContent = '';
+  try {
+    if (typeof THREE === 'undefined') throw new Error('Three.js nao carregou');
+    return criarJogoPenalti('jogo-penalti', estado.selecaoId);
+  } catch (erro3d) {
+    console.warn('Cena 3D indisponivel, usando o modo simplificado:', erro3d);
+    container.textContent = '';
+  }
+  try {
+    return criarJogoPenalti2D('jogo-penalti', estado.selecaoId);
+  } catch (erro2d) {
+    console.error('Modo simplificado indisponivel:', erro2d);
+    container.textContent = '';
+    return null;
+  }
+}
 
-function iniciarFase1() {
-  // Configura parametros da fase selecionada
+function iniciarPartida() {
+  encerrarJogoEmAndamento(); // invalida qualquer sessao anterior
   var fase = Progressao.obterFase(estado.faseAtual);
+  estado.faseAtual = fase.id;
   TOTAL_COBRANCAS = fase.cobrancas;
   TIMER_MAX = fase.timerMax;
 
@@ -491,28 +871,33 @@ function iniciarFase1() {
   estado.gols = 0;
   estado.pontuacao = 0;
   estado.resultadosCobrancas = [];
-  estado.cobrancaFinalizada = false;
+  estado.perguntaAtual = null;
 
-  // Reseta o banco de questoes pra essa sessao
   BancoQuestoes.resetarSessao();
 
-  // Mostra nome da fase no cabecalho
   var tituloFase = document.getElementById('titulo-fase');
   if (tituloFase) tituloFase.textContent = fase.icone + ' ' + fase.nome;
 
   mostrarTela('tela-fase1');
   atualizarBolinhasProgresso();
+  atualizarDisplayPontuacao();
+  document.getElementById('mensagem-feedback').textContent = '';
 
-  if (estado.jogoPenalti) { estado.jogoPenalti.destruir(); estado.jogoPenalti = null; }
-  document.getElementById('jogo-penalti').innerHTML = '';
+  var aviso = document.getElementById('aviso-modo-jogo');
+  estado.jogoPenalti = criarCenaDaPartida();
 
-  try {
-    if (typeof THREE === 'undefined') throw new Error('Three.js nao carregou');
-    estado.jogoPenalti = criarJogoPenalti('jogo-penalti', estado.selecaoId);
-  } catch (e) {
-    console.warn('Cena 3D indisponivel:', e);
-    estado.jogoPenalti = null;
+  if (!estado.jogoPenalti) {
+    // Nunca premia gol automatico: sem cena jogavel, nao ha partida.
+    aviso.hidden = false;
+    aviso.classList.add('aviso-erro');
+    aviso.textContent = 'Não foi possível abrir o campo neste navegador. Tente atualizar a página ou usar outro navegador.';
+    document.getElementById('area-respostas').hidden = true;
+    document.getElementById('pergunta-texto').textContent = '--';
+    return;
   }
+  aviso.classList.remove('aviso-erro');
+  aviso.hidden = estado.jogoPenalti.modo !== '2d';
+  aviso.textContent = estado.jogoPenalti.modo === '2d' ? 'Modo simplificado ativo (sem 3D).' : '';
 
   SFX.apito();
   carregarProximaPergunta();
@@ -520,12 +905,14 @@ function iniciarFase1() {
 
 function atualizarBolinhasProgresso() {
   var container = document.getElementById('cabecalho-fase');
-  container.innerHTML = '';
+  container.textContent = '';
+  container.setAttribute('aria-label', 'Cobrança ' + Math.min(estado.cobrancaAtual + 1, TOTAL_COBRANCAS) + ' de ' + TOTAL_COBRANCAS);
   for (var i = 0; i < TOTAL_COBRANCAS; i++) {
     var b = document.createElement('span');
     b.className = 'bolinha-cobranca';
     if (i < estado.resultadosCobrancas.length) {
-      b.classList.add(estado.resultadosCobrancas[i].resultado === 'gol' ? 'acerto' : 'erro');
+      var res = estado.resultadosCobrancas[i].resultado;
+      b.classList.add(res === 'gol' ? 'acerto' : (res === 'fora' ? 'fora' : 'erro'));
     } else if (i === estado.cobrancaAtual) {
       b.classList.add('atual');
     }
@@ -533,18 +920,26 @@ function atualizarBolinhasProgresso() {
   }
 }
 
+// ---------- Timer ----------
+
 function iniciarTimer() {
+  pararTimer();
   estado.timerSegundos = TIMER_MAX;
   estado.timerInicio = Date.now();
+  estado.ultimoSegundoAlertado = null;
   atualizarDisplayTimer();
-  pararTimer();
+  var idSessao = cicloPartida.sessaoJogoId;
   estado.timerInterval = setInterval(function() {
+    if (!sessaoValida(idSessao) || estado.etapa !== ETAPA.RESPOSTA) { pararTimer(); return; }
     var decorrido = Math.floor((Date.now() - estado.timerInicio) / 1000);
     estado.timerSegundos = Math.max(0, TIMER_MAX - decorrido);
     atualizarDisplayTimer();
 
-    // SFX: tick de alerta nos ultimos 4 segundos
-    if (estado.timerSegundos > 0 && estado.timerSegundos <= 4) {
+    // Um unico alerta por segundo exibido (4, 3, 2, 1), mesmo o intervalo
+    // rodando a cada 200 ms.
+    if (estado.timerSegundos > 0 && estado.timerSegundos <= 4 &&
+        estado.timerSegundos !== estado.ultimoSegundoAlertado) {
+      estado.ultimoSegundoAlertado = estado.timerSegundos;
       SFX.timerAlerta();
     }
 
@@ -569,140 +964,402 @@ function atualizarDisplayTimer() {
   else el.classList.add('timer-vermelho');
 }
 
-function calcularPontosPorVelocidade() {
-  var tempo = Math.floor((Date.now() - estado.timerInicio) / 1000);
-  // Max 100 pontos (resposta instantanea), min 10 (respondeu no limite)
-  var pontos = Math.max(10, Math.round(100 * (1 - tempo / TIMER_MAX)));
-  return pontos;
+// Pontuacao SEMPRE pelo tempo de resposta da conta — capturado no instante
+// do clique (ou do estouro do timer). Mira, forca e animacao NAO contam.
+function calcularPontosPorVelocidade(tempoUsadoSegundos) {
+  return Math.max(10, Math.round(100 * (1 - tempoUsadoSegundos / TIMER_MAX)));
 }
 
-function tempoEsgotado() {
-  // Garante uma única finalização por cobrança: se o clique do jogador e o
-  // estouro do timer chegarem quase juntos, só o primeiro a passar por
-  // aqui prossegue (secao 5 do documento de melhorias).
-  if (estado.cobrancaFinalizada) return;
-  estado.cobrancaFinalizada = true;
+// ---------- Etapas visuais ----------
 
-  SFX.tempoEsgotado();
-  document.querySelectorAll('.botao-zona').forEach(function(b) { b.disabled = true; });
-  document.getElementById('mensagem-feedback').textContent = 'Tempo esgotado!';
-  // Tempo usado = o cronometro inteiro, capturado ja (antes da animacao),
-  // pra nao inflar o valor registrado com o tempo da animacao do chute.
-  var tempoUsadoMs = TIMER_MAX * 1000;
-  if (estado.jogoPenalti) {
-    estado.jogoPenalti.chutar('meio', false, function() {
-      finalizarCobranca({ foiGol: false, zonaEscolhida: null, estourouTempo: true, tempoUsadoMs: tempoUsadoMs });
-    });
-  } else {
-    setTimeout(function() {
-      finalizarCobranca({ foiGol: false, zonaEscolhida: null, estourouTempo: true, tempoUsadoMs: tempoUsadoMs });
-    }, 500);
-  }
+function mostrarEtapaRespostas() {
+  document.getElementById('area-respostas').hidden = false;
+  document.getElementById('mensagem-etapa').hidden = true;
+  document.getElementById('camada-mira').hidden = true;
+  document.getElementById('bloco-forca').hidden = true;
+  document.getElementById('bloco-altura').hidden = true;
+  document.getElementById('incentivo-jogo').hidden = true;
+  document.getElementById('tela-fase1').classList.remove('foco-campo');
+}
+
+function esconderEtapaRespostas() {
+  document.getElementById('area-respostas').hidden = true;
 }
 
 function carregarProximaPergunta() {
-  estado.cobrancaFinalizada = false;
-
-  // Usa o banco de questoes com dificuldade efetiva (escala com a fase)
-  // Nivel de partida + um degrau por fase (ver PASSO_POR_FASE em
-  // progressao.js). Se a crianca esta numa sala, o professor manda no nivel.
+  // Nivel de partida + um degrau por fase (PASSO_POR_FASE em progressao.js).
+  // Numa sala, o nivel e o que o professor definiu, e os filtros limitam os
+  // tipos de conta (ex.: so subtracao).
   var nivelBase = Sala.estaNaSala() && Sala.nivelDaSala()
     ? Sala.nivelDaSala()
-    : (estado.nivelId || estado.dificuldadeId);
-  var nivelDaVez = Progressao.nivelEfetivo(nivelBase, estado.faseAtual);
-  estado.nivelEmJogo = nivelDaVez;
+    : estado.dificuldadeId;
+  var nivelDaVez = Progressao.dificuldadeEfetiva(nivelBase, estado.faseAtual);
   estado.perguntaAtual = BancoQuestoes.sortearPergunta(nivelDaVez, Sala.filtrosDaSala());
   document.getElementById('mensagem-feedback').textContent = '';
   document.getElementById('pergunta-texto').textContent = estado.perguntaAtual.texto;
+  mostrarEtapaRespostas();
 
   estado.zonaCorreta = null;
+  var container = document.getElementById('respostas-alternativas');
+  container.textContent = '';
   ORDEM_ZONAS.forEach(function(zonaId, indice) {
     var alt = estado.perguntaAtual.alternativas[indice];
-    var botao = document.querySelector('.botao-zona[data-zona="' + zonaId + '"]');
+    var botao = document.createElement('button');
+    botao.type = 'button';
+    botao.className = 'botao-resposta';
+    botao.setAttribute('data-zona', zonaId);
     botao.textContent = alt.valor;
-    botao.disabled = false;
-    botao.classList.remove('acertou', 'errou');
+    botao.addEventListener('click', function() { responderAlternativa(botao); });
+    container.appendChild(botao);
     if (alt.correta) estado.zonaCorreta = zonaId;
   });
 
+  estado.etapa = ETAPA.RESPOSTA;
+  atualizarBolinhasProgresso();
   Narracao.falar(estado.perguntaAtual.textoFalado);
   iniciarTimer();
 }
 
 function initFase1() {
-  document.getElementById('zonas-gol').addEventListener('click', function(ev) {
-    var botao = ev.target.closest('.botao-zona');
-    if (!botao || botao.disabled) return;
-    chutarZona(botao);
-  });
-
-  // "Ouvir novamente" (secao 1, Narracao): repete a pergunta atual sem
-  // reiniciar o cronometro nem alterar nenhum outro estado do jogo.
   var botaoOuvir = document.getElementById('botao-ouvir-novamente');
   if (botaoOuvir) {
     botaoOuvir.addEventListener('click', function() {
-      if (estado.perguntaAtual) Narracao.falar(estado.perguntaAtual.textoFalado);
+      // Pedido explicito da crianca: fala mesmo com a narracao automatica
+      // desligada (antes o botao nao fazia nada nesse caso).
+      SFX.clique();
+      if (estado.perguntaAtual) Narracao.falar(estado.perguntaAtual.textoFalado, { forcar: true });
     });
   }
+  desenharFaixaIdealForca('meia');
 }
 
-function chutarZona(botaoClicado) {
-  // Mesma trava de finalização única: um clique que chegue depois que o
-  // tempo já esgotou (ou depois de outro clique) é ignorado.
-  if (estado.cobrancaFinalizada) return;
-  estado.cobrancaFinalizada = true;
+// ---------- Resposta ----------
 
-  // Tempo usado capturado no instante do clique — antes da animacao do
-  // chute, pra o valor registrado refletir o tempo de decisao real.
+// Correta: avanca SOMENTE para a mira. Errada: defesa (uma unica vez).
+function responderAlternativa(botaoClicado) {
+  if (estado.etapa !== ETAPA.RESPOSTA) return;
+
   var tempoUsadoMs = Date.now() - estado.timerInicio;
   pararTimer();
   var zonaId = botaoClicado.getAttribute('data-zona');
   var acertou = zonaId === estado.zonaCorreta;
 
-  document.querySelectorAll('.botao-zona').forEach(function(b) { b.disabled = true; });
-  // O resultado nunca depende so de cor: a classe muda a cor de fundo, mas
-  // o rotulo acessivel tambem passa a dizer "Acertou"/"Errou" por texto.
+  document.querySelectorAll('.botao-resposta').forEach(function(b) { b.disabled = true; });
   botaoClicado.classList.add(acertou ? 'acertou' : 'errou');
   botaoClicado.setAttribute('aria-label', (acertou ? 'Acertou! Resposta ' : 'Errou. Resposta ') + botaoClicado.textContent);
 
-  if (estado.jogoPenalti) {
-    estado.jogoPenalti.chutar(zonaId, acertou, function(r) {
-      finalizarCobranca({ foiGol: r.gol, zonaEscolhida: zonaId, estourouTempo: false, tempoUsadoMs: tempoUsadoMs });
+  if (acertou) {
+    estado.etapa = ETAPA.TRANSICAO;
+    SFX.selecionar();
+    document.getElementById('mensagem-feedback').textContent = '✓ Resposta correta!';
+    agendarNaSessao(function() { avancarParaMira(tempoUsadoMs); }, PAUSA_ANTES_DA_MIRA);
+    return;
+  }
+
+  estado.etapa = ETAPA.CHUTE;
+  document.getElementById('mensagem-feedback').textContent = '✗ Resposta errada!';
+  chutarParaDefesa(zonaId, { respostaCorreta: false, zonaEscolhida: zonaId, estourouTempo: false, tempoUsadoMs: tempoUsadoMs });
+}
+
+// Tempo esgotado = mesmo tratamento de resposta errada: defesa no meio.
+function tempoEsgotado() {
+  if (estado.etapa !== ETAPA.RESPOSTA) return;
+  estado.etapa = ETAPA.CHUTE;
+
+  SFX.tempoEsgotado();
+  document.querySelectorAll('.botao-resposta').forEach(function(b) { b.disabled = true; });
+  document.getElementById('mensagem-feedback').textContent = 'Tempo esgotado!';
+  chutarParaDefesa('meio', { respostaCorreta: false, zonaEscolhida: null, estourouTempo: true, tempoUsadoMs: TIMER_MAX * 1000 });
+}
+
+function chutarParaDefesa(zonaId, detalhes) {
+  var aoFinalizar = vincularSessao(function() { finalizarCobranca(detalhes); });
+  var iniciou = estado.jogoPenalti && estado.jogoPenalti.chutar(zonaId, aoFinalizar);
+  // Cena ocupada/indisponivel: registra a defesa mesmo assim (sem gol).
+  if (!iniciou) agendarNaSessao(function() { finalizarCobranca(detalhes); }, 500);
+}
+
+// ---------- Etapas interativas (mira e forca) ----------
+// Um unico fluxo de Pointer Events na superficie do jogo:
+//   - so o ponteiro primario conta;
+//   - a transicao acontece no pointerup DAQUELE ponteiro que deu pointerdown
+//     nesta etapa (o "up" de um toque antigo nunca confirma a etapa nova);
+//   - nenhum listener de click/touchend: o clique sintetico que o navegador
+//     gera depois do toque nao tem efeito;
+//   - trava por etapa: depois de confirmar, nada mais e aceito nela.
+// Teclado: setas movem a mira; Enter ou Espaco confirmam.
+
+var etapaInterativa = null;
+
+function cancelarEtapaInterativa() {
+  if (etapaInterativa) { etapaInterativa.cancelar(); etapaInterativa = null; }
+}
+
+function iniciarEtapaInterativa(opcoes) {
+  cancelarEtapaInterativa();
+  var superficie = document.getElementById('superficie-jogo');
+  var idSessao = cicloPartida.sessaoJogoId;
+  var ponteiroAtivo = null;
+  var travada = false;
+  var liberadaEm = performance.now() + TRAVA_ENTRADA_MS;
+  // Usa o horario em que a entrada ACONTECEU (ev.timeStamp), nao o horario
+  // em que foi processada: num aparelho lento o 2o toque de um duplo toque
+  // pode ser entregue tarde, mas continua sendo um duplo toque.
+  function aindaTravada(ev) {
+    var quando = (ev && typeof ev.timeStamp === 'number' && ev.timeStamp > 0) ? ev.timeStamp : performance.now();
+    return quando < liberadaEm;
+  }
+
+  function limpar() {
+    superficie.removeEventListener('pointerdown', aoPointerDown);
+    superficie.removeEventListener('pointermove', aoPointerMove);
+    superficie.removeEventListener('pointerup', aoPointerUp);
+    superficie.removeEventListener('pointercancel', aoPointerCancel);
+    superficie.removeEventListener('keydown', aoTecla);
+    superficie.classList.remove('superficie-interativa');
+    superficie.tabIndex = -1;
+    if (ponteiroAtivo !== null) {
+      try { superficie.releasePointerCapture(ponteiroAtivo); } catch (e) {}
+    }
+    ponteiroAtivo = null;
+  }
+
+  function confirmar() {
+    if (travada) return;
+    travada = true;
+    limpar();
+    if (etapaInterativa === controle) etapaInterativa = null;
+    if (!sessaoValida(idSessao)) return;
+    opcoes.aoConfirmar();
+  }
+
+  function aoPointerDown(ev) {
+    if (travada || !ev.isPrimary) return;
+    if (ev.pointerType === 'mouse' && ev.button !== 0) return;
+    // Botoes dentro da superficie (ex.: "Ouvir novamente") fazem so o papel deles.
+    if (ev.target && ev.target.closest && ev.target.closest('button')) return;
+    // Trava anti-duplo-clique: o 2o clique de um duplo clique nao conta.
+    if (aindaTravada(ev)) return;
+    ponteiroAtivo = ev.pointerId;
+    try { superficie.setPointerCapture(ev.pointerId); } catch (e) {}
+    if (opcoes.aoMover) opcoes.aoMover(ev.clientX, ev.clientY);
+    ev.preventDefault();
+  }
+
+  function aoPointerMove(ev) {
+    if (travada || !ev.isPrimary || !opcoes.aoMover) return;
+    // Mouse mira so de passar por cima; toque/caneta, arrastando.
+    if (ev.pointerType !== 'mouse' && ev.pointerId !== ponteiroAtivo) return;
+    opcoes.aoMover(ev.clientX, ev.clientY);
+  }
+
+  function aoPointerUp(ev) {
+    if (travada || !ev.isPrimary || ev.pointerId !== ponteiroAtivo) return;
+    ev.preventDefault();
+    confirmar();
+  }
+
+  function aoPointerCancel(ev) {
+    if (ev.pointerId === ponteiroAtivo) ponteiroAtivo = null;
+  }
+
+  function aoTecla(ev) {
+    var tecla = ev.key;
+    var confirma = tecla === 'Enter' || tecla === ' ' || tecla === 'Spacebar';
+    if (confirma) {
+      if (ev.target && ev.target !== superficie && ev.target.closest && ev.target.closest('button')) return;
+      ev.preventDefault();
+      if (!ev.repeat && !aindaTravada(ev)) confirmar();
+      return;
+    }
+    if (!opcoes.aoSeta) return;
+    var dx = 0, dy = 0;
+    if (tecla === 'ArrowLeft') dx = -1;
+    else if (tecla === 'ArrowRight') dx = 1;
+    else if (tecla === 'ArrowUp') dy = 1;
+    else if (tecla === 'ArrowDown') dy = -1;
+    else return;
+    ev.preventDefault();
+    if (!travada) opcoes.aoSeta(dx, dy);
+  }
+
+  superficie.addEventListener('pointerdown', aoPointerDown);
+  superficie.addEventListener('pointermove', aoPointerMove);
+  superficie.addEventListener('pointerup', aoPointerUp);
+  superficie.addEventListener('pointercancel', aoPointerCancel);
+  superficie.addEventListener('keydown', aoTecla);
+  superficie.classList.add('superficie-interativa');
+  superficie.tabIndex = 0;
+  document.getElementById('instrucoes-jogo').textContent = opcoes.instrucoes || '';
+  try { superficie.focus({ preventScroll: true }); } catch (e) { superficie.focus(); }
+
+  var controle = {
+    cancelar: function() { travada = true; limpar(); },
+    confirmar: confirmar
+  };
+  etapaInterativa = controle;
+  return controle;
+}
+
+// Etapa: mira (ponteiro, arrastar o dedo ou setas).
+function avancarParaMira(tempoUsadoMs) {
+  if (estado.etapa !== ETAPA.TRANSICAO || !estado.jogoPenalti) return;
+  estado.etapa = ETAPA.MIRA;
+  esconderEtapaRespostas();
+  document.getElementById('tela-fase1').classList.add('foco-campo');
+  var msg = document.getElementById('mensagem-etapa');
+  msg.hidden = false;
+  msg.textContent = 'Escolha onde chutar! 🎯';
+
+  var jogo = estado.jogoPenalti;
+  var camada = document.getElementById('camada-mira');
+  camada.hidden = false;
+  var alvo = document.getElementById('alvo-mira');
+
+  alvo.classList.remove('mira-travada', 'mira-fora');
+  jogo.iniciarMira(function(pos, ponto) {
+    alvo.style.left = pos.leftPercent + '%';
+    alvo.style.top = pos.topPercent + '%';
+    // Mira fora do gol fica vermelha (chute sai com qualquer forca).
+    alvo.classList.toggle('mira-fora', !!ponto && !RegrasChute.dentroDaAreaValida(ponto));
+  });
+
+  iniciarEtapaInterativa({
+    instrucoes: 'Mire no gol com o dedo, o mouse ou as setas do teclado. Toque, clique ou aperte Enter para confirmar a mira.',
+    aoMover: function(x, y) { jogo.moverMiraTela(x, y); },
+    aoSeta: function(dx, dy) { jogo.moverMiraDelta(dx * PASSO_MIRA_TECLADO.x, dy * PASSO_MIRA_TECLADO.y); },
+    aoConfirmar: function() {
+      var ponto = jogo.pararMira();
+      // A mira continua visivel, travada, durante altura e forca.
+      alvo.classList.add('mira-travada');
+      SFX.clique();
+      avancarParaAltura(ponto, tempoUsadoMs);
+    }
+  });
+}
+
+// Etapa: altura = tipo de chute (rasteiro / meia-altura / cavadinha).
+// Muda o resultado de verdade: ver RegrasChute.TIPOS.
+function avancarParaAltura(pontoMira, tempoUsadoMs) {
+  if (estado.etapa !== ETAPA.MIRA) return;
+  estado.etapa = ETAPA.ALTURA;
+  var msg = document.getElementById('mensagem-etapa');
+  msg.textContent = 'Rasteiro, meia-altura ou cavadinha? ⬇️⚽☁️';
+  var bloco = document.getElementById('bloco-altura');
+  bloco.hidden = false;
+  iniciarBarraAltura();
+
+  iniciarEtapaInterativa({
+    instrucoes: 'Escolha o tipo de chute na barra: rasteiro à esquerda, meia-altura no meio, cavadinha à direita. Toque, clique ou aperte Enter para travar.',
+    aoConfirmar: function() {
+      var altura = pararBarraAltura();
+      bloco.hidden = true;
+      SFX.clique();
+      avancarParaForca(pontoMira, altura, tempoUsadoMs);
+    }
+  });
+}
+
+// Etapa: forca (barra oscilante; um toque/clique/Enter trava).
+function avancarParaForca(pontoMira, altura, tempoUsadoMs) {
+  if (estado.etapa !== ETAPA.ALTURA) return;
+  estado.etapa = ETAPA.FORCA;
+  var tipo = RegrasChute.tipoPorAltura(altura);
+  var msg = document.getElementById('mensagem-etapa');
+  msg.textContent = 'Escolha a força do chute! 💪';
+  document.getElementById('tipo-escolhido').textContent = '— ' + tipo.nome;
+  desenharFaixaIdealForca(tipo.id);
+  var bloco = document.getElementById('bloco-forca');
+  bloco.hidden = false;
+  iniciarBarraForca();
+
+  var dicaTipo = tipo.id === 'cavadinha' ? ' Cavadinha pede força fraquinha.'
+    : (tipo.id === 'rasteiro' ? ' Rasteiro pede força forte.' : '');
+  iniciarEtapaInterativa({
+    instrucoes: 'Chute ' + NOME_TIPO[tipo.id] + '. A barra de força está enchendo: toque, clique ou aperte Enter quando ela estiver na faixa marcada "ideal".' + dicaTipo,
+    aoConfirmar: function() {
+      var forca = pararBarraForca();
+      bloco.hidden = true;
+      msg.hidden = true;
+      SFX.clique();
+      chutarComMiraEForca(pontoMira, forca, altura, tempoUsadoMs);
+    }
+  });
+}
+
+function chutarComMiraEForca(pontoMira, forca, altura, tempoUsadoMs) {
+  if (estado.etapa !== ETAPA.FORCA) return;
+  estado.etapa = ETAPA.CHUTE;
+  document.getElementById('instrucoes-jogo').textContent = '';
+  document.getElementById('camada-mira').hidden = true;
+  var detalhesBase = { respostaCorreta: true, zonaEscolhida: null, estourouTempo: false, tempoUsadoMs: tempoUsadoMs };
+  var aoFinalizar = vincularSessao(function(r) {
+    finalizarCobranca({
+      respostaCorreta: true,
+      bolaDentro: !!(r && r.gol),
+      motivo: r && r.motivo,
+      tipoChute: r && r.tipo,
+      zonaEscolhida: null,
+      estourouTempo: false,
+      tempoUsadoMs: tempoUsadoMs
     });
-  } else {
-    setTimeout(function() {
-      finalizarCobranca({ foiGol: acertou, zonaEscolhida: zonaId, estourouTempo: false, tempoUsadoMs: tempoUsadoMs });
-    }, 500);
+  });
+  var iniciou = estado.jogoPenalti && estado.jogoPenalti.chutarLivre(pontoMira, forca, altura, aoFinalizar);
+  if (!iniciou) {
+    // Nunca vira gol automatico: sem animacao, a bola nao entrou.
+    agendarNaSessao(function() { finalizarCobranca(Object.assign({ bolaDentro: false, motivo: 'lado' }, detalhesBase)); }, 500);
   }
 }
 
-// HU-07: registra cada cobranca como um objeto estruturado (zona escolhida,
-// zona correta, resultado, se estourou o tempo, pontos e tempo usado) em
-// vez de uma string solta — a tela de resultado usa isso para montar um
-// resumo compreensivel por crianca e acessivel por texto.
-function finalizarCobranca(detalhes) {
-  var tempoUsadoSegundos = Math.min(TIMER_MAX, Math.max(0, Math.round((detalhes.tempoUsadoMs || 0) / 1000)));
-  var pontosGanhos = 0;
+// ---------- Finalizacao (idempotente) ----------
 
-  if (detalhes.foiGol) {
+// HU-07: registra cada cobranca como objeto estruturado. So roda UMA vez
+// por cobranca: a segunda chamada (clique duplo, callback atrasado) e
+// ignorada pela etapa FINALIZADA.
+function finalizarCobranca(detalhes) {
+  if (estado.etapa === ETAPA.FINALIZADA || estado.etapa === ETAPA.OCIOSA) return;
+  estado.etapa = ETAPA.FINALIZADA;
+  cancelarEtapaInterativa();
+
+  var tempoUsadoSegundos = Math.min(TIMER_MAX, Math.max(0, Math.round((detalhes.tempoUsadoMs || 0) / 1000)));
+  var resultado = RegrasChute.resolverCobranca(!!detalhes.respostaCorreta,
+    detalhes.respostaCorreta ? { dentro: !!detalhes.bolaDentro } : null);
+  var pontosGanhos = 0;
+  var feedback = document.getElementById('mensagem-feedback');
+
+  if (resultado === 'gol') {
     SFX.gol();
-    pontosGanhos = calcularPontosPorVelocidade();
+    pontosGanhos = calcularPontosPorVelocidade(tempoUsadoSegundos);
     estado.gols++;
     estado.pontuacao += pontosGanhos;
-    document.getElementById('mensagem-feedback').innerHTML = 'GOOOL! +' + pontosGanhos + ' <img class="icone-cruzeiro" src="../Imagens/estrela-cruzeiro.png" alt="">Cruzeiro!';
+    feedback.textContent = 'GOOOL! +' + pontosGanhos + ' ';
+    feedback.appendChild(criarIconeCruzeiro(''));
+    feedback.appendChild(document.createTextNode('Cruzeiros!'));
     Narracao.falar('Gol!');
+  } else if (resultado === 'fora') {
+    // Reaproveita o som existente de "sem gol" — nao criar SFX novo.
+    SFX.defesa();
+    var motivo = MENSAGEM_FORA[detalhes.motivo] ? detalhes.motivo : 'lado';
+    feedback.textContent = MENSAGEM_FORA[motivo];
+    Narracao.falar(NARRACAO_FORA[motivo]);
   } else {
     SFX.defesa();
-    if (document.getElementById('mensagem-feedback').textContent !== 'Tempo esgotado!') {
-      document.getElementById('mensagem-feedback').textContent = 'O goleiro defendeu!';
-    }
+    var frase = FRASES_INCENTIVO[Math.floor(Math.random() * FRASES_INCENTIVO.length)];
+    feedback.textContent = (detalhes.estourouTempo ? 'Tempo esgotado! O goleiro defendeu! ' : 'O goleiro defendeu! ') + frase;
+    // Incentivo visual dentro do campo, em area segura (nao sai do quadro).
+    var incentivo = document.getElementById('incentivo-jogo');
+    incentivo.textContent = frase;
+    incentivo.hidden = false;
+    incentivo.classList.remove('animar'); void incentivo.offsetWidth; incentivo.classList.add('animar');
     Narracao.falar(detalhes.estourouTempo ? 'Tempo esgotado! O goleiro defendeu.' : 'O goleiro defendeu!');
   }
 
   estado.resultadosCobrancas.push({
     zonaEscolhida: detalhes.zonaEscolhida,
     zonaCorreta: estado.zonaCorreta,
-    resultado: detalhes.foiGol ? 'gol' : 'defesa',
+    resultado: resultado,
+    motivoFora: resultado === 'fora' ? (detalhes.motivo || 'lado') : null,
+    tipoChute: detalhes.tipoChute || null,
     estourouTempo: !!detalhes.estourouTempo,
     pontos: pontosGanhos,
     tempoUsado: tempoUsadoSegundos
@@ -712,26 +1369,21 @@ function finalizarCobranca(detalhes) {
   atualizarBolinhasProgresso();
   atualizarDisplayPontuacao();
 
-  // Pausa entre uma cobranca e a proxima. Precisa ser maior que o tempo que
-  // a bola leva pra voltar pra marca do penalti (TEMPO.ANTES_DE_RESETAR, em
-  // game.js), senao a pergunta seguinte aparece com a bola ainda na rede.
-  setTimeout(function() {
-    if (estado.cobrancaAtual >= TOTAL_COBRANCAS) { irParaResultado(); }
-    else { carregarProximaPergunta(); }
+  agendarNaSessao(function() {
+    if (estado.cobrancaAtual >= TOTAL_COBRANCAS) irParaResultado();
+    else carregarProximaPergunta();
   }, PAUSA_ENTRE_COBRANCAS);
 }
 
 function atualizarDisplayPontuacao() {
   var el = document.getElementById('pontuacao-display');
-  if (el) el.innerHTML = estado.pontuacao + ' <img class="icone-cruzeiro" src="../Imagens/estrela-cruzeiro.png" alt="estrelinhas Cruzeiro">';
+  if (!el) return;
+  el.textContent = estado.pontuacao + ' ';
+  el.appendChild(criarIconeCruzeiro('Cruzeiros'));
 }
 
 // ---------- Resultado ----------
 
-// HU-07: monta o resumo de cada cobranca (zona escolhida + acerto/erro) de
-// forma compreensivel pra crianca e acessivel por texto — nunca so por
-// cor. Construido via DOM (sem innerHTML) porque os textos incluem a zona
-// escolhida pelo jogador.
 function renderizarListaCobrancas() {
   var lista = document.getElementById('lista-cobrancas');
   if (!lista) return;
@@ -739,17 +1391,23 @@ function renderizarListaCobrancas() {
 
   estado.resultadosCobrancas.forEach(function(cobranca, indice) {
     var item = document.createElement('li');
-    item.className = 'item-cobranca ' + (cobranca.resultado === 'gol' ? 'item-cobranca-gol' : 'item-cobranca-defesa');
+    var classeResultado = cobranca.resultado === 'gol' ? 'item-cobranca-gol'
+      : (cobranca.resultado === 'fora' ? 'item-cobranca-fora' : 'item-cobranca-defesa');
+    item.className = 'item-cobranca ' + classeResultado;
 
     var icone = document.createElement('span');
     icone.className = 'item-cobranca-icone';
     icone.setAttribute('aria-hidden', 'true');
-    icone.textContent = cobranca.resultado === 'gol' ? '✓' : '✗';
+    icone.textContent = cobranca.resultado === 'gol' ? '✓' : (cobranca.resultado === 'fora' ? '➤' : '✗');
     item.appendChild(icone);
 
-    var zonaTexto = cobranca.zonaEscolhida ? (ROTULO_ZONA[cobranca.zonaEscolhida] || cobranca.zonaEscolhida) : 'nenhuma zona (tempo esgotado)';
-    var resultadoTexto = cobranca.resultado === 'gol' ? 'gol' : 'defesa';
-    var textoCompleto = 'Cobrança ' + (indice + 1) + ' — ' + zonaTexto + ' — ' + resultadoTexto;
+    var zonaTexto = cobranca.zonaEscolhida ? (ROTULO_ZONA[cobranca.zonaEscolhida] || cobranca.zonaEscolhida) : null;
+    var resultadoTexto = cobranca.resultado === 'gol' ? 'gol'
+      : (cobranca.resultado === 'fora' ? (cobranca.motivoFora === 'fraco' ? 'chute fraco, não chegou ao gol'
+        : (cobranca.motivoFora === 'alto' ? 'chute por cima do gol' : 'chute para fora')) : 'defesa');
+    var textoCompleto = 'Cobrança ' + (indice + 1) + ' — ' + resultadoTexto;
+    if (zonaTexto) textoCompleto = 'Cobrança ' + (indice + 1) + ' — ' + zonaTexto + ' — ' + resultadoTexto;
+    if (cobranca.tipoChute && NOME_TIPO[cobranca.tipoChute]) textoCompleto += ' (' + NOME_TIPO[cobranca.tipoChute] + ')';
     if (cobranca.estourouTempo) textoCompleto += ' (tempo esgotado)';
 
     var texto = document.createElement('span');
@@ -761,38 +1419,65 @@ function renderizarListaCobrancas() {
   });
 }
 
+// Codigo compacto por cobranca, salvo no Firestore: G = gol, D = defesa,
+// T = defesa por tempo esgotado, F = fora.
+function codigoCobranca(c) {
+  if (c.resultado === 'gol') return 'G';
+  if (c.resultado === 'fora') return 'F';
+  return c.estourouTempo ? 'T' : 'D';
+}
+
+function montarResumoPartida() {
+  var tempoTotal = estado.resultadosCobrancas.reduce(function(s, c) { return s + (c.tempoUsado || 0); }, 0);
+  return {
+    versaoEsquema: 2,
+    faseId: estado.faseAtual,
+    dificuldadeId: estado.dificuldadeId,
+    selecaoId: estado.selecaoId,
+    gols: estado.gols,
+    totalCobrancas: TOTAL_COBRANCAS,
+    pontuacao: estado.pontuacao,
+    tempoTotalSegundos: tempoTotal,
+    resumoCobrancas: estado.resultadosCobrancas.map(codigoCobranca).join(''),
+    data: new Date().toISOString()
+  };
+}
+
 function irParaResultado() {
-  pararTimer();
-  if (estado.jogoPenalti) { estado.jogoPenalti.destruir(); estado.jogoPenalti = null; }
+  var fase = Progressao.obterFase(estado.faseAtual);
+  var resumo = montarResumoPartida();
+  encerrarJogoEmAndamento(); // invalida a sessao: nada mais da partida roda
 
-  // Registra progressao
-  var resultadoProgressao = Progressao.registrarResultado(estado.faseAtual, estado.gols, estado.pontuacao);
+  var resultadoProgressao = Progressao.registrarResultado(fase.id, estado.gols, estado.pontuacao);
 
-  // Os pontos da fase viram Cruzeiros na carteira (Firestore). Se a carteira
-  // nao pôde ser lida, Loja.creditar() se recusa a somar — melhor nao creditar
-  // do que gravar por cima de um saldo desconhecido e apagar o que ela tinha.
-  Loja.creditar(estado.pontuacao);
+  document.getElementById('titulo-resultado').textContent = fase.tituloResultado;
+  document.getElementById('placar-final').textContent = estado.gols + ' / ' + fase.cobrancas;
+  var pontuacaoFinal = document.getElementById('pontuacao-final');
+  pontuacaoFinal.textContent = estado.pontuacao + ' ';
+  pontuacaoFinal.appendChild(criarIconeCruzeiro(''));
+  pontuacaoFinal.appendChild(document.createTextNode(estado.pontuacao === 1 ? 'Cruzeiro' : 'Cruzeiros'));
 
-  // Manda o resultado pro painel do professor, se a crianca estiver na sala.
+  // Os Cruzeiros da partida vao para a carteira (gastos na Loja).
+  ultimoGanho = estado.pontuacao;
+  if (typeof Carteira !== 'undefined') Carteira.adicionar(estado.pontuacao);
+
+  // HU-14: manda o resultado pro painel do professor, se estiver numa sala.
   if (Sala.estaNaSala()) {
-    Sala.reportarResultado(estado.token, {
+    Sala.reportarResultado({
       apelido: estado.apelido || 'Craque',
       avatarSeed: estado.avatarSeed,
       gols: estado.gols,
       pontuacao: estado.pontuacao,
-      fase: estado.faseAtual
+      fase: fase.id
     });
   }
+  atualizarGanhoCarteira();
 
-  document.getElementById('placar-final').textContent = estado.gols + ' / ' + TOTAL_COBRANCAS;
-  document.getElementById('pontuacao-final').innerHTML = estado.pontuacao + ' <img class="icone-cruzeiro" src="../Imagens/estrela-cruzeiro.png" alt="">Cruzeiro';
-
-  var mensagem = sortearMensagemResultado(estado.gols);
+  var mensagem = sortearMensagemResultado(estado.gols, fase.cobrancas);
   document.getElementById('resumo-resultado').textContent = mensagem;
 
   renderizarListaCobrancas();
 
-  // Mostra/esconde mensagem de desbloqueio
   var elDesbloqueio = document.getElementById('mensagem-desbloqueio');
   if (elDesbloqueio) {
     if (resultadoProgressao.desbloqueou && resultadoProgressao.proximaFase) {
@@ -810,36 +1495,38 @@ function irParaResultado() {
   }
 
   try {
-    // HU-07: registro versionado, tolerante a leitura futura mesmo se o
-    // formato mudar de novo (quem ler, confere "versao" antes de usar).
     localStorage.setItem('mathgol_ultimo_resultado', JSON.stringify({
       versao: VERSAO_ULTIMO_RESULTADO,
-      dados: {
-        apelido: estado.apelido, selecaoId: estado.selecaoId,
-        dificuldadeId: estado.dificuldadeId, faseId: estado.faseAtual,
-        gols: estado.gols, pontuacao: estado.pontuacao,
-        cobrancas: estado.resultadosCobrancas,
-        data: new Date().toISOString()
-      }
+      dados: Object.assign({ apelido: estado.apelido, cobrancas: estado.resultadosCobrancas }, resumo)
     }));
   } catch (e) {}
 
-  if (window.FirebaseMathGol && estado.token) {
-    window.FirebaseMathGol.salvarProgresso(estado.token, {
-      apelido: estado.apelido, selecaoId: estado.selecaoId,
-      dificuldadeId: estado.dificuldadeId, faseId: estado.faseAtual,
-      gols: estado.gols, pontuacao: estado.pontuacao
-    });
+  if (window.FirebaseMathGol) {
+    window.FirebaseMathGol.salvarProgresso(resumo);
   }
 
   Narracao.falar(mensagem);
   mostrarTela('tela-resultado');
 }
 
+var ultimoGanho = 0;
+
+function atualizarGanhoCarteira() {
+  var el = document.getElementById('ganho-carteira');
+  if (!el || typeof Carteira === 'undefined') return;
+  el.textContent = (ultimoGanho > 0 ? '+' + Carteira.formatar(ultimoGanho) + ' na sua carteira! ' : '') +
+    'Saldo: ' + Carteira.formatar(Carteira.saldo()) + '.';
+}
+
 function initResultado() {
   document.getElementById('botao-voltar-menu').addEventListener('click', function() {
     SFX.clique();
     sairParaMenu();
+  });
+  var botaoLojaResultado = document.getElementById('botao-loja-resultado');
+  if (botaoLojaResultado) botaoLojaResultado.addEventListener('click', function() {
+    SFX.clique();
+    if (typeof Loja !== 'undefined') Loja.abrir('tela-resultado');
   });
   var botaoProxFase = document.getElementById('botao-proxima-fase');
   if (botaoProxFase) {
@@ -850,15 +1537,95 @@ function initResultado() {
   }
 }
 
+// ======================================================================
+// Modais acessiveis (acessibilidade, creditos, backup)
+// ======================================================================
+// role="dialog" + aria-modal + aria-labelledby ficam no HTML. Aqui: foco
+// entra no modal, Tab fica preso dentro dele, Escape fecha, o foco volta
+// pro botao que abriu e o fundo fica inerte (inert) enquanto aberto.
+
+var Modal = (function() {
+  var aberto = null; // { sobreposicao, origem, aoFechar }
+  var SELETOR_FOCAVEL = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+  function fundo() {
+    return [document.getElementById('app'), document.querySelector('.rodape')].filter(Boolean);
+  }
+
+  function focaveis(sobreposicao) {
+    return Array.prototype.filter.call(sobreposicao.querySelectorAll(SELETOR_FOCAVEL), function(el) {
+      return !el.hidden && el.offsetParent !== null && el.style.display !== 'none';
+    });
+  }
+
+  function abrir(sobreposicao, origem, opcoes) {
+    if (aberto) fechar();
+    aberto = { sobreposicao: sobreposicao, origem: origem || document.activeElement, aoFechar: opcoes && opcoes.aoFechar };
+    sobreposicao.classList.add('aberta');
+    sobreposicao.removeAttribute('aria-hidden');
+    fundo().forEach(function(el) { el.setAttribute('inert', ''); el.setAttribute('aria-hidden', 'true'); });
+    var dialogo = sobreposicao.querySelector('[role="dialog"]');
+    var alvo = dialogo && dialogo.querySelector('h2');
+    if (alvo) {
+      if (!alvo.hasAttribute('tabindex')) alvo.setAttribute('tabindex', '-1');
+      alvo.focus();
+    } else {
+      var lista = focaveis(sobreposicao);
+      if (lista.length) lista[0].focus();
+    }
+  }
+
+  function fechar() {
+    if (!aberto) return;
+    var atual = aberto;
+    aberto = null;
+    atual.sobreposicao.classList.remove('aberta');
+    atual.sobreposicao.setAttribute('aria-hidden', 'true');
+    fundo().forEach(function(el) { el.removeAttribute('inert'); el.removeAttribute('aria-hidden'); });
+    if (atual.aoFechar) atual.aoFechar();
+    if (atual.origem && typeof atual.origem.focus === 'function') atual.origem.focus();
+  }
+
+  document.addEventListener('keydown', function(ev) {
+    if (!aberto) return;
+    if (ev.key === 'Escape' || ev.key === 'Esc') {
+      ev.preventDefault();
+      fechar();
+      return;
+    }
+    if (ev.key !== 'Tab') return;
+    var lista = focaveis(aberto.sobreposicao);
+    if (!lista.length) { ev.preventDefault(); return; }
+    var primeiro = lista[0], ultimo = lista[lista.length - 1];
+    var ativo = document.activeElement;
+    var dentro = aberto.sobreposicao.contains(ativo);
+    // Foco no titulo (tabindex=-1) nao esta na lista: Shift+Tab vai pro ultimo.
+    if (ev.shiftKey && (ativo === primeiro || !dentro || lista.indexOf(ativo) === -1)) {
+      ev.preventDefault(); ultimo.focus();
+    } else if (!ev.shiftKey && (ativo === ultimo || !dentro)) {
+      ev.preventDefault(); primeiro.focus();
+    }
+  });
+
+  // Clique fora do painel (no fundo escurecido) fecha.
+  function ligarFundo(sobreposicao) {
+    sobreposicao.addEventListener('click', function(ev) {
+      if (ev.target === sobreposicao && aberto && aberto.sobreposicao === sobreposicao) fechar();
+    });
+  }
+
+  return { abrir: abrir, fechar: fechar, ligarFundo: ligarFundo, estaAberto: function() { return !!aberto; } };
+})();
+
 // ---------- Acessibilidade ----------
 
 function carregarPreferenciasAcessibilidade() {
   var prefs = {};
-  try { prefs = JSON.parse(localStorage.getItem('mathgol_acessibilidade') || '{}'); } catch(e) {}
+  try { prefs = JSON.parse(localStorage.getItem('mathgol_acessibilidade') || '{}') || {}; } catch(e) {}
   document.body.classList.toggle('alto-contraste', !!prefs.altoContraste);
   document.body.classList.toggle('espaco-dislexia', !!prefs.espacoDislexia);
-  Narracao.alternar(prefs.narracaoAtiva !== undefined ? prefs.narracaoAtiva : true);
-  SFX.alternar(prefs.sfxAtivo !== undefined ? prefs.sfxAtivo : true);
+  Narracao.alternar(prefs.narracaoAtiva !== undefined ? !!prefs.narracaoAtiva : true);
+  SFX.alternar(prefs.sfxAtivo !== undefined ? !!prefs.sfxAtivo : true);
   document.getElementById('opcao-alto-contraste').checked = !!prefs.altoContraste;
   document.getElementById('opcao-espaco-dislexia').checked = !!prefs.espacoDislexia;
   document.getElementById('opcao-narracao').checked = prefs.narracaoAtiva !== false;
@@ -883,415 +1650,15 @@ function salvarPreferenciasAcessibilidade() {
 
 function initAcessibilidade() {
   var sobreposicao = document.getElementById('sobreposicao-acessibilidade');
-  document.getElementById('botao-acessibilidade').addEventListener('click', function() { sobreposicao.classList.add('aberta'); });
-  document.getElementById('botao-fechar-acessibilidade').addEventListener('click', function() { sobreposicao.classList.remove('aberta'); });
-  sobreposicao.addEventListener('click', function(ev) { if (ev.target === sobreposicao) sobreposicao.classList.remove('aberta'); });
+  var botaoAbrir = document.getElementById('botao-acessibilidade');
+  botaoAbrir.addEventListener('click', function() { Modal.abrir(sobreposicao, botaoAbrir); });
+  document.getElementById('botao-fechar-acessibilidade').addEventListener('click', function() { Modal.fechar(); });
+  Modal.ligarFundo(sobreposicao);
   ['opcao-alto-contraste', 'opcao-espaco-dislexia', 'opcao-narracao', 'opcao-sfx'].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.addEventListener('change', salvarPreferenciasAcessibilidade);
   });
   carregarPreferenciasAcessibilidade();
-}
-
-// ---------- HU-14: Sala (lado da criança) ----------
-
-function atualizarFaixaSala() {
-  var faixa = document.getElementById('faixa-sala');
-  if (!faixa) return;
-  if (!Sala.estaNaSala()) { faixa.hidden = true; return; }
-  faixa.hidden = false;
-  faixa.innerHTML = '🚪 Você está na sala <strong>' + Sala.nome() + '</strong> · ' +
-                    rotuloNivel(Sala.nivelDaSala()) +
-                    ' <button id="botao-sair-sala" class="link-sair" type="button">sair</button>';
-  var sair = document.getElementById('botao-sair-sala');
-  if (sair) {
-    sair.addEventListener('click', function() {
-      SFX.clique();
-      Sala.sair();
-      atualizarFaixaSala();
-    });
-  }
-}
-
-function initEntrarSala() {
-  var abrir = document.getElementById('botao-entrar-sala');
-  var confirmar = document.getElementById('botao-confirmar-sala');
-  var voltar = document.getElementById('botao-voltar-entrar-sala');
-  var campo = document.getElementById('input-sala');
-  var aviso = document.getElementById('aviso-entrar-sala');
-
-  function avisar(txt, classe) {
-    aviso.textContent = txt;
-    aviso.className = 'loja-aviso' + (classe ? ' ' + classe : '');
-  }
-
-  if (abrir) abrir.addEventListener('click', function() {
-    SFX.clique(); avisar(''); campo.value = ''; mostrarTela('tela-entrar-sala');
-  });
-  if (voltar) voltar.addEventListener('click', function() { SFX.clique(); mostrarTela('tela-menu'); });
-
-  if (confirmar) confirmar.addEventListener('click', async function() {
-    SFX.clique();
-    var cod = campo.value.trim();
-    if (!cod) { avisar('Digite o código primeiro.', 'erro'); return; }
-
-    avisar('Procurando a sala...');
-    var r = await Sala.entrar(cod, estado.token, {
-      apelido: estado.apelido || 'Craque',
-      avatarSeed: estado.avatarSeed
-    });
-
-    if (!r.ok) {
-      avisar(r.motivo === 'offline'
-        ? 'Sem conexão com o servidor.'
-        : 'Sala não encontrada. Confira as letras.', 'erro');
-      return;
-    }
-    avisar('Pronto! Você entrou em ' + r.sala.nome + '.', 'ok');
-    atualizarFaixaSala();
-    setTimeout(function() { mostrarTela('tela-menu'); }, 1200);
-  });
-}
-
-// ---------- HU-14: Painel do professor ----------
-
-function preencherSelectNiveis(select, selecionado) {
-  select.innerHTML = '';
-  NIVEIS.forEach(function(nv) {
-    var o = document.createElement('option');
-    o.value = nv.id;
-    o.textContent = nv.id + ' — ' + nv.nome + ' (' + nv.descricao + ')';
-    if (nv.id === selecionado) o.selected = true;
-    select.appendChild(o);
-  });
-}
-
-function tiposMarcados() {
-  var marcados = [];
-  document.querySelectorAll('#filtros-tipo input:checked').forEach(function(i) {
-    marcados.push(i.value);
-  });
-  return marcados;
-}
-
-function renderizarAlunos(lista) {
-  var ul = document.getElementById('lista-alunos');
-  var contagem = document.getElementById('prof-contagem');
-  contagem.textContent = '(' + lista.length + ')';
-
-  if (!lista.length) {
-    ul.innerHTML = '<li class="aluno-vazio">Ninguém entrou ainda. Dite o código para a turma.</li>';
-    return;
-  }
-
-  // Quem fez mais gols primeiro; empate decide pela pontuação.
-  lista.sort(function(a, b) {
-    return (b.gols || 0) - (a.gols || 0) || (b.pontuacao || 0) - (a.pontuacao || 0);
-  });
-
-  ul.innerHTML = '';
-  lista.forEach(function(al) {
-    var li = document.createElement('li');
-    li.className = 'item-aluno';
-    li.innerHTML =
-      '<img class="aluno-avatar" src="' + gerarUrlAvatar(al.avatarSeed || 'Pele') + '" alt="" loading="lazy">' +
-      '<span class="aluno-nome">' + (al.apelido || 'Craque') + '</span>' +
-      '<span class="aluno-placar">' + (al.gols || 0) + ' ⚽</span>' +
-      '<span class="aluno-pontos">' + (al.pontuacao || 0) + '</span>';
-    ul.appendChild(li);
-  });
-}
-
-function mostrarPainelDaSala(sala) {
-  document.getElementById('prof-sem-sala').hidden = true;
-  document.getElementById('prof-com-sala').hidden = false;
-  document.getElementById('codigo-sala').textContent = sala.codigo;
-  document.getElementById('prof-nivel-atual').textContent = rotuloNivel(sala.nivel);
-
-  var selAtivo = document.getElementById('select-nivel-ativo');
-  preencherSelectNiveis(selAtivo, sala.nivel);
-  selAtivo.onchange = async function() {
-    var novo = parseInt(selAtivo.value, 10);
-    await Sala.mudarNivel(sala.codigo, novo, sala.tipos);
-    sala.nivel = novo;
-    document.getElementById('prof-nivel-atual').textContent = rotuloNivel(novo);
-  };
-
-  Sala.observar(sala.codigo, renderizarAlunos);
-  renderizarAlunos([]);
-}
-
-function initProfessor() {
-  var abrir = document.getElementById('botao-professor');
-  var criar = document.getElementById('botao-criar-sala');
-  var abrirExistente = document.getElementById('botao-abrir-sala');
-  var fechar = document.getElementById('botao-fechar-painel');
-  var aviso = document.getElementById('aviso-prof');
-
-  function avisar(txt, classe) {
-    aviso.textContent = txt;
-    aviso.className = 'loja-aviso' + (classe ? ' ' + classe : '');
-  }
-
-  // Caixinhas de tipo de conta — deixam o professor restringir a sala a,
-  // por exemplo, só subtração, sem mexer em código.
-  var caixa = document.getElementById('filtros-tipo');
-  if (caixa) {
-    Object.keys(TIPOS_OPERACAO).forEach(function(t) {
-      var id = 'tipo-' + t;
-      var w = document.createElement('label');
-      w.className = 'chip-tipo';
-      w.setAttribute('for', id);
-      w.innerHTML = '<input type="checkbox" id="' + id + '" value="' + t + '"> ' +
-                    TIPOS_OPERACAO[t].simbolo + ' ' + TIPOS_OPERACAO[t].nome;
-      caixa.appendChild(w);
-    });
-  }
-
-  if (abrir) abrir.addEventListener('click', function() {
-    SFX.clique();
-    avisar('');
-    preencherSelectNiveis(document.getElementById('select-nivel-sala'), 1);
-    document.getElementById('prof-sem-sala').hidden = false;
-    document.getElementById('prof-com-sala').hidden = true;
-    mostrarTela('tela-professor');
-  });
-
-  if (criar) criar.addEventListener('click', async function() {
-    SFX.selecionar();
-    if (!window.FirebaseMathGol || !estado.token) { avisar('Sem conexão com o servidor.', 'erro'); return; }
-
-    avisar('Criando a sala...');
-    var sala = await Sala.criar(estado.token, {
-      nome: (document.getElementById('input-nome-turma').value || '').trim() || 'Turma',
-      nivel: parseInt(document.getElementById('select-nivel-sala').value, 10) || 1,
-      tipos: tiposMarcados()
-    });
-
-    if (!sala) { avisar('Não consegui criar a sala. Tente de novo.', 'erro'); return; }
-    mostrarPainelDaSala(sala);
-  });
-
-  if (abrirExistente) abrirExistente.addEventListener('click', async function() {
-    SFX.clique();
-    var cod = prompt('Código da sala:');
-    if (!cod) return;
-    var sala = await window.FirebaseMathGol.buscarSala(cod);
-    if (!sala) { avisar('Sala não encontrada.', 'erro'); return; }
-    mostrarPainelDaSala(sala);
-  });
-
-  if (fechar) fechar.addEventListener('click', function() {
-    SFX.clique();
-    Sala.pararDeObservar(); // listener do Firestore nao pode ficar aberto
-    mostrarTela('tela-menu');
-  });
-}
-
-// ---------- Loja ----------
-
-var abaLojaAtiva = 'clubes';
-
-var ABAS_LOJA = [
-  { id: 'clubes',      rotulo: '⚽ Brasileirão' },
-  { id: 'selecoes',    rotulo: '🌎 Seleções' },
-  { id: 'personagens', rotulo: '🦸 Nomes' },
-  { id: 'animais',     rotulo: '🐯 Animais' },
-  { id: 'avatares',    rotulo: '🙂 Avatares' }
-];
-
-function avisoLoja(texto, classe) {
-  var el = document.getElementById('loja-aviso');
-  if (!el) return;
-  el.textContent = texto;
-  el.className = 'loja-aviso' + (classe ? ' ' + classe : '');
-}
-
-function montarAbasLoja() {
-  var caixa = document.getElementById('abas-loja');
-  caixa.innerHTML = '';
-  ABAS_LOJA.forEach(function(aba) {
-    var b = document.createElement('button');
-    b.className = 'aba-loja';
-    b.type = 'button';
-    b.setAttribute('role', 'tab');
-    b.setAttribute('aria-selected', aba.id === abaLojaAtiva ? 'true' : 'false');
-    b.textContent = aba.rotulo;
-    b.addEventListener('click', function() {
-      SFX.clique();
-      abaLojaAtiva = aba.id;
-      montarAbasLoja();
-      montarGradeLoja();
-    });
-    caixa.appendChild(b);
-  });
-}
-
-// Devolve { tipo, itens[] } da aba ativa. Cada item tem id, nome e um
-// pedaco de HTML pra miniatura.
-function itensDaAba() {
-  if (abaLojaAtiva === 'clubes') {
-    return {
-      tipo: 'clube',
-      itens: CLUBES_BRASILEIRAO.map(function(c) {
-        return { id: c.id, nome: c.nome, extra: c.uf, mini: Loja.escudo(c, 54) };
-      })
-    };
-  }
-  if (abaLojaAtiva === 'selecoes') {
-    return {
-      tipo: 'selecao',
-      itens: SELECOES.map(function(s) {
-        var cod = s.bandeira || '';
-        var mini = cod
-          ? '<img class="bandeira-loja" src="https://flagcdn.com/w80/' + cod + '.png" alt="">'
-          : '<span class="chip-nome-loja">' + s.nome.charAt(0) + '</span>';
-        return { id: s.id, nome: s.nome, mini: mini };
-      })
-    };
-  }
-  if (abaLojaAtiva === 'avatares') {
-    var seeds = [];
-    CATEGORIAS_AVATAR.forEach(function(cat) {
-      cat.seeds.forEach(function(s) { if (seeds.indexOf(s) === -1) seeds.push(s); });
-    });
-    return {
-      tipo: 'avatar',
-      itens: seeds.map(function(s) {
-        return { id: s, nome: s, mini: '<img class="avatar-loja" src="' + gerarUrlAvatar(s) + '" alt="" loading="lazy">' };
-      })
-    };
-  }
-  var lista = abaLojaAtiva === 'personagens' ? PERSONAGENS : ANIMAIS;
-  var tipo = abaLojaAtiva === 'personagens' ? 'personagem' : 'animal';
-  return {
-    tipo: tipo,
-    itens: lista.map(function(n) {
-      return { id: n, nome: n, mini: '<span class="chip-nome-loja">' + n + '</span>' };
-    })
-  };
-}
-
-function montarGradeLoja() {
-  var grade = document.getElementById('grade-loja');
-  grade.innerHTML = '';
-
-  var dados = itensDaAba();
-  var preco = precoDoItem(dados.tipo);
-
-  dados.itens.forEach(function(item) {
-    var jaTem = Loja.liberado(dados.tipo, item.id);
-    var podePagar = Loja.estaPronta() && Loja.saldo() >= preco;
-
-    var b = document.createElement('button');
-    b.className = 'item-loja' + (jaTem ? ' tem' : (podePagar ? '' : ' caro'));
-    b.type = 'button';
-    b.disabled = jaTem;
-
-    var selo = jaTem
-      ? '<span class="item-preco">✓ Tem</span>'
-      : '<span class="item-preco"><img class="icone-cruzeiro" src="../Imagens/estrela-cruzeiro.png" alt="">' + preco + '</span>';
-
-    b.innerHTML =
-      item.mini +
-      '<span class="item-nome">' + item.nome + '</span>' +
-      (item.extra ? '<span class="item-uf">' + item.extra + '</span>' : '') +
-      selo;
-
-    b.setAttribute('aria-label',
-      jaTem ? item.nome + ' — você já tem'
-            : 'Comprar ' + item.nome + ' por ' + preco + ' Cruzeiros');
-
-    if (!jaTem) {
-      b.addEventListener('click', function() { tentarComprar(dados.tipo, item); });
-    }
-    grade.appendChild(b);
-  });
-}
-
-async function tentarComprar(tipo, item) {
-  SFX.clique();
-  var r = await Loja.comprar(tipo, item.id);
-
-  if (r.ok) {
-    SFX.gol();
-    avisoLoja('🎉 ' + item.nome + ' é seu! Restam ' + r.saldo + ' Cruzeiros.', 'ok');
-    Narracao.falar(item.nome + ' comprado!');
-    montarGradeLoja();
-    return;
-  }
-
-  if (r.motivo === 'sem-saldo') {
-    avisoLoja('Faltam ' + r.falta + ' Cruzeiros. Faça mais gols pra comprar!', 'erro');
-  } else if (r.motivo === 'offline') {
-    avisoLoja('Não consegui falar com o servidor. Tente de novo em instantes.', 'erro');
-  } else if (r.motivo === 'falha-salvar') {
-    avisoLoja('A compra não foi salva. Seus Cruzeiros continuam com você.', 'erro');
-  }
-}
-
-async function irParaLoja() {
-  mostrarTela('tela-loja');
-  avisoLoja('');
-  montarAbasLoja();
-  montarGradeLoja();
-
-  if (!Loja.estaPronta() && estado.token) {
-    avisoLoja('Carregando sua carteira...');
-    await Loja.carregar(estado.token);
-    montarGradeLoja();
-    avisoLoja(Loja.estaPronta() ? '' : 'Sem conexão com o servidor — a loja está só pra olhar agora.', 'erro');
-  }
-
-  // Código do craque
-  if (estado.token && window.FirebaseMathGol) {
-    var codigo = await window.FirebaseMathGol.obterOuCriarCodigo(estado.token);
-    var el = document.getElementById('codigo-craque');
-    if (el) el.textContent = codigo || 'indisponível';
-  }
-}
-
-function initLoja() {
-  var botaoAbrir = document.getElementById('botao-loja');
-  if (botaoAbrir) {
-    botaoAbrir.addEventListener('click', function() { SFX.selecionar(); irParaLoja(); });
-  }
-  var botaoSair = document.getElementById('botao-sair-loja');
-  if (botaoSair) {
-    botaoSair.addEventListener('click', function() { SFX.clique(); mostrarTela('tela-menu'); });
-  }
-
-  var botaoCodigo = document.getElementById('botao-usar-codigo');
-  var campo = document.getElementById('input-codigo');
-  var aviso = document.getElementById('codigo-aviso');
-
-  function mostrarAvisoCodigo(txt, classe) {
-    if (!aviso) return;
-    aviso.textContent = txt;
-    aviso.className = 'loja-aviso' + (classe ? ' ' + classe : '');
-  }
-
-  if (botaoCodigo && campo) {
-    botaoCodigo.addEventListener('click', async function() {
-      SFX.clique();
-      var digitado = campo.value.trim();
-      if (!digitado) { mostrarAvisoCodigo('Digite o código primeiro.', 'erro'); return; }
-      if (!window.FirebaseMathGol) { mostrarAvisoCodigo('Sem conexão com o servidor.', 'erro'); return; }
-
-      mostrarAvisoCodigo('Procurando...');
-      var novoToken = await window.FirebaseMathGol.recuperarTokenPorCodigo(digitado);
-      if (!novoToken) { mostrarAvisoCodigo('Código não encontrado. Confira as letras.', 'erro'); return; }
-
-      estado.token = novoToken;
-      try { localStorage.setItem('mathgol_token', novoToken); } catch (e) {}
-      await Loja.carregar(novoToken);
-      montarGradeLoja();
-      campo.value = '';
-      mostrarAvisoCodigo('Pronto! Você voltou com ' + Loja.saldo() + ' Cruzeiros.', 'ok');
-      var el = document.getElementById('codigo-craque');
-      if (el) el.textContent = digitado.toUpperCase();
-    });
-  }
 }
 
 // ---------- Creditos ----------
@@ -1300,57 +1667,8 @@ function initCreditos() {
   var sobreposicao = document.getElementById('sobreposicao-creditos');
   var botaoAbrir = document.getElementById('botao-creditos');
   var botaoFechar = document.getElementById('botao-fechar-creditos');
-
-  if (botaoAbrir) {
-    botaoAbrir.addEventListener('click', function() {
-      SFX.clique();
-      sobreposicao.classList.add('aberta');
-    });
-  }
-  if (botaoFechar) {
-    botaoFechar.addEventListener('click', function() {
-      SFX.clique();
-      sobreposicao.classList.remove('aberta');
-    });
-  }
-  sobreposicao.addEventListener('click', function(ev) {
-    if (ev.target === sobreposicao) sobreposicao.classList.remove('aberta');
-  });
-
-  // "Sobre mim": cada botao abre a bio do seu integrante. Abrir uma fecha
-  // as outras (acordeao), pra o painel nao virar um paredao de texto.
   var botoesSobre = sobreposicao.querySelectorAll('.botao-sobre-mim');
-  botoesSobre.forEach(function(botao) {
-    botao.addEventListener('click', function() {
-      SFX.clique();
-      var bio = document.getElementById(botao.getAttribute('aria-controls'));
-      var vaiAbrir = botao.getAttribute('aria-expanded') !== 'true';
 
-      // Fecha todas antes de abrir a escolhida
-      botoesSobre.forEach(function(outro) {
-        var outraBio = document.getElementById(outro.getAttribute('aria-controls'));
-        outro.setAttribute('aria-expanded', 'false');
-        if (outraBio) outraBio.hidden = true;
-        var card = outro.closest('.dev-card');
-        if (card) card.classList.remove('aberto');
-      });
-
-      if (vaiAbrir) {
-        botao.setAttribute('aria-expanded', 'true');
-        if (bio) bio.hidden = false;
-        var cardAtual = botao.closest('.dev-card');
-        if (cardAtual) {
-          cardAtual.classList.add('aberto');
-          // Garante que a bio recem-aberta fique visivel no painel rolavel
-          setTimeout(function() {
-            cardAtual.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-          }, 60);
-        }
-      }
-    });
-  });
-
-  // Ao fechar o modal, recolhe todas as bios pra abrir sempre limpo
   function recolherBios() {
     botoesSobre.forEach(function(botao) {
       var bio = document.getElementById(botao.getAttribute('aria-controls'));
@@ -1360,9 +1678,39 @@ function initCreditos() {
       if (card) card.classList.remove('aberto');
     });
   }
-  if (botaoFechar) botaoFechar.addEventListener('click', recolherBios);
-  sobreposicao.addEventListener('click', function(ev) {
-    if (ev.target === sobreposicao) recolherBios();
+
+  if (botaoAbrir) {
+    botaoAbrir.addEventListener('click', function() {
+      SFX.clique();
+      Modal.abrir(sobreposicao, botaoAbrir, { aoFechar: recolherBios });
+    });
+  }
+  if (botaoFechar) {
+    botaoFechar.addEventListener('click', function() {
+      SFX.clique();
+      Modal.fechar();
+    });
+  }
+  Modal.ligarFundo(sobreposicao);
+
+  botoesSobre.forEach(function(botao) {
+    botao.addEventListener('click', function() {
+      SFX.clique();
+      var bio = document.getElementById(botao.getAttribute('aria-controls'));
+      var vaiAbrir = botao.getAttribute('aria-expanded') !== 'true';
+      recolherBios();
+      if (vaiAbrir) {
+        botao.setAttribute('aria-expanded', 'true');
+        if (bio) bio.hidden = false;
+        var cardAtual = botao.closest('.dev-card');
+        if (cardAtual) {
+          cardAtual.classList.add('aberto');
+          setTimeout(function() {
+            cardAtual.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          }, 60);
+        }
+      }
+    });
   });
 }
 
@@ -1380,47 +1728,56 @@ function baixarJSON(dados, nomeArquivo) {
   URL.revokeObjectURL(url);
 }
 
+var timerStatusBackup = null;
 function mostrarStatusBackup(texto, erro) {
   var el = document.getElementById('backup-status');
   if (!el) return;
   el.textContent = texto;
   el.classList.toggle('erro', !!erro);
-  // Limpa apos 5 segundos
-  setTimeout(function() { el.textContent = ''; }, 5000);
+  if (timerStatusBackup) clearTimeout(timerStatusBackup);
+  timerStatusBackup = setTimeout(function() { el.textContent = ''; }, 6000);
 }
 
 function exportarProgressoLocal() {
   var backup = {
-    versao: 1,
-    tipo: 'mathgol-backup-local',
+    versao: ValidacaoBackup.VERSAO_BACKUP_LOCAL,
+    tipo: ValidacaoBackup.TIPO_LOCAL,
     exportadoEm: new Date().toISOString(),
     dados: {}
   };
-
   try {
-    // Coleta todos os dados do localStorage relacionados ao MathGol
-    var chaves = ['mathgol_token', 'mathgol_acessibilidade', 'mathgol_ultimo_resultado',
-                  'mathgol_progresso', 'mathgol_fases_desbloqueadas'];
-    for (var i = 0; i < chaves.length; i++) {
-      var valor = localStorage.getItem(chaves[i]);
-      if (valor !== null) {
-        backup.dados[chaves[i]] = valor;
-      }
-    }
-    // Busca qualquer outra chave mathgol_
-    for (var j = 0; j < localStorage.length; j++) {
-      var chave = localStorage.key(j);
-      if (chave && chave.indexOf('mathgol_') === 0 && !backup.dados[chave]) {
-        backup.dados[chave] = localStorage.getItem(chave);
-      }
-    }
+    // So as chaves conhecidas. O antigo "mathgol_token" NAO e exportado:
+    // ele nunca foi credencial e nao da acesso a nada.
+    ValidacaoBackup.CHAVES_LOCAIS_PERMITIDAS.forEach(function(chave) {
+      var valor = localStorage.getItem(chave);
+      if (valor !== null) backup.dados[chave] = valor;
+    });
   } catch (e) {
     console.warn('Erro ao ler localStorage:', e);
   }
-
   var dataStr = new Date().toISOString().slice(0, 10);
   baixarJSON(backup, 'mathgol-backup-local-' + dataStr + '.json');
   mostrarStatusBackup('✅ Backup local exportado com sucesso!');
+}
+
+// Restaura um arquivo de backup ja lido (texto). Separado do FileReader pra
+// ficar testavel. Retorna uma Promise<string> com a mensagem de sucesso,
+// ou rejeita com uma mensagem amigavel.
+function restaurarBackupDeTexto(texto, tamanhoBytes) {
+  var analise = ValidacaoBackup.analisarArquivo(texto, tamanhoBytes);
+  if (!analise.ok) return Promise.reject(new Error(analise.erro));
+
+  if (analise.tipo === 'local') {
+    try {
+      analise.entradas.forEach(function(entrada) { localStorage.setItem(entrada.chave, entrada.valor); });
+    } catch (e) {
+      return Promise.reject(new Error('Não foi possível gravar os dados neste navegador.'));
+    }
+    return Promise.resolve('local');
+  }
+
+  if (!window.FirebaseMathGol) return Promise.reject(new Error('A nuvem (Firebase) não está disponível agora.'));
+  return window.FirebaseMathGol.restaurarDadosFirebase(analise.dados).then(function() { return 'firebase'; });
 }
 
 function initBackup() {
@@ -1435,20 +1792,17 @@ function initBackup() {
   if (botaoAbrir) {
     botaoAbrir.addEventListener('click', function() {
       SFX.clique();
-      sobreposicao.classList.add('aberta');
+      Modal.abrir(sobreposicao, botaoAbrir);
     });
   }
   if (botaoFechar) {
     botaoFechar.addEventListener('click', function() {
       SFX.clique();
-      sobreposicao.classList.remove('aberta');
+      Modal.fechar();
     });
   }
-  sobreposicao.addEventListener('click', function(ev) {
-    if (ev.target === sobreposicao) sobreposicao.classList.remove('aberta');
-  });
+  Modal.ligarFundo(sobreposicao);
 
-  // Exportar progresso local (localStorage)
   if (botaoLocal) {
     botaoLocal.addEventListener('click', function() {
       SFX.selecionar();
@@ -1456,26 +1810,24 @@ function initBackup() {
     });
   }
 
-  // Exportar dados do Firebase
   if (botaoFirebase) {
     botaoFirebase.addEventListener('click', function() {
       SFX.selecionar();
-      if (!window.FirebaseMathGol || !estado.token) {
+      if (!window.FirebaseMathGol) {
         mostrarStatusBackup('⚠️ Firebase não disponível.', true);
         return;
       }
       mostrarStatusBackup('⏳ Exportando dados do Firebase...');
-      window.FirebaseMathGol.exportarDadosFirebase(estado.token).then(function(dados) {
+      window.FirebaseMathGol.exportarDadosFirebase().then(function(dados) {
         var dataStr = new Date().toISOString().slice(0, 10);
         baixarJSON(dados, 'mathgol-backup-firebase-' + dataStr + '.json');
         mostrarStatusBackup('✅ Backup do Firebase exportado!');
-      }).catch(function(erro) {
-        mostrarStatusBackup('❌ Erro ao exportar: ' + erro.message, true);
+      }).catch(function() {
+        mostrarStatusBackup('❌ Não foi possível exportar os dados da nuvem agora.', true);
       });
     });
   }
 
-  // Restaurar backup
   if (botaoRestaurar) {
     botaoRestaurar.addEventListener('click', function() {
       SFX.clique();
@@ -1483,57 +1835,309 @@ function initBackup() {
     });
   }
 
+  // R10: restaurar SUBSTITUI o progresso atual, entao pede confirmacao
+  // antes de gravar (o arquivo ja foi validado neste ponto).
+  var blocoConfirmar = document.getElementById('confirmar-restauracao');
+  var botaoSimRestaurar = document.getElementById('botao-confirmar-restauracao');
+  var botaoNaoRestaurar = document.getElementById('botao-cancelar-restauracao');
+  var restauracaoPendente = null;
+
+  function esconderConfirmacao() {
+    restauracaoPendente = null;
+    if (blocoConfirmar) blocoConfirmar.hidden = true;
+  }
+
+  function executarRestauracao(texto, tamanho) {
+    restaurarBackupDeTexto(texto, tamanho).then(function(tipo) {
+      if (tipo === 'local') {
+        mostrarStatusBackup('✅ Backup local restaurado! Recarregando...');
+        setTimeout(function() { location.reload(); }, 1500);
+      } else {
+        mostrarStatusBackup('✅ Backup da nuvem restaurado!');
+      }
+    }).catch(function(erro) {
+      mostrarStatusBackup('❌ ' + (erro && erro.message ? erro.message : 'Arquivo de backup inválido.'), true);
+    });
+  }
+
+  if (botaoSimRestaurar) botaoSimRestaurar.addEventListener('click', function() {
+    if (!restauracaoPendente) return;
+    SFX.selecionar();
+    var p = restauracaoPendente;
+    esconderConfirmacao();
+    if (botaoRestaurar) botaoRestaurar.focus();
+    executarRestauracao(p.texto, p.tamanho);
+  });
+  if (botaoNaoRestaurar) botaoNaoRestaurar.addEventListener('click', function() {
+    SFX.clique();
+    esconderConfirmacao();
+    mostrarStatusBackup('Restauração cancelada. Nada foi alterado.');
+    if (botaoRestaurar) botaoRestaurar.focus();
+  });
+  // Fechar o modal descarta a confirmacao pendente.
+  if (botaoFechar) botaoFechar.addEventListener('click', esconderConfirmacao);
+  sobreposicao.addEventListener('click', function(ev) { if (ev.target === sobreposicao) esconderConfirmacao(); });
+  document.addEventListener('keydown', function(ev) { if (ev.key === 'Escape') esconderConfirmacao(); });
+
   if (inputRestaurar) {
     inputRestaurar.addEventListener('change', function(ev) {
-      var arquivo = ev.target.files[0];
+      var arquivo = ev.target.files && ev.target.files[0];
+      inputRestaurar.value = '';
+      esconderConfirmacao();
       if (!arquivo) return;
-
+      if (arquivo.size > ValidacaoBackup.TAMANHO_MAXIMO_BYTES) {
+        mostrarStatusBackup('❌ Arquivo grande demais para ser um backup do MathGol.', true);
+        return;
+      }
       var leitor = new FileReader();
+      leitor.onerror = function() { mostrarStatusBackup('❌ Não foi possível ler o arquivo.', true); };
       leitor.onload = function(e) {
-        try {
-          var dados = JSON.parse(e.target.result);
-
-          if (dados.tipo === 'mathgol-backup-local') {
-            // Restaurar dados locais
-            var chaves = Object.keys(dados.dados || {});
-            for (var i = 0; i < chaves.length; i++) {
-              try { localStorage.setItem(chaves[i], dados.dados[chaves[i]]); } catch(err) {}
-            }
-            mostrarStatusBackup('✅ Backup local restaurado! Recarregando...');
-            setTimeout(function() { location.reload(); }, 1500);
-
-          } else if (dados.tipo === 'mathgol-backup-firebase') {
-            // Restaurar dados do Firebase
-            if (!window.FirebaseMathGol || !estado.token) {
-              mostrarStatusBackup('⚠️ Firebase não disponível.', true);
-              return;
-            }
-            mostrarStatusBackup('⏳ Restaurando dados no Firebase...');
-            window.FirebaseMathGol.restaurarDadosFirebase(estado.token, dados).then(function() {
-              mostrarStatusBackup('✅ Backup do Firebase restaurado!');
-            }).catch(function(erro) {
-              mostrarStatusBackup('❌ Erro ao restaurar: ' + erro.message, true);
-            });
-
-          } else {
-            mostrarStatusBackup('❌ Arquivo de backup não reconhecido.', true);
-          }
-        } catch (erro) {
-          mostrarStatusBackup('❌ Arquivo inválido: ' + erro.message, true);
+        var texto = String(e.target.result || '');
+        // Valida ANTES de perguntar: arquivo ruim ja mostra o erro direto.
+        var analise = ValidacaoBackup.analisarArquivo(texto, arquivo.size);
+        if (!analise.ok) {
+          mostrarStatusBackup('❌ ' + analise.erro, true);
+          return;
         }
-        // Limpa o input pra permitir selecionar o mesmo arquivo novamente
-        inputRestaurar.value = '';
+        restauracaoPendente = { texto: texto, tamanho: arquivo.size };
+        var el = document.getElementById('backup-status');
+        if (el) { el.textContent = ''; el.classList.remove('erro'); }
+        if (blocoConfirmar) {
+          blocoConfirmar.hidden = false;
+          if (botaoNaoRestaurar) botaoNaoRestaurar.focus();
+        }
       };
       leitor.readAsText(arquivo);
     });
   }
 }
 
+// ---------- HU-14: Sala (lado da crianca) ----------
+
+function atualizarFaixaSala() {
+  var faixa = document.getElementById('faixa-sala');
+  if (!faixa) return;
+  faixa.textContent = '';
+
+  if (!Sala.estaNaSala()) { faixa.hidden = true; return; }
+  faixa.hidden = false;
+
+  faixa.appendChild(document.createTextNode('🚪 Sala '));
+  var forte = document.createElement('strong');
+  forte.textContent = Sala.nome();
+  faixa.appendChild(forte);
+  faixa.appendChild(document.createTextNode(' · ' + rotuloNivel(Sala.nivelDaSala()) + ' '));
+
+  var sair = document.createElement('button');
+  sair.type = 'button';
+  sair.className = 'link-sair';
+  sair.textContent = 'sair';
+  sair.addEventListener('click', function() {
+    SFX.clique();
+    Sala.sair();
+    atualizarFaixaSala();
+  });
+  faixa.appendChild(sair);
+}
+
+function initEntrarSala() {
+  var abrir = document.getElementById('botao-entrar-sala');
+  var confirmar = document.getElementById('botao-confirmar-sala');
+  var voltar = document.getElementById('botao-voltar-entrar-sala');
+  var campo = document.getElementById('input-sala');
+  var aviso = document.getElementById('aviso-entrar-sala');
+  if (!abrir || !confirmar || !campo) return;
+
+  function avisar(txt, classe) {
+    aviso.textContent = txt;
+    aviso.className = 'aviso-sala' + (classe ? ' ' + classe : '');
+  }
+
+  abrir.addEventListener('click', function() {
+    SFX.clique();
+    avisar('');
+    campo.value = '';
+    mostrarTela('tela-entrar-sala');
+  });
+  if (voltar) voltar.addEventListener('click', function() { SFX.clique(); mostrarTela('tela-menu'); });
+
+  confirmar.addEventListener('click', function() {
+    SFX.clique();
+    var cod = campo.value.trim();
+    if (!cod) { avisar('Digite o código primeiro.', 'erro'); return; }
+
+    avisar('Procurando a sala...');
+    Sala.entrar(cod, {
+      apelido: estado.apelido || 'Craque',
+      avatarSeed: estado.avatarSeed
+    }).then(function(r) {
+      if (!r.ok) {
+        avisar(r.motivo === 'offline'
+          ? 'Sem conexão com o servidor. Tente de novo em instantes.'
+          : 'Sala não encontrada. Confira as letras.', 'erro');
+        return;
+      }
+      avisar('Pronto! Você entrou em ' + r.sala.nome + '.', 'ok');
+      atualizarFaixaSala();
+      setTimeout(function() { mostrarTela('tela-menu'); }, 1200);
+    });
+  });
+}
+
+// ---------- HU-14: Painel do professor ----------
+
+function preencherSelectNiveis(select, selecionado) {
+  if (!select) return;
+  select.textContent = '';
+  NIVEIS.forEach(function(nv) {
+    var o = document.createElement('option');
+    o.value = String(nv.id);
+    o.textContent = nv.id + ' — ' + nv.nome + ' (' + nv.descricao + ')';
+    if (nv.id === selecionado) o.selected = true;
+    select.appendChild(o);
+  });
+}
+
+function tiposMarcados() {
+  var marcados = [];
+  document.querySelectorAll('#filtros-tipo input:checked').forEach(function(i) {
+    marcados.push(i.value);
+  });
+  return marcados;
+}
+
+function renderizarAlunos(lista) {
+  var ul = document.getElementById('lista-alunos');
+  var contagem = document.getElementById('prof-contagem');
+  if (!ul) return;
+  contagem.textContent = '(' + lista.length + ')';
+  ul.textContent = '';
+
+  if (!lista.length) {
+    var vazio = document.createElement('li');
+    vazio.className = 'aluno-vazio';
+    vazio.textContent = 'Ninguém entrou ainda. Dite o código para a turma.';
+    ul.appendChild(vazio);
+    return;
+  }
+
+  // Mais gols primeiro; empate decide pela pontuacao.
+  lista.sort(function(a, b) {
+    return (b.gols || 0) - (a.gols || 0) || (b.pontuacao || 0) - (a.pontuacao || 0);
+  });
+
+  lista.forEach(function(al) {
+    var li = document.createElement('li');
+    li.className = 'item-aluno';
+
+    var img = document.createElement('img');
+    img.className = 'aluno-avatar';
+    img.src = gerarUrlAvatar(al.avatarSeed || AVATAR_PADRAO.seed);
+    img.alt = '';
+    img.loading = 'lazy';
+    li.appendChild(img);
+
+    li.appendChild(criarSpan('aluno-nome', al.apelido || 'Craque'));
+    li.appendChild(criarSpan('aluno-placar', (al.gols || 0) + ' ⚽'));
+    li.appendChild(criarSpan('aluno-pontos', String(al.pontuacao || 0)));
+    ul.appendChild(li);
+  });
+}
+
+function mostrarPainelDaSala(sala) {
+  document.getElementById('prof-sem-sala').hidden = true;
+  document.getElementById('prof-com-sala').hidden = false;
+  document.getElementById('codigo-sala').textContent = sala.codigo;
+  document.getElementById('prof-nivel-atual').textContent = rotuloNivel(sala.nivel);
+
+  var selAtivo = document.getElementById('select-nivel-ativo');
+  preencherSelectNiveis(selAtivo, sala.nivel);
+  selAtivo.onchange = function() {
+    var novo = parseInt(selAtivo.value, 10);
+    Sala.mudarNivel(sala.codigo, novo, sala.tipos).then(function() {
+      sala.nivel = novo;
+      document.getElementById('prof-nivel-atual').textContent = rotuloNivel(novo);
+    });
+  };
+
+  renderizarAlunos([]);
+  Sala.observar(sala.codigo, renderizarAlunos);
+}
+
+function initProfessor() {
+  var abrir = document.getElementById('botao-professor');
+  var criar = document.getElementById('botao-criar-sala');
+  var fechar = document.getElementById('botao-fechar-painel');
+  var aviso = document.getElementById('aviso-prof');
+  if (!abrir || !criar) return;
+
+  function avisar(txt, classe) {
+    aviso.textContent = txt;
+    aviso.className = 'aviso-sala' + (classe ? ' ' + classe : '');
+  }
+
+  // Caixinhas de tipo de conta: deixam o professor restringir a sala a, por
+  // exemplo, so subtracao, sem precisar mexer em codigo.
+  var caixa = document.getElementById('filtros-tipo');
+  if (caixa && !caixa.children.length) {
+    Object.keys(TIPOS_OPERACAO).forEach(function(t) {
+      var id = 'tipo-' + t;
+      var rotulo = document.createElement('label');
+      rotulo.className = 'chip-tipo';
+      rotulo.setAttribute('for', id);
+      var cx = document.createElement('input');
+      cx.type = 'checkbox';
+      cx.id = id;
+      cx.value = t;
+      rotulo.appendChild(cx);
+      rotulo.appendChild(document.createTextNode(
+        ' ' + TIPOS_OPERACAO[t].simbolo + ' ' + TIPOS_OPERACAO[t].nome));
+      caixa.appendChild(rotulo);
+    });
+  }
+
+  abrir.addEventListener('click', function() {
+    SFX.clique();
+    avisar('');
+    preencherSelectNiveis(document.getElementById('select-nivel-sala'), 1);
+    document.getElementById('prof-sem-sala').hidden = false;
+    document.getElementById('prof-com-sala').hidden = true;
+    mostrarTela('tela-professor');
+  });
+
+  criar.addEventListener('click', function() {
+    SFX.selecionar();
+    if (!window.FirebaseMathGol) { avisar('Sem conexão com o servidor.', 'erro'); return; }
+
+    avisar('Criando a sala...');
+    Sala.criar({
+      nome: (document.getElementById('input-nome-turma').value || '').trim() || 'Turma',
+      nivel: parseInt(document.getElementById('select-nivel-sala').value, 10) || 1,
+      tipos: tiposMarcados()
+    }).then(function(sala) {
+      if (!sala) { avisar('Não consegui criar a sala. Tente de novo.', 'erro'); return; }
+      avisar('');
+      mostrarPainelDaSala(sala);
+    });
+  });
+
+  if (fechar) fechar.addEventListener('click', function() {
+    SFX.clique();
+    Sala.pararDeObservar(); // listener do Firestore nao pode ficar aberto
+    mostrarTela('tela-menu');
+  });
+}
+
 // ---------- Init ----------
 
 document.addEventListener('DOMContentLoaded', function() {
+  // O antigo identificador "mathgol_token" nao e credencial e nao da acesso
+  // a nada (a identidade agora e o uid do Firebase Auth). Remove a sobra.
+  try { localStorage.removeItem('mathgol_token'); } catch (e) {}
+
   initAcessibilidade();
   initNavegacaoTopo();
+  initTelaCheia();
   initMenu();
   initApelido();
   initSelecao();
@@ -1541,24 +2145,28 @@ document.addEventListener('DOMContentLoaded', function() {
   initFases();
   initFase1();
   initResultado();
+  initSaldoTopo();
+  if (typeof initLoja === 'function') initLoja();
+  if (typeof initTutorial === 'function') initTutorial();
   initCreditos();
   initBackup();
-  initLoja();
   initEntrarSala();
   initProfessor();
-  mostrarTela('tela-menu');
+  mostrarTela('tela-menu', { focar: false });
 
-  if (window.FirebaseMathGol) {
-    window.FirebaseMathGol.obterOuCriarToken().then(function(t) {
-      estado.token = t;
-      // Carteira vem do Firebase (nao de localStorage): a crianca usa o
-      // laboratorio e raramente pega a mesma maquina duas vezes.
-      Loja.carregar(t);
-      // Se a crianca ja estava numa sala neste computador, reabre sozinho.
-      Sala.restaurar(t).then(atualizarFaixaSala);
-    });
-    window.FirebaseMathGol.carregarConfiguracoes().then(function(config) {
-      aplicarConfiguracoesRemotas(config);
-    });
-  }
 });
+
+// O Firebase chega depois (import dinamico em carregar-externos.js): quando
+// ficar pronto, aplica as configuracoes remotas validadas.
+function carregarConfiguracoesRemotas() {
+  if (!window.FirebaseMathGol) return;
+  // Sala so pode ser reaberta depois que o Firebase existe.
+  Sala.restaurar().then(atualizarFaixaSala);
+
+  window.FirebaseMathGol.carregarConfiguracoes().then(function(config) {
+    aplicarConfiguracoesRemotas(config);
+  }).catch(function(erro) {
+    console.warn('Configuracoes remotas indisponiveis; usando padrao:', erro);
+  });
+}
+document.addEventListener('mathgol:firebase-pronto', carregarConfiguracoesRemotas);
