@@ -53,6 +53,94 @@ que o site é **estático puro**: não precisa configurar nenhuma variável de
 ambiente pra ele funcionar publicado (as variáveis do `.env` só existem pra
 você rodar `npm run seed` na sua máquina).
 
+## Banco de questões — escada de 12 níveis
+
+### O problema que isso resolve
+
+Existiam 3 dificuldades (`facil` / `medio` / `dificil`) e a fase escalava
+sozinha assim:
+
+```
+facil → fase 1 facil · fase 2 medio · fase 3 dificil
+```
+
+Ou seja: a criança somava `2 + 3` na fase 1 e encarava `7 × 9` e divisão na
+fase 3, na mesma sessão. Com só três degraus, cada passo era um abismo. Era a
+reclamação de quem testou.
+
+### A escada nova (`JS/niveis.js`)
+
+12 níveis pequenos. Cada um declara **tipo de operação** e **quantidade de
+dígitos**, então dá pra pedir "só subtração de 2 dígitos" sem tocar em código.
+
+| Nível | Nome | Tipo | Tamanho |
+|---|---|---|---|
+| 1 | Primeiros gols | soma | até 10 |
+| 2 | Tirando de pouquinho | subtração | até 10 |
+| 3 | Vai e volta | soma, subtração | até 10 |
+| 4 | Passando do 10 | soma | resultado 11–18 |
+| 5 | Voltando do 20 | subtração | 2 dígitos |
+| 6 | Dezenas certinhas | soma | 2 dígitos, sem "vai um" |
+| 7 | Com o vai um | soma, subtração | 2 dígitos |
+| 8 | Tabuada do começo | multiplicação | ×2 a ×5 |
+| 9 | Tabuada inteira | multiplicação | ×2 a ×10 |
+| 10 | Dividindo igual | divisão exata | ÷2 a ÷5 |
+| 11 | Divisão inteira | divisão exata | ÷2 a ÷10 |
+| 12 | Craque das contas | as quatro | misto |
+
+**A fase agora sobe UM degrau** (`PASSO_POR_FASE` em `progressao.js`). Quem
+começa no 5 faz 5 → 6 → 7, não 5 → 11.
+
+Progresso antigo não se perde: `DIFICULDADE_PARA_NIVEL` traduz
+`facil → 1`, `medio → 4`, `dificil → 8`.
+
+### Banco curado mais simples de revisar
+
+Cada entrada virou `[a, b, tipo]` — o enunciado, o texto falado e as 5
+alternativas saem de `montarPergunta()`, o mesmo caminho do gerador. Antes as
+distratoras eram escritas à mão uma a uma, o que é onde erro de digitação
+aparece. Um professor consegue revisar a lista inteira agora.
+
+As distratoras também acompanham a grandeza do resultado: errar "48" por 1
+unidade era quase sorteio, então em número grande as opções se afastam mais.
+
+O banco se autoconfere ao carregar e avisa no console se alguma conta for
+inválida (divisão não exata, subtração negativa).
+
+## HU-14 — Sala do Professor
+
+Mesmo molde do "código do craque": o professor cria a sala, recebe um código
+curto (`K4P-7MN`) e dita para a turma. Sem login, sem e-mail, sem nome real.
+
+**O professor pode:**
+- escolher o nível das contas da turma e trocar no meio da aula
+- restringir a sala a tipos de conta (só subtração, por exemplo)
+- acompanhar a turma ao vivo — apelido, gols e pontos, ordenado por gols
+
+**A criança:** digita o código no menu e pronto. O nível passa a ser o que o
+professor definiu, e a tela de escolha de nível some (ela não escolhe mais).
+A sala fica lembrada no navegador, então não precisa digitar de novo.
+
+```
+salas/{codigo}                 → { nome, nivel, tipos, dono, criadoEm }
+salas/{codigo}/alunos/{token}  → { apelido, avatarSeed, gols, pontuacao, fase }
+```
+
+O painel usa `onSnapshot` (lista ao vivo). O cancelamento é guardado dentro do
+módulo e chamado ao sair da tela — listener de Firestore esquecido aberto
+consome leitura sem parar.
+
+### A ressalva de segurança
+
+`dono` guarda o token do professor mas **não é autenticação**: quem souber o
+código pode mudar o nível da sala, e a lista de alunos é legível por qualquer
+um com o código. Para turma real isso precisa de Firebase Auth anônimo com
+checagem de `dono` nas regras.
+
+Enquanto o conteúdo é apelido + placar (sem nome real, sem e-mail), o risco é
+baixo — mas é exatamente o que o card **R03** tem que resolver antes de rodar
+com turma de verdade. Está comentado em `Config/firestore.rules`.
+
 ## HU-22 / HU-23 — Loja e Cruzeiros
 
 A pontuação deixou de morrer no fim da fase: agora vira **Cruzeiros**, a moeda

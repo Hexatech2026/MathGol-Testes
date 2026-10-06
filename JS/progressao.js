@@ -51,12 +51,16 @@ var Progressao = (function() {
     }
   ];
 
-  // Mapa: dificuldade escolhida -> dificuldade efetiva por fase
-  var ESCALAR_DIFICULDADE = {
-    'facil':   ['facil', 'medio', 'dificil'],
-    'medio':   ['medio', 'dificil', 'dificil'],
-    'dificil': ['dificil', 'dificil', 'dificil']
-  };
+  // Quanto o nível sobe a cada fase.
+  //
+  // ANTES isto era um mapa de 3 dificuldades e o salto era brutal: quem
+  // escolhia "facil" encarava a fase 3 em "dificil" — ou seja, saía de
+  // 2 + 3 e caía em 7 × 9 e divisões na mesma sessão. Era a reclamação
+  // principal de quem testou.
+  //
+  // Agora a escada tem 12 degraus (niveis.js) e cada fase sobe UM. Da fase 1
+  // à 3 o jogador anda 2 degraus pequenos, não 2 abismos.
+  var PASSO_POR_FASE = 1;
 
   var progresso = {
     fasesDesbloqueadas: ['penaltis'], // sempre comeca com a primeira
@@ -136,10 +140,22 @@ var Progressao = (function() {
     return 0;
   }
 
-  function dificuldadeEfetiva(dificuldadeEscolhida, faseId) {
+  // Nível efetivo de uma fase: o nível de partida + um degrau por fase.
+  //
+  // Aceita tanto um número (nível novo) quanto 'facil'/'medio'/'dificil'
+  // (progresso salvo antes da escada existir), traduzido por niveis.js.
+  function nivelEfetivo(nivelOuDificuldade, faseId) {
+    var base = typeof nivelOuDificuldade === 'number'
+      ? nivelOuDificuldade
+      : nivelDaDificuldadeAntiga(nivelOuDificuldade);
     var idx = indiceFase(faseId);
-    var escala = ESCALAR_DIFICULDADE[dificuldadeEscolhida] || ESCALAR_DIFICULDADE['facil'];
-    return escala[Math.min(idx, escala.length - 1)];
+    return obterNivel(base + idx * PASSO_POR_FASE).id; // obterNivel já limita em 1..12
+  }
+
+  // Nome antigo mantido: main.js e qualquer código de fora continuam
+  // chamando dificuldadeEfetiva() sem saber que agora devolve um nível.
+  function dificuldadeEfetiva(nivelOuDificuldade, faseId) {
+    return nivelEfetivo(nivelOuDificuldade, faseId);
   }
 
   // Registra resultado de uma fase. Retorna { desbloqueou: bool, proximaFase: string|null }
@@ -189,6 +205,7 @@ var Progressao = (function() {
     obterFase: obterFase,
     faseDesbloqueada: faseDesbloqueada,
     dificuldadeEfetiva: dificuldadeEfetiva,
+    nivelEfetivo: nivelEfetivo,
     registrarResultado: registrarResultado,
     melhorPontuacao: melhorPontuacao,
     melhorGols: melhorGols

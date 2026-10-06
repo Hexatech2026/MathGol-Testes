@@ -39,6 +39,26 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // HU-14 — Sala do Professor. Mesmo modelo do código do craque: quem
+    // sabe o código entra. O professor dita o código para a turma.
+    //
+    // RESSALVA IMPORTANTE (card R03): "dono" guarda o token do professor,
+    // mas NÃO é autenticação — qualquer cliente que saiba o código pode
+    // mudar o nível da sala, e a subcoleção de alunos é legível por
+    // qualquer um que tenha o código. Para uma turma real isso precisa de
+    // Firebase Auth anônimo + checagem de "dono" nas regras. Enquanto o
+    // conteúdo é apelido + placar (sem nome real, sem e-mail), o risco é
+    // baixo e está consciente.
+    match /salas/{codigo} {
+      allow read: if true;
+      allow create, update: if true;
+      allow delete: if false;
+
+      match /alunos/{token} {
+        allow read, write: if true;
+      }
+    }
+
     // Coleção própria só com apelido + avatar escolhidos na tela de
     // personalizar (separada de "jogadores" de propósito, ver
     // public/firebase-config.js → salvarPerfil()).

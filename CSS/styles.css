@@ -1310,6 +1310,139 @@ body.alto-contraste #botao-creditos {
 }
 
 /* ========================================================================
+   HU-14 — Sala do Professor
+   ======================================================================== */
+
+.faixa-sala {
+  width: 100%;
+  margin: 14px 0 0;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: var(--branco-giz);
+  border: 2px solid var(--grafite);
+  color: var(--grafite);
+  font-size: 0.8rem;
+  text-align: center;
+}
+.link-sair {
+  background: none;
+  border: none;
+  color: var(--vermelho-texto, #B3261E);
+  text-decoration: underline;
+  cursor: pointer;
+  font: inherit;
+  padding: 0 2px;
+}
+
+.texto-apoio {
+  font-size: 0.86rem;
+  color: var(--branco-giz);
+  margin: 0 0 14px;
+  max-width: 44ch;
+}
+
+.rotulo-campo {
+  display: block;
+  width: 100%;
+  font-family: var(--fonte-titulo);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--branco-giz);
+  margin: 12px 0 5px;
+  text-align: left;
+}
+
+.campo-texto {
+  width: 100%;
+  font-family: var(--fonte-corpo, inherit);
+  font-size: 0.95rem;
+  padding: 9px 12px;
+  border: 3px solid var(--grafite);
+  border-radius: 12px;
+  background: var(--branco-giz);
+  color: var(--grafite);
+}
+.campo-texto:focus-visible { outline: 3px solid var(--amarelo-sol); outline-offset: 2px; }
+
+.campo-codigo-grande {
+  width: 190px;
+  font-size: 1.5rem;
+  padding: 12px;
+}
+
+.grupo-tipos { border: none; padding: 0; margin: 0; width: 100%; }
+.linha-tipos { display: flex; flex-wrap: wrap; gap: 7px; }
+.chip-tipo {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--fonte-titulo);
+  font-size: 0.78rem;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 2px solid var(--grafite);
+  background: var(--branco-giz);
+  color: var(--grafite);
+  cursor: pointer;
+}
+.chip-tipo:focus-within { outline: 3px solid var(--amarelo-sol); outline-offset: 2px; }
+
+.codigo-sala { font-size: 2.1rem; letter-spacing: 0.16em; }
+
+.contagem-alunos { color: var(--amarelo-sol); font-variant-numeric: tabular-nums; }
+
+.lista-alunos {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.item-aluno {
+  display: grid;
+  grid-template-columns: 34px 1fr auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  background: var(--branco-giz);
+  border: 2px solid var(--grafite);
+  border-radius: 12px;
+  color: var(--grafite);
+}
+.aluno-avatar { width: 34px; height: 34px; border-radius: 50%; }
+.aluno-nome { font-family: var(--fonte-titulo); font-weight: 600; font-size: 0.86rem; text-align: left; }
+.aluno-placar { font-family: var(--fonte-titulo); font-weight: 700; font-size: 0.86rem; }
+.aluno-pontos {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.8rem;
+  background: var(--amarelo-sol);
+  border-radius: 999px;
+  padding: 1px 9px;
+}
+.aluno-vazio {
+  color: var(--branco-giz);
+  font-size: 0.85rem;
+  text-align: center;
+  padding: 14px;
+  border: 2px dashed var(--branco-giz);
+  border-radius: 12px;
+}
+
+/* Cartão de nível na tela de escolha */
+.cartao-nivel { position: relative; }
+.etiqueta-tipo {
+  display: block;
+  margin-top: 4px;
+  font-family: var(--fonte-titulo);
+  font-size: 0.95rem;
+  letter-spacing: 0.12em;
+  color: var(--verde-texto);
+}
+body.alto-contraste .etiqueta-tipo { color: var(--grafite); }
+
+/* ========================================================================
    Loja — carteira de Cruzeiros, clubes, seleções, nomes e avatares
    ======================================================================== */
 

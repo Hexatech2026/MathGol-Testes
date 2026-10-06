@@ -13,6 +13,7 @@ var estado = {
   avatarSeed: AVATAR_PADRAO.seed,
   selecaoId: null,
   dificuldadeId: null,
+  nivelId: 1,
   faseAtual: 'penaltis',
   cobrancaAtual: 0,
   gols: 0,
@@ -84,7 +85,9 @@ var TELA_ANTERIOR = {
   'tela-fases':      'tela-dificuldade',
   'tela-fase1':      'tela-fases',
   'tela-resultado':  'tela-fases',
-  'tela-loja':       'tela-menu'
+  'tela-loja':       'tela-menu',
+  'tela-entrar-sala':'tela-menu',
+  'tela-professor':  'tela-menu'
 };
 
 function mostrarTela(idTela) {
@@ -373,23 +376,47 @@ function initSelecao() {
 
 // ---------- Dificuldade ----------
 
+// Tela de nivel. Antes eram 3 cartoes (facil/medio/dificil); agora sao os 12
+// degraus de niveis.js, cada um dizendo o tipo de conta e o tamanho dos
+// numeros — o professor consegue apontar o nivel certo pra cada turma.
+//
+// Se a crianca entrou numa sala, o professor ja escolheu o nivel: a tela
+// mostra qual e e segue direto, em vez de deixar ela trocar.
 function irParaDificuldade() {
+  if (Sala.estaNaSala() && Sala.nivelDaSala()) {
+    estado.nivelId = Sala.nivelDaSala();
+    estado.dificuldadeId = estado.nivelId;
+    irParaFases();
+    return;
+  }
+
   var grade = document.getElementById('grade-dificuldades');
   grade.innerHTML = '';
-  DIFICULDADES.forEach(function(dif) {
+
+  NIVEIS.forEach(function(nv) {
     var cartao = document.createElement('button');
-    cartao.className = 'cartao';
+    cartao.className = 'cartao cartao-nivel';
     cartao.type = 'button';
-    cartao.innerHTML = '<span class="cartao-icone-dificuldade">' + dif.icone + '</span><span class="cartao-titulo">' + dif.nome + '</span><span class="cartao-descricao">' + dif.descricao + '</span>';
+    cartao.innerHTML =
+      '<span class="cartao-icone-dificuldade">' + nv.id + '</span>' +
+      '<span class="cartao-titulo">' + nv.nome + '</span>' +
+      '<span class="cartao-descricao">' + nv.descricao + '</span>' +
+      '<span class="etiqueta-tipo">' + nv.tipos.map(function(t) {
+        return TIPOS_OPERACAO[t].simbolo;
+      }).join(' ') + '</span>';
+    cartao.setAttribute('aria-label', rotuloNivel(nv.id) + '. ' + nv.descricao);
+
     cartao.addEventListener('click', function() {
       SFX.clique();
       grade.querySelectorAll('.cartao').forEach(function(c) { c.classList.remove('cartao-selecionado'); });
       cartao.classList.add('cartao-selecionado');
-      estado.dificuldadeId = dif.id;
+      estado.nivelId = nv.id;
+      estado.dificuldadeId = nv.id; // mantido pro resto do codigo que ainda le esse campo
       document.getElementById('botao-confirmar-dificuldade').disabled = false;
     });
     grade.appendChild(cartao);
   });
+
   document.getElementById('botao-confirmar-dificuldade').disabled = true;
   mostrarTela('tela-dificuldade');
 }
@@ -577,8 +604,14 @@ function carregarProximaPergunta() {
   estado.cobrancaFinalizada = false;
 
   // Usa o banco de questoes com dificuldade efetiva (escala com a fase)
-  var dificuldadeEfetiva = Progressao.dificuldadeEfetiva(estado.dificuldadeId, estado.faseAtual);
-  estado.perguntaAtual = BancoQuestoes.sortearPergunta(dificuldadeEfetiva);
+  // Nivel de partida + um degrau por fase (ver PASSO_POR_FASE em
+  // progressao.js). Se a crianca esta numa sala, o professor manda no nivel.
+  var nivelBase = Sala.estaNaSala() && Sala.nivelDaSala()
+    ? Sala.nivelDaSala()
+    : (estado.nivelId || estado.dificuldadeId);
+  var nivelDaVez = Progressao.nivelEfetivo(nivelBase, estado.faseAtual);
+  estado.nivelEmJogo = nivelDaVez;
+  estado.perguntaAtual = BancoQuestoes.sortearPergunta(nivelDaVez, Sala.filtrosDaSala());
   document.getElementById('mensagem-feedback').textContent = '';
   document.getElementById('pergunta-texto').textContent = estado.perguntaAtual.texto;
 
@@ -740,6 +773,17 @@ function irParaResultado() {
   // do que gravar por cima de um saldo desconhecido e apagar o que ela tinha.
   Loja.creditar(estado.pontuacao);
 
+  // Manda o resultado pro painel do professor, se a crianca estiver na sala.
+  if (Sala.estaNaSala()) {
+    Sala.reportarResultado(estado.token, {
+      apelido: estado.apelido || 'Craque',
+      avatarSeed: estado.avatarSeed,
+      gols: estado.gols,
+      pontuacao: estado.pontuacao,
+      fase: estado.faseAtual
+    });
+  }
+
   document.getElementById('placar-final').textContent = estado.gols + ' / ' + TOTAL_COBRANCAS;
   document.getElementById('pontuacao-final').innerHTML = estado.pontuacao + ' <img class="icone-cruzeiro" src="../Imagens/estrela-cruzeiro.png" alt="">Cruzeiro';
 
@@ -847,6 +891,201 @@ function initAcessibilidade() {
     if (el) el.addEventListener('change', salvarPreferenciasAcessibilidade);
   });
   carregarPreferenciasAcessibilidade();
+}
+
+// ---------- HU-14: Sala (lado da criança) ----------
+
+function atualizarFaixaSala() {
+  var faixa = document.getElementById('faixa-sala');
+  if (!faixa) return;
+  if (!Sala.estaNaSala()) { faixa.hidden = true; return; }
+  faixa.hidden = false;
+  faixa.innerHTML = '🚪 Você está na sala <strong>' + Sala.nome() + '</strong> · ' +
+                    rotuloNivel(Sala.nivelDaSala()) +
+                    ' <button id="botao-sair-sala" class="link-sair" type="button">sair</button>';
+  var sair = document.getElementById('botao-sair-sala');
+  if (sair) {
+    sair.addEventListener('click', function() {
+      SFX.clique();
+      Sala.sair();
+      atualizarFaixaSala();
+    });
+  }
+}
+
+function initEntrarSala() {
+  var abrir = document.getElementById('botao-entrar-sala');
+  var confirmar = document.getElementById('botao-confirmar-sala');
+  var voltar = document.getElementById('botao-voltar-entrar-sala');
+  var campo = document.getElementById('input-sala');
+  var aviso = document.getElementById('aviso-entrar-sala');
+
+  function avisar(txt, classe) {
+    aviso.textContent = txt;
+    aviso.className = 'loja-aviso' + (classe ? ' ' + classe : '');
+  }
+
+  if (abrir) abrir.addEventListener('click', function() {
+    SFX.clique(); avisar(''); campo.value = ''; mostrarTela('tela-entrar-sala');
+  });
+  if (voltar) voltar.addEventListener('click', function() { SFX.clique(); mostrarTela('tela-menu'); });
+
+  if (confirmar) confirmar.addEventListener('click', async function() {
+    SFX.clique();
+    var cod = campo.value.trim();
+    if (!cod) { avisar('Digite o código primeiro.', 'erro'); return; }
+
+    avisar('Procurando a sala...');
+    var r = await Sala.entrar(cod, estado.token, {
+      apelido: estado.apelido || 'Craque',
+      avatarSeed: estado.avatarSeed
+    });
+
+    if (!r.ok) {
+      avisar(r.motivo === 'offline'
+        ? 'Sem conexão com o servidor.'
+        : 'Sala não encontrada. Confira as letras.', 'erro');
+      return;
+    }
+    avisar('Pronto! Você entrou em ' + r.sala.nome + '.', 'ok');
+    atualizarFaixaSala();
+    setTimeout(function() { mostrarTela('tela-menu'); }, 1200);
+  });
+}
+
+// ---------- HU-14: Painel do professor ----------
+
+function preencherSelectNiveis(select, selecionado) {
+  select.innerHTML = '';
+  NIVEIS.forEach(function(nv) {
+    var o = document.createElement('option');
+    o.value = nv.id;
+    o.textContent = nv.id + ' — ' + nv.nome + ' (' + nv.descricao + ')';
+    if (nv.id === selecionado) o.selected = true;
+    select.appendChild(o);
+  });
+}
+
+function tiposMarcados() {
+  var marcados = [];
+  document.querySelectorAll('#filtros-tipo input:checked').forEach(function(i) {
+    marcados.push(i.value);
+  });
+  return marcados;
+}
+
+function renderizarAlunos(lista) {
+  var ul = document.getElementById('lista-alunos');
+  var contagem = document.getElementById('prof-contagem');
+  contagem.textContent = '(' + lista.length + ')';
+
+  if (!lista.length) {
+    ul.innerHTML = '<li class="aluno-vazio">Ninguém entrou ainda. Dite o código para a turma.</li>';
+    return;
+  }
+
+  // Quem fez mais gols primeiro; empate decide pela pontuação.
+  lista.sort(function(a, b) {
+    return (b.gols || 0) - (a.gols || 0) || (b.pontuacao || 0) - (a.pontuacao || 0);
+  });
+
+  ul.innerHTML = '';
+  lista.forEach(function(al) {
+    var li = document.createElement('li');
+    li.className = 'item-aluno';
+    li.innerHTML =
+      '<img class="aluno-avatar" src="' + gerarUrlAvatar(al.avatarSeed || 'Pele') + '" alt="" loading="lazy">' +
+      '<span class="aluno-nome">' + (al.apelido || 'Craque') + '</span>' +
+      '<span class="aluno-placar">' + (al.gols || 0) + ' ⚽</span>' +
+      '<span class="aluno-pontos">' + (al.pontuacao || 0) + '</span>';
+    ul.appendChild(li);
+  });
+}
+
+function mostrarPainelDaSala(sala) {
+  document.getElementById('prof-sem-sala').hidden = true;
+  document.getElementById('prof-com-sala').hidden = false;
+  document.getElementById('codigo-sala').textContent = sala.codigo;
+  document.getElementById('prof-nivel-atual').textContent = rotuloNivel(sala.nivel);
+
+  var selAtivo = document.getElementById('select-nivel-ativo');
+  preencherSelectNiveis(selAtivo, sala.nivel);
+  selAtivo.onchange = async function() {
+    var novo = parseInt(selAtivo.value, 10);
+    await Sala.mudarNivel(sala.codigo, novo, sala.tipos);
+    sala.nivel = novo;
+    document.getElementById('prof-nivel-atual').textContent = rotuloNivel(novo);
+  };
+
+  Sala.observar(sala.codigo, renderizarAlunos);
+  renderizarAlunos([]);
+}
+
+function initProfessor() {
+  var abrir = document.getElementById('botao-professor');
+  var criar = document.getElementById('botao-criar-sala');
+  var abrirExistente = document.getElementById('botao-abrir-sala');
+  var fechar = document.getElementById('botao-fechar-painel');
+  var aviso = document.getElementById('aviso-prof');
+
+  function avisar(txt, classe) {
+    aviso.textContent = txt;
+    aviso.className = 'loja-aviso' + (classe ? ' ' + classe : '');
+  }
+
+  // Caixinhas de tipo de conta — deixam o professor restringir a sala a,
+  // por exemplo, só subtração, sem mexer em código.
+  var caixa = document.getElementById('filtros-tipo');
+  if (caixa) {
+    Object.keys(TIPOS_OPERACAO).forEach(function(t) {
+      var id = 'tipo-' + t;
+      var w = document.createElement('label');
+      w.className = 'chip-tipo';
+      w.setAttribute('for', id);
+      w.innerHTML = '<input type="checkbox" id="' + id + '" value="' + t + '"> ' +
+                    TIPOS_OPERACAO[t].simbolo + ' ' + TIPOS_OPERACAO[t].nome;
+      caixa.appendChild(w);
+    });
+  }
+
+  if (abrir) abrir.addEventListener('click', function() {
+    SFX.clique();
+    avisar('');
+    preencherSelectNiveis(document.getElementById('select-nivel-sala'), 1);
+    document.getElementById('prof-sem-sala').hidden = false;
+    document.getElementById('prof-com-sala').hidden = true;
+    mostrarTela('tela-professor');
+  });
+
+  if (criar) criar.addEventListener('click', async function() {
+    SFX.selecionar();
+    if (!window.FirebaseMathGol || !estado.token) { avisar('Sem conexão com o servidor.', 'erro'); return; }
+
+    avisar('Criando a sala...');
+    var sala = await Sala.criar(estado.token, {
+      nome: (document.getElementById('input-nome-turma').value || '').trim() || 'Turma',
+      nivel: parseInt(document.getElementById('select-nivel-sala').value, 10) || 1,
+      tipos: tiposMarcados()
+    });
+
+    if (!sala) { avisar('Não consegui criar a sala. Tente de novo.', 'erro'); return; }
+    mostrarPainelDaSala(sala);
+  });
+
+  if (abrirExistente) abrirExistente.addEventListener('click', async function() {
+    SFX.clique();
+    var cod = prompt('Código da sala:');
+    if (!cod) return;
+    var sala = await window.FirebaseMathGol.buscarSala(cod);
+    if (!sala) { avisar('Sala não encontrada.', 'erro'); return; }
+    mostrarPainelDaSala(sala);
+  });
+
+  if (fechar) fechar.addEventListener('click', function() {
+    SFX.clique();
+    Sala.pararDeObservar(); // listener do Firestore nao pode ficar aberto
+    mostrarTela('tela-menu');
+  });
 }
 
 // ---------- Loja ----------
@@ -1305,6 +1544,8 @@ document.addEventListener('DOMContentLoaded', function() {
   initCreditos();
   initBackup();
   initLoja();
+  initEntrarSala();
+  initProfessor();
   mostrarTela('tela-menu');
 
   if (window.FirebaseMathGol) {
@@ -1313,6 +1554,8 @@ document.addEventListener('DOMContentLoaded', function() {
       // Carteira vem do Firebase (nao de localStorage): a crianca usa o
       // laboratorio e raramente pega a mesma maquina duas vezes.
       Loja.carregar(t);
+      // Se a crianca ja estava numa sala neste computador, reabre sozinho.
+      Sala.restaurar(t).then(atualizarFaixaSala);
     });
     window.FirebaseMathGol.carregarConfiguracoes().then(function(config) {
       aplicarConfiguracoesRemotas(config);

@@ -1,217 +1,201 @@
-// banco-questoes.js — banco de questoes curadas por dificuldade (HU-05).
-// Complementa o gerador aleatorio de questions.js: primeiro sorteia
-// do banco (sem repetir na mesma sessao), quando esgota cai no gerador.
-// Cada questao tem texto visual, texto falado, resultado e 5 alternativas
-// (1 correta + 4 distratoras plausíveis), uma para cada zona do gol.
+// banco-questoes.js — banco curado, organizado pela escada de niveis.js.
 //
-// Toda questão — venha do banco curado ou do gerador de fallback — passa
-// por validarPergunta() antes de ser entregue ao jogo: nunca aceita
-// resultado inválido, alternativas repetidas, mais de uma correta ou
-// questão malformada. Isso garante que o fallback de questions.js também
-// seja seguro, como pede a HU-05.
+// MUDOU NESTA VERSÃO
+// Antes o banco tinha 3 baldes (facil/medio/dificil) e as distratoras eram
+// escritas à mão, uma a uma. Agora cada entrada é só [a, b, tipo]: a conta,
+// o enunciado falado e as 5 alternativas saem de montarPergunta(), o mesmo
+// caminho do gerador. Menos lugar pra errar e muito mais fácil de um
+// professor revisar a lista.
+//
+// O banco é sorteado primeiro (contas escolhidas a dedo, sem repetir na
+// sessão); quando esgota, o gerador de questions.js assume. Toda questão,
+// venha de onde vier, passa por validarPergunta() antes de ir pro jogo.
 
 var BancoQuestoes = (function() {
 
-  // Perguntas pré-montadas. Formato identico ao retorno de gerarPergunta().
-  // As alternativas ja vem com 5 opcoes (1 correta + 4 distratoras).
-
-  function q(texto, textoFalado, resultado, distratoras) {
-    var alts = [{ valor: resultado, correta: true }];
-    distratoras.forEach(function(d) { alts.push({ valor: d, correta: false }); });
-    // Embaralha
-    for (var i = alts.length - 1; i > 0; i--) {
-      var j = Math.floor(Math.random() * (i + 1));
-      var temp = alts[i]; alts[i] = alts[j]; alts[j] = temp;
-    }
-    return { texto: texto, textoFalado: textoFalado, resultado: resultado, alternativas: alts };
-  }
-
-  // Pedagogia por dificuldade:
-  // - fácil: adição e subtração simples, resultados não negativos.
-  // - médio: adição, subtração e multiplicação básica.
-  // - difícil: multiplicação e divisões exatas.
+  // [a, b, tipo] — o nível da chave define o que é apropriado ali.
   var BANCO = {
-    facil: [
-      function(){ return q('2 + 3', 'Quanto é 2 mais 3?', 5, [3, 4, 6, 7]); },
-      function(){ return q('1 + 4', 'Quanto é 1 mais 4?', 5, [3, 4, 6, 7]); },
-      function(){ return q('3 + 5', 'Quanto é 3 mais 5?', 8, [6, 7, 9, 10]); },
-      function(){ return q('6 + 2', 'Quanto é 6 mais 2?', 8, [6, 7, 9, 10]); },
-      function(){ return q('7 + 1', 'Quanto é 7 mais 1?', 8, [6, 7, 9, 10]); },
-      function(){ return q('4 + 4', 'Quanto é 4 mais 4?', 8, [5, 6, 7, 9]); },
-      function(){ return q('5 + 3', 'Quanto é 5 mais 3?', 8, [6, 7, 9, 10]); },
-      function(){ return q('2 + 6', 'Quanto é 2 mais 6?', 8, [5, 7, 9, 10]); },
-      function(){ return q('1 + 7', 'Quanto é 1 mais 7?', 8, [5, 6, 9, 10]); },
-      function(){ return q('5 − 2', 'Quanto é 5 menos 2?', 3, [1, 2, 4, 5]); },
-      function(){ return q('8 − 3', 'Quanto é 8 menos 3?', 5, [3, 4, 6, 7]); },
-      function(){ return q('7 − 4', 'Quanto é 7 menos 4?', 3, [1, 2, 4, 5]); },
-      function(){ return q('9 − 5', 'Quanto é 9 menos 5?', 4, [2, 3, 5, 6]); },
-      function(){ return q('10 − 3', 'Quanto é 10 menos 3?', 7, [5, 6, 8, 9]); },
-      function(){ return q('6 − 1', 'Quanto é 6 menos 1?', 5, [3, 4, 6, 7]); },
-      function(){ return q('4 + 3', 'Quanto é 4 mais 3?', 7, [5, 6, 8, 9]); },
-      function(){ return q('9 − 6', 'Quanto é 9 menos 6?', 3, [1, 2, 4, 5]); },
-      function(){ return q('1 + 8', 'Quanto é 1 mais 8?', 9, [6, 7, 8, 10]); },
-      function(){ return q('10 − 7', 'Quanto é 10 menos 7?', 3, [1, 2, 4, 5]); },
-      function(){ return q('3 + 3', 'Quanto é 3 mais 3?', 6, [4, 5, 7, 8]); }
+    1: [ // Somar até 10 — começa bem pequeno de propósito
+      [1,1,'soma'], [1,2,'soma'], [2,2,'soma'], [1,3,'soma'], [2,3,'soma'],
+      [1,4,'soma'], [3,5,'soma'], [6,2,'soma'], [7,1,'soma'], [4,4,'soma'],
+      [5,3,'soma'], [2,6,'soma'], [1,8,'soma'], [3,3,'soma'], [4,2,'soma'],
+      [5,5,'soma']
     ],
-
-    medio: [
-      function(){ return q('7 + 8', 'Quanto é 7 mais 8?', 15, [12, 13, 14, 16]); },
-      function(){ return q('9 + 6', 'Quanto é 9 mais 6?', 15, [13, 14, 16, 17]); },
-      function(){ return q('12 + 5', 'Quanto é 12 mais 5?', 17, [15, 16, 18, 19]); },
-      function(){ return q('14 − 6', 'Quanto é 14 menos 6?', 8, [6, 7, 9, 10]); },
-      function(){ return q('18 − 9', 'Quanto é 18 menos 9?', 9, [7, 8, 10, 11]); },
-      function(){ return q('15 − 7', 'Quanto é 15 menos 7?', 8, [6, 7, 9, 10]); },
-      function(){ return q('3 × 4', 'Quanto é 3 vezes 4?', 12, [9, 10, 11, 14]); },
-      function(){ return q('5 × 3', 'Quanto é 5 vezes 3?', 15, [12, 13, 16, 18]); },
-      function(){ return q('4 × 5', 'Quanto é 4 vezes 5?', 20, [15, 16, 18, 22]); },
-      function(){ return q('2 × 5', 'Quanto é 2 vezes 5?', 10, [6, 8, 12, 15]); },
-      function(){ return q('11 + 7', 'Quanto é 11 mais 7?', 18, [15, 16, 17, 19]); },
-      function(){ return q('16 − 8', 'Quanto é 16 menos 8?', 8, [5, 6, 7, 9]); },
-      function(){ return q('3 × 3', 'Quanto é 3 vezes 3?', 9, [6, 7, 8, 12]); },
-      function(){ return q('4 × 4', 'Quanto é 4 vezes 4?', 16, [12, 14, 15, 18]); },
-      function(){ return q('13 + 6', 'Quanto é 13 mais 6?', 19, [16, 17, 18, 20]); },
-      function(){ return q('20 − 8', 'Quanto é 20 menos 8?', 12, [10, 11, 13, 14]); },
-      function(){ return q('5 × 4', 'Quanto é 5 vezes 4?', 20, [15, 16, 18, 24]); },
-      function(){ return q('2 × 4', 'Quanto é 2 vezes 4?', 8, [5, 6, 10, 12]); },
-      function(){ return q('17 − 9', 'Quanto é 17 menos 9?', 8, [6, 7, 9, 10]); },
-      function(){ return q('6 + 9', 'Quanto é 6 mais 9?', 15, [12, 13, 14, 16]); }
+    2: [ // Subtrair até 10
+      [5,2,'subtracao'], [8,3,'subtracao'], [7,4,'subtracao'], [9,5,'subtracao'],
+      [10,3,'subtracao'], [6,1,'subtracao'], [9,6,'subtracao'], [10,7,'subtracao'],
+      [8,5,'subtracao'], [7,2,'subtracao'], [6,4,'subtracao'], [10,4,'subtracao']
     ],
-
-    dificil: [
-      function(){ return q('7 × 8', 'Quanto é 7 vezes 8?', 56, [48, 52, 54, 63]); },
-      function(){ return q('6 × 9', 'Quanto é 6 vezes 9?', 54, [45, 48, 56, 63]); },
-      function(){ return q('8 × 7', 'Quanto é 8 vezes 7?', 56, [49, 54, 58, 63]); },
-      function(){ return q('9 × 6', 'Quanto é 9 vezes 6?', 54, [45, 48, 56, 63]); },
-      function(){ return q('42 ÷ 7', 'Quanto é 42 dividido por 7?', 6, [4, 5, 7, 8]); },
-      function(){ return q('56 ÷ 8', 'Quanto é 56 dividido por 8?', 7, [5, 6, 8, 9]); },
-      function(){ return q('72 ÷ 9', 'Quanto é 72 dividido por 9?', 8, [6, 7, 9, 10]); },
-      function(){ return q('36 ÷ 6', 'Quanto é 36 dividido por 6?', 6, [4, 5, 7, 8]); },
-      function(){ return q('8 × 9', 'Quanto é 8 vezes 9?', 72, [63, 68, 70, 81]); },
-      function(){ return q('7 × 7', 'Quanto é 7 vezes 7?', 49, [42, 46, 48, 56]); },
-      function(){ return q('9 × 9', 'Quanto é 9 vezes 9?', 81, [72, 78, 80, 90]); },
-      function(){ return q('48 ÷ 6', 'Quanto é 48 dividido por 6?', 8, [6, 7, 9, 10]); },
-      function(){ return q('63 ÷ 9', 'Quanto é 63 dividido por 9?', 7, [5, 6, 8, 9]); },
-      function(){ return q('54 ÷ 6', 'Quanto é 54 dividido por 6?', 9, [6, 7, 8, 10]); },
-      function(){ return q('6 × 7', 'Quanto é 6 vezes 7?', 42, [35, 36, 48, 49]); },
-      function(){ return q('10 × 8', 'Quanto é 10 vezes 8?', 80, [64, 70, 72, 90]); },
-      function(){ return q('81 ÷ 9', 'Quanto é 81 dividido por 9?', 9, [7, 8, 10, 11]); },
-      function(){ return q('5 × 9', 'Quanto é 5 vezes 9?', 45, [36, 40, 50, 54]); },
-      function(){ return q('40 ÷ 8', 'Quanto é 40 dividido por 8?', 5, [3, 4, 6, 8]); },
-      function(){ return q('7 × 9', 'Quanto é 7 vezes 9?', 63, [54, 56, 70, 72]); }
+    3: [ // Soma e subtração até 10
+      [4,3,'soma'], [6,3,'soma'], [2,7,'soma'], [8,2,'soma'],
+      [9,4,'subtracao'], [7,3,'subtracao'], [10,6,'subtracao'], [8,6,'subtracao'],
+      [5,4,'soma'], [9,2,'subtracao'], [3,6,'soma'], [10,5,'subtracao']
+    ],
+    4: [ // Passar do 10 (resultado 11–18)
+      [7,8,'soma'], [9,6,'soma'], [8,5,'soma'], [6,7,'soma'], [9,8,'soma'],
+      [7,6,'soma'], [8,8,'soma'], [9,9,'soma'], [5,8,'soma'], [6,6,'soma'],
+      [9,4,'soma'], [7,7,'soma']
+    ],
+    5: [ // Subtrair de números até 20
+      [14,6,'subtracao'], [18,9,'subtracao'], [15,7,'subtracao'], [16,8,'subtracao'],
+      [13,5,'subtracao'], [17,9,'subtracao'], [12,4,'subtracao'], [20,8,'subtracao'],
+      [19,7,'subtracao'], [11,3,'subtracao'], [16,9,'subtracao'], [15,6,'subtracao']
+    ],
+    6: [ // Somar 2 dígitos sem "vai um"
+      [23,14,'soma'], [31,25,'soma'], [42,16,'soma'], [54,23,'soma'],
+      [12,36,'soma'], [25,41,'soma'], [33,24,'soma'], [61,27,'soma'],
+      [14,52,'soma'], [43,35,'soma'], [21,48,'soma'], [52,36,'soma']
+    ],
+    7: [ // Somar e subtrair 2 dígitos (com reagrupamento)
+      [36,27,'soma'], [48,25,'soma'], [59,18,'soma'], [27,39,'soma'],
+      [52,18,'subtracao'], [63,27,'subtracao'], [71,35,'subtracao'], [84,46,'subtracao'],
+      [45,38,'soma'], [90,42,'subtracao'], [67,29,'soma'], [55,27,'subtracao']
+    ],
+    8: [ // Tabuada de 2 a 5
+      [3,4,'multiplicacao'], [5,3,'multiplicacao'], [4,5,'multiplicacao'], [2,7,'multiplicacao'],
+      [3,6,'multiplicacao'], [5,8,'multiplicacao'], [4,7,'multiplicacao'], [2,9,'multiplicacao'],
+      [3,8,'multiplicacao'], [5,6,'multiplicacao'], [4,9,'multiplicacao'], [2,10,'multiplicacao']
+    ],
+    9: [ // Tabuada completa
+      [7,8,'multiplicacao'], [6,7,'multiplicacao'], [9,6,'multiplicacao'], [8,8,'multiplicacao'],
+      [7,9,'multiplicacao'], [6,9,'multiplicacao'], [8,7,'multiplicacao'], [9,9,'multiplicacao'],
+      [6,6,'multiplicacao'], [8,9,'multiplicacao'], [7,7,'multiplicacao'], [10,7,'multiplicacao']
+    ],
+    10: [ // Dividir por 2 a 5
+      [12,3,'divisao'], [20,4,'divisao'], [15,5,'divisao'], [18,2,'divisao'],
+      [24,4,'divisao'], [25,5,'divisao'], [16,2,'divisao'], [21,3,'divisao'],
+      [30,5,'divisao'], [28,4,'divisao'], [27,3,'divisao'], [14,2,'divisao']
+    ],
+    11: [ // Divisão completa
+      [56,7,'divisao'], [63,9,'divisao'], [48,6,'divisao'], [72,8,'divisao'],
+      [54,6,'divisao'], [81,9,'divisao'], [42,7,'divisao'], [64,8,'divisao'],
+      [49,7,'divisao'], [36,6,'divisao'], [90,9,'divisao'], [70,10,'divisao']
+    ],
+    12: [ // Tudo junto
+      [47,38,'soma'], [82,45,'subtracao'], [7,9,'multiplicacao'], [56,8,'divisao'],
+      [63,29,'soma'], [91,37,'subtracao'], [8,6,'multiplicacao'], [72,9,'divisao'],
+      [58,34,'soma'], [75,48,'subtracao'], [9,7,'multiplicacao'], [45,5,'divisao']
     ]
   };
 
-  // Valida programaticamente uma questão pronta: enunciado e texto falado
-  // não vazios, resultado numérico válido (>= 0), exatamente 5 alternativas
-  // com valores únicos e numéricos válidos, exatamente uma marcada como
-  // correta, e o valor dessa alternativa batendo com o resultado.
+  // ---------- Validação ----------
+  //
+  // Enunciado e texto falado não vazios, resultado numérico >= 0, exatamente
+  // 5 alternativas de valores únicos, exatamente uma correta, e o valor dela
+  // batendo com o resultado.
   function validarPergunta(p) {
     if (!p || typeof p.texto !== 'string' || !p.texto.trim()) return false;
     if (typeof p.textoFalado !== 'string' || !p.textoFalado.trim()) return false;
     if (typeof p.resultado !== 'number' || !isFinite(p.resultado) || p.resultado < 0) return false;
+    if (!Number.isInteger(p.resultado)) return false; // divisão tem que ser exata
     if (!Array.isArray(p.alternativas) || p.alternativas.length !== 5) return false;
 
-    var valoresVistos = [];
-    var quantidadeCorretas = 0;
-    var alternativaCorreta = null;
+    var vistos = [];
+    var corretas = 0;
+    var aCorreta = null;
 
     for (var i = 0; i < p.alternativas.length; i++) {
       var alt = p.alternativas[i];
       if (!alt || typeof alt.valor !== 'number' || !isFinite(alt.valor) || alt.valor < 0) return false;
-      if (valoresVistos.indexOf(alt.valor) !== -1) return false; // alternativa repetida
-      valoresVistos.push(alt.valor);
-      if (alt.correta) {
-        quantidadeCorretas++;
-        alternativaCorreta = alt;
-      }
+      if (vistos.indexOf(alt.valor) !== -1) return false;
+      vistos.push(alt.valor);
+      if (alt.correta) { corretas++; aCorreta = alt; }
     }
 
-    if (quantidadeCorretas !== 1) return false; // nenhuma ou mais de uma correta
-    if (!alternativaCorreta || alternativaCorreta.valor !== p.resultado) return false;
+    if (corretas !== 1) return false;
+    if (!aCorreta || aCorreta.valor !== p.resultado) return false;
     return true;
   }
 
-  // Controle de quais perguntas do banco ja foram usadas nesta sessao
-  var usadas = { facil: [], medio: [], dificil: [] };
+  // ---------- Sorteio sem repetir na sessão ----------
 
-  function resetarSessao() {
-    usadas = { facil: [], medio: [], dificil: [] };
+  var usadas = {};
+
+  function resetarSessao() { usadas = {}; }
+
+  function montarDoBanco(entrada, nivelId) {
+    return montarPergunta(entrada[0], entrada[1], entrada[2], nivelId);
   }
 
-  function obterPergunta(dificuldade) {
-    var lista = BANCO[dificuldade];
-    if (!lista) return null;
+  // filtros opcionais { tipos: [...], digitos: n } — usados quando o
+  // professor restringe a sala a um tipo de conta específico.
+  function obterPergunta(nivelId, filtros) {
+    var lista = BANCO[nivelId];
+    if (!lista || !lista.length) return null;
 
-    // Indices disponiveis (nao usados ainda)
-    var disponiveis = [];
+    var indices = [];
     for (var i = 0; i < lista.length; i++) {
-      if (usadas[dificuldade].indexOf(i) === -1) disponiveis.push(i);
+      if (filtros && filtros.tipos && filtros.tipos.length &&
+          filtros.tipos.indexOf(lista[i][2]) === -1) continue;
+      indices.push(i);
     }
+    if (!indices.length) return null;
 
-    // Se esgotou o banco, reseta e volta a sortear
-    if (disponiveis.length === 0) {
-      usadas[dificuldade] = [];
-      for (var j = 0; j < lista.length; j++) disponiveis.push(j);
-    }
+    if (!usadas[nivelId]) usadas[nivelId] = [];
+    var disponiveis = indices.filter(function(i) { return usadas[nivelId].indexOf(i) === -1; });
+    if (!disponiveis.length) { usadas[nivelId] = []; disponiveis = indices.slice(); }
 
-    // Tenta sortear uma questão válida; se por algum motivo a construída
-    // for inválida, marca como usada (pra não insistir nela) e tenta outra
-    // dentre as disponíveis, até esgotar as opções desta rodada.
-    while (disponiveis.length > 0) {
+    while (disponiveis.length) {
       var pos = Math.floor(Math.random() * disponiveis.length);
       var indice = disponiveis[pos];
       disponiveis.splice(pos, 1);
-      usadas[dificuldade].push(indice);
-      var pergunta = lista[indice]();
-      if (validarPergunta(pergunta)) return pergunta;
-      console.warn('BancoQuestoes: questão malformada ignorada (' + dificuldade + ', índice ' + indice + ')');
+      usadas[nivelId].push(indice);
+      var p = montarDoBanco(lista[indice], nivelId);
+      if (validarPergunta(p)) return p;
+      console.warn('BancoQuestoes: entrada inválida no nível ' + nivelId + ', índice ' + indice);
     }
     return null;
   }
 
-  // Exporta: tenta o banco primeiro, cai no gerador se necessario. O
-  // gerador de fallback (questions.js) também passa pela validação — se
-  // por algum motivo gerar algo inválido, tenta mais uma vez antes de usar
-  // uma questão mínima garantida, pra nunca travar o jogo.
-  function sortearPergunta(dificuldade) {
-    var pergunta = obterPergunta(dificuldade);
-    if (pergunta) return pergunta;
+  // Aceita número (nível) ou string (dificuldade antiga), pra não quebrar
+  // progresso de quem já jogava antes da escada existir.
+  function sortearPergunta(nivelOuDificuldade, filtros) {
+    var nivelId = typeof nivelOuDificuldade === 'number'
+      ? nivelOuDificuldade
+      : nivelDaDificuldadeAntiga(nivelOuDificuldade);
+    nivelId = obterNivel(nivelId).id;
 
-    pergunta = gerarPergunta(dificuldade);
-    if (validarPergunta(pergunta)) return pergunta;
+    var p = obterPergunta(nivelId, filtros);
+    if (p) return p;
 
-    console.warn('BancoQuestoes: fallback de questions.js retornou questão inválida, tentando novamente.');
-    pergunta = gerarPergunta(dificuldade);
-    if (validarPergunta(pergunta)) return pergunta;
+    p = gerarPerguntaDoNivel(nivelId);
+    if (validarPergunta(p)) return p;
 
-    return questaoMinimaSegura(dificuldade);
+    console.warn('BancoQuestoes: gerador retornou questão inválida, tentando de novo.');
+    p = gerarPerguntaDoNivel(nivelId);
+    if (validarPergunta(p)) return p;
+
+    return montarPergunta(2, 2, 'soma', 1); // rede final
   }
 
-  // Última rede de segurança: uma questão fixa, sempre válida, usada apenas
-  // se banco e gerador falharem simultaneamente (nunca deveria acontecer).
-  function questaoMinimaSegura(dificuldade) {
-    if (dificuldade === 'dificil') return q('6 × 6', 'Quanto é 6 vezes 6?', 36, [30, 32, 40, 42]);
-    if (dificuldade === 'medio') return q('6 + 7', 'Quanto é 6 mais 7?', 13, [10, 11, 14, 15]);
-    return q('2 + 2', 'Quanto é 2 mais 2?', 4, [2, 3, 5, 6]);
-  }
-
-  // Autoverificação do banco inteiro ao carregar o módulo — apenas avisa no
-  // console em desenvolvimento; nunca interrompe o jogo.
-  (function validarBancoCompleto() {
-    Object.keys(BANCO).forEach(function(dificuldade) {
-      BANCO[dificuldade].forEach(function(fabrica, indice) {
-        var amostra;
-        try { amostra = fabrica(); } catch (e) { amostra = null; }
-        if (!validarPergunta(amostra)) {
-          console.warn('BancoQuestoes: entrada inválida no banco "' + dificuldade + '", índice ' + indice + '.');
+  // ---------- Autoverificação ----------
+  //
+  // Roda o banco inteiro ao carregar e avisa no console. Pega erro de
+  // digitação (divisão não exata, subtração negativa) na hora de desenvolver,
+  // nunca interrompe o jogo.
+  (function conferirBanco() {
+    Object.keys(BANCO).forEach(function(nivel) {
+      BANCO[nivel].forEach(function(entrada, i) {
+        var p;
+        try { p = montarDoBanco(entrada, parseInt(nivel, 10)); } catch (e) { p = null; }
+        if (!validarPergunta(p)) {
+          console.warn('BancoQuestoes: entrada inválida — nível ' + nivel + ', índice ' + i +
+                       ' (' + entrada.join(' ') + ')');
         }
       });
     });
   })();
 
+  function quantidadePorNivel() {
+    var r = {};
+    Object.keys(BANCO).forEach(function(n) { r[n] = BANCO[n].length; });
+    return r;
+  }
+
   return {
     sortearPergunta: sortearPergunta,
     resetarSessao: resetarSessao,
-    validarPergunta: validarPergunta
+    validarPergunta: validarPergunta,
+    quantidadePorNivel: quantidadePorNivel
   };
 })();

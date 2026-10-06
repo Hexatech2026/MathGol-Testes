@@ -12,6 +12,7 @@ import {
   getDocs,
   addDoc,
   collection,
+  onSnapshot,
   serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
 
@@ -280,6 +281,111 @@ async function recuperarTokenPorCodigo(codigo) {
   }
 }
 
+// ---------- HU-14: Sala do Professor ----------
+//
+// Mesmo padrão do "código do craque": um código curto e opaco identifica a
+// sala, sem login e sem dado pessoal. O professor cria a sala e dita o
+// código em voz alta; as crianças digitam e entram.
+//
+//   salas/{codigo}            → { nome, nivel, tipos, criadoEm, dono }
+//   salas/{codigo}/alunos/{token} → { apelido, avatarSeed, gols, pontuacao }
+//
+// "dono" é o token do professor — serve pra o painel dele reabrir a sala
+// depois, não é autenticação (ver a ressalva nas regras do Firestore).
+
+async function criarSala(tokenProfessor, dados) {
+  if (!tokenProfessor) return null;
+  try {
+    for (let tentativa = 0; tentativa < 5; tentativa++) {
+      const codigo = sortearCodigo();
+      const jaExiste = await getDoc(doc(db, 'salas', codigo));
+      if (jaExiste.exists()) continue;
+
+      await setDoc(doc(db, 'salas', codigo), {
+        nome: (dados && dados.nome) || 'Turma',
+        nivel: (dados && dados.nivel) || 1,
+        tipos: (dados && dados.tipos) || [],
+        dono: tokenProfessor,
+        criadoEm: serverTimestamp()
+      });
+      return codigo;
+    }
+    console.warn('Não foi possível gerar um código de sala livre.');
+    return null;
+  } catch (erro) {
+    console.warn('Não foi possível criar a sala:', erro);
+    return null;
+  }
+}
+
+async function buscarSala(codigo) {
+  if (!codigo) return null;
+  try {
+    const snap = await getDoc(doc(db, 'salas', normalizarCodigo(codigo)));
+    if (!snap.exists()) return null;
+    return Object.assign({ codigo: normalizarCodigo(codigo) }, snap.data());
+  } catch (erro) {
+    console.warn('Não foi possível ler a sala:', erro);
+    return null;
+  }
+}
+
+async function atualizarSala(codigo, mudancas) {
+  if (!codigo) return false;
+  try {
+    await setDoc(doc(db, 'salas', normalizarCodigo(codigo)), mudancas, { merge: true });
+    return true;
+  } catch (erro) {
+    console.warn('Não foi possível atualizar a sala:', erro);
+    return false;
+  }
+}
+
+// A criança se anuncia na sala. Chamado ao entrar e de novo no fim de cada
+// fase, com o resultado — é o que alimenta o painel do professor.
+async function entrarNaSala(codigo, token, aluno) {
+  if (!codigo || !token) return false;
+  try {
+    await setDoc(doc(collection(doc(db, 'salas', normalizarCodigo(codigo)), 'alunos'), token), {
+      apelido: aluno.apelido || 'Craque',
+      avatarSeed: aluno.avatarSeed || '',
+      gols: aluno.gols || 0,
+      pontuacao: aluno.pontuacao || 0,
+      fase: aluno.fase || '',
+      atualizadoEm: serverTimestamp()
+    }, { merge: true });
+    return true;
+  } catch (erro) {
+    console.warn('Não foi possível entrar na sala:', erro);
+    return false;
+  }
+}
+
+// Acompanha a turma ao vivo. Devolve a função de cancelamento — quem chama
+// PRECISA guardar e chamar ao sair da tela, senão o listener fica aberto
+// consumindo leitura do Firestore.
+function observarAlunos(codigo, aoMudar) {
+  if (!codigo) return function() {};
+  try {
+    const ref = collection(doc(db, 'salas', normalizarCodigo(codigo)), 'alunos');
+    return onSnapshot(ref, function(snap) {
+      const lista = [];
+      snap.forEach(function(d) { lista.push(Object.assign({ token: d.id }, d.data())); });
+      aoMudar(lista);
+    }, function(erro) {
+      console.warn('Observação da sala interrompida:', erro);
+    });
+  } catch (erro) {
+    console.warn('Não foi possível observar a sala:', erro);
+    return function() {};
+  }
+}
+
+function normalizarCodigo(codigo) {
+  const limpo = String(codigo).toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return limpo.length === 6 ? limpo.slice(0, 3) + '-' + limpo.slice(3) : limpo;
+}
+
 // ---------- Backup / Export ----------
 
 async function exportarDadosFirebase(token) {
@@ -367,5 +473,10 @@ window.FirebaseMathGol = {
   buscarCarteira,
   salvarCarteira,
   obterOuCriarCodigo,
-  recuperarTokenPorCodigo
+  recuperarTokenPorCodigo,
+  criarSala,
+  buscarSala,
+  atualizarSala,
+  entrarNaSala,
+  observarAlunos
 };

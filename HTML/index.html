@@ -148,8 +148,63 @@
         🛒 Loja
         <span class="selo-saldo"><img class="icone-cruzeiro" src="../Imagens/estrela-cruzeiro.png" alt=""><span data-saldo-cruzeiros>--</span></span>
       </button>
+      <button id="botao-entrar-sala" class="botao botao-secundario" type="button">🚪 Entrar numa sala</button>
+      <button id="botao-professor" class="botao botao-secundario" type="button">🧑‍🏫 Sou professor</button>
       <button id="botao-creditos" class="botao botao-secundario" type="button">Créditos</button>
       <button id="botao-backup" class="botao botao-secundario" type="button">💾 Backup</button>
+    </div>
+    <p id="faixa-sala" class="faixa-sala" hidden></p>
+  </section>
+
+  <section id="tela-entrar-sala" class="tela">
+    <h2>🚪 Entrar numa sala</h2>
+    <p class="texto-apoio">Peça o código da sala para a sua professora ou professor e digite aqui.</p>
+    <input id="input-sala" class="campo-codigo campo-codigo-grande" type="text" maxlength="7"
+           placeholder="ABC-123" aria-label="Código da sala" autocomplete="off" spellcheck="false">
+    <p id="aviso-entrar-sala" class="loja-aviso" aria-live="polite"></p>
+    <div class="pilha-botoes" style="margin-top: 18px;">
+      <button id="botao-confirmar-sala" class="botao botao-cta" type="button">Entrar</button>
+      <button id="botao-voltar-entrar-sala" class="botao" type="button">Voltar</button>
+    </div>
+  </section>
+
+  <section id="tela-professor" class="tela tela-professor">
+    <h2>🧑‍🏫 Sala do Professor</h2>
+
+    <div id="prof-sem-sala">
+      <p class="texto-apoio">Crie uma sala, dite o código para a turma e escolha o nível das contas.</p>
+      <label class="rotulo-campo" for="input-nome-turma">Nome da turma</label>
+      <input id="input-nome-turma" class="campo-texto" type="text" maxlength="30" placeholder="3º ano B" autocomplete="off">
+
+      <label class="rotulo-campo" for="select-nivel-sala">Nível das contas</label>
+      <select id="select-nivel-sala" class="campo-texto"></select>
+
+      <fieldset class="grupo-tipos">
+        <legend class="rotulo-campo">Só estes tipos de conta (opcional)</legend>
+        <div id="filtros-tipo" class="linha-tipos"></div>
+      </fieldset>
+
+      <div class="pilha-botoes" style="margin-top: 16px;">
+        <button id="botao-criar-sala" class="botao botao-cta" type="button">Criar sala</button>
+        <button id="botao-abrir-sala" class="botao botao-secundario" type="button">Abrir sala existente</button>
+      </div>
+      <p id="aviso-prof" class="loja-aviso" aria-live="polite"></p>
+    </div>
+
+    <div id="prof-com-sala" hidden>
+      <p class="texto-apoio">Dite este código para a turma:</p>
+      <p id="codigo-sala" class="codigo-craque codigo-sala">------</p>
+      <p id="prof-nivel-atual" class="texto-apoio"></p>
+
+      <label class="rotulo-campo" for="select-nivel-ativo">Trocar o nível da turma</label>
+      <select id="select-nivel-ativo" class="campo-texto"></select>
+
+      <h3 class="subtitulo-secao">Turma <span id="prof-contagem" class="contagem-alunos">(0)</span></h3>
+      <ul id="lista-alunos" class="lista-alunos" aria-live="polite"></ul>
+
+      <div class="pilha-botoes" style="margin-top: 16px;">
+        <button id="botao-fechar-painel" class="botao" type="button">Voltar ao menu</button>
+      </div>
     </div>
   </section>
 
@@ -432,6 +487,8 @@
 
 <!-- Scripts do jogo (ordem importa) -->
 <script src="../JS/data.js?v=5"></script>
+<script src="../JS/niveis.js?v=5"></script>
+<script src="../JS/sala.js?v=5"></script>
 <script src="../JS/loja-dados.js?v=5"></script>
 <script src="../JS/loja.js?v=5"></script>
 <script src="../JS/avatar-data.js?v=5"></script>
