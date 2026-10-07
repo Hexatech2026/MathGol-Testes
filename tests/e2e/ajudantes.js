@@ -34,6 +34,14 @@ async function monitorarErros(page) {
 async function abrirJogo(page, opcoes = {}) {
   const erros = await monitorarErros(page);
   await prepararRede(page, opcoes);
+  // O tutorial abre sozinho no primeiro "Jogar"; os testes antigos partem
+  // de quem ja viu (opcoes.tutorial = true para testar a primeira vez).
+  if (!opcoes.tutorial) {
+    await page.addInitScript(() => localStorage.setItem('mathgol_tutorial_visto', '1'));
+  }
+  if (opcoes.carteira) {
+    await page.addInitScript(c => localStorage.setItem('mathgol_carteira', JSON.stringify(c)), opcoes.carteira);
+  }
   if (opcoes.progressao) {
     await page.addInitScript(p => localStorage.setItem('mathgol_progressao', JSON.stringify(p)), opcoes.progressao);
   }

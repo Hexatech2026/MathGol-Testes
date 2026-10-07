@@ -24,7 +24,8 @@ function criarJogoPenalti2D(containerId, selecaoId) {
   var reduzMovimento = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   function d(ms) { return reduzMovimento ? 1 : ms; }
 
-  var TEMPO = { CORRIDA: 450, VOO: 750, ANTES_DE_RESETAR: 1500 };
+  // v1.5: mais rapido (antes 450 / 750 / 1500 ms).
+  var TEMPO = { CORRIDA: 300, VOO: 500, ANTES_DE_RESETAR: 1000 };
 
   // Projecao simples do plano do gol (metros) para % do palco.
   // O gol ocupa de 20% a 80% da largura; chao em 78%, travessao em 30%.
@@ -128,7 +129,8 @@ function criarJogoPenalti2D(containerId, selecaoId) {
         // num palco 16:9) fica metade acima da linha do chao: sobe metade.
         posicionar(goleiro, poseGoleiroTela.leftPercent, CHAO - 6.2, d(260));
         aoTerminarVoo();
-        depois(reduzMovimento ? 60 : TEMPO.ANTES_DE_RESETAR, resetar);
+        // R08: com movimento reduzido a jogada continua visivel (antes sumia em 60 ms).
+        depois(TEMPO.ANTES_DE_RESETAR, resetar);
       });
     });
   }

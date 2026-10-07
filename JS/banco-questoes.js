@@ -14,67 +14,84 @@
 var BancoQuestoes = (function() {
 
   // [a, b, tipo] — o nível da chave define o que é apropriado ali.
+  // [a, b, tipo] — o nível da chave define o que é apropriado ali.
+  //
+  // Os resultados são distribuídos de propósito: no máximo DUAS contas por
+  // resultado, e a forma varia (5 = 2+3 e 5 = 1+4). A primeira versão disto
+  // tinha seis contas que davam 8 no nível 1, e o teste DEF-23 de vocês pegou:
+  // com resultado repetido a criança decora a resposta em vez de calcular.
   var BANCO = {
     1: [ // Somar até 10 — começa bem pequeno de propósito
-      [1,1,'soma'], [1,2,'soma'], [2,2,'soma'], [1,3,'soma'], [2,3,'soma'],
-      [1,4,'soma'], [3,5,'soma'], [6,2,'soma'], [7,1,'soma'], [4,4,'soma'],
-      [5,3,'soma'], [2,6,'soma'], [1,8,'soma'], [3,3,'soma'], [4,2,'soma'],
-      [5,5,'soma']
+      [1,1,'soma'], [1,2,'soma'], [2,2,'soma'], [2,3,'soma'], [3,3,'soma'],
+      [3,4,'soma'], [4,4,'soma'], [4,5,'soma'], [5,5,'soma'], [2,1,'soma'],
+      [1,3,'soma'], [1,4,'soma'], [4,2,'soma'], [5,2,'soma'], [2,6,'soma'],
+      [2,7,'soma'], [7,3,'soma']
     ],
     2: [ // Subtrair até 10
-      [5,2,'subtracao'], [8,3,'subtracao'], [7,4,'subtracao'], [9,5,'subtracao'],
-      [10,3,'subtracao'], [6,1,'subtracao'], [9,6,'subtracao'], [10,7,'subtracao'],
-      [8,5,'subtracao'], [7,2,'subtracao'], [6,4,'subtracao'], [10,4,'subtracao']
+      [2,1,'subtracao'], [3,1,'subtracao'], [4,1,'subtracao'], [5,1,'subtracao'], [6,1,'subtracao'],
+      [7,1,'subtracao'], [8,1,'subtracao'], [9,1,'subtracao'], [10,1,'subtracao'], [6,5,'subtracao'],
+      [7,5,'subtracao'], [7,4,'subtracao'], [8,4,'subtracao'], [8,3,'subtracao'], [9,3,'subtracao'],
+      [9,2,'subtracao'], [10,2,'subtracao']
     ],
     3: [ // Soma e subtração até 10
-      [4,3,'soma'], [6,3,'soma'], [2,7,'soma'], [8,2,'soma'],
-      [9,4,'subtracao'], [7,3,'subtracao'], [10,6,'subtracao'], [8,6,'subtracao'],
-      [5,4,'soma'], [9,2,'subtracao'], [3,6,'soma'], [10,5,'subtracao']
+      [2,1,'subtracao'], [1,1,'soma'], [1,2,'soma'], [2,2,'soma'], [2,3,'soma'],
+      [3,3,'soma'], [3,4,'soma'], [4,4,'soma'], [4,5,'soma'], [5,5,'soma'],
+      [6,5,'subtracao'], [6,4,'subtracao'], [6,3,'subtracao'], [6,2,'subtracao'], [6,1,'subtracao'],
+      [5,1,'soma'], [1,6,'soma'], [6,2,'soma']
     ],
-    4: [ // Passar do 10 (resultado 11–18)
-      [7,8,'soma'], [9,6,'soma'], [8,5,'soma'], [6,7,'soma'], [9,8,'soma'],
-      [7,6,'soma'], [8,8,'soma'], [9,9,'soma'], [5,8,'soma'], [6,6,'soma'],
-      [9,4,'soma'], [7,7,'soma']
+    4: [ // Passar do 10 (resultado 11–20)
+      [5,6,'soma'], [6,6,'soma'], [6,7,'soma'], [7,7,'soma'], [7,8,'soma'],
+      [8,8,'soma'], [8,9,'soma'], [9,9,'soma'], [9,10,'soma'], [10,10,'soma'],
+      [3,8,'soma'], [8,4,'soma'], [4,9,'soma'], [5,9,'soma'], [9,6,'soma'],
+      [9,7,'soma'], [7,10,'soma'], [8,10,'soma']
     ],
     5: [ // Subtrair de números até 20
-      [14,6,'subtracao'], [18,9,'subtracao'], [15,7,'subtracao'], [16,8,'subtracao'],
-      [13,5,'subtracao'], [17,9,'subtracao'], [12,4,'subtracao'], [20,8,'subtracao'],
-      [19,7,'subtracao'], [11,3,'subtracao'], [16,9,'subtracao'], [15,6,'subtracao']
+      [11,9,'subtracao'], [11,8,'subtracao'], [11,7,'subtracao'], [11,6,'subtracao'], [11,5,'subtracao'],
+      [11,4,'subtracao'], [11,3,'subtracao'], [11,2,'subtracao'], [11,1,'subtracao'], [12,1,'subtracao'],
+      [13,1,'subtracao'], [14,1,'subtracao'], [15,1,'subtracao'], [16,1,'subtracao'], [17,1,'subtracao'],
+      [18,1,'subtracao'], [19,1,'subtracao'], [20,1,'subtracao']
     ],
     6: [ // Somar 2 dígitos sem "vai um"
-      [23,14,'soma'], [31,25,'soma'], [42,16,'soma'], [54,23,'soma'],
-      [12,36,'soma'], [25,41,'soma'], [33,24,'soma'], [61,27,'soma'],
-      [14,52,'soma'], [43,35,'soma'], [21,48,'soma'], [52,36,'soma']
+      [10,10,'soma'], [10,11,'soma'], [11,11,'soma'], [11,12,'soma'], [12,12,'soma'],
+      [12,13,'soma'], [13,13,'soma'], [13,14,'soma'], [14,14,'soma'], [14,15,'soma'],
+      [10,20,'soma'], [11,20,'soma'], [12,20,'soma'], [13,20,'soma'], [14,20,'soma'],
+      [20,15,'soma'], [20,16,'soma'], [20,17,'soma']
     ],
     7: [ // Somar e subtrair 2 dígitos (com reagrupamento)
-      [36,27,'soma'], [48,25,'soma'], [59,18,'soma'], [27,39,'soma'],
-      [52,18,'subtracao'], [63,27,'subtracao'], [71,35,'subtracao'], [84,46,'subtracao'],
-      [45,38,'soma'], [90,42,'subtracao'], [67,29,'soma'], [55,27,'subtracao']
+      [20,10,'subtracao'], [21,10,'subtracao'], [22,10,'subtracao'], [23,10,'subtracao'], [24,10,'subtracao'],
+      [25,10,'subtracao'], [26,10,'subtracao'], [27,10,'subtracao'], [28,10,'subtracao'], [29,10,'subtracao'],
+      [10,10,'soma'], [10,11,'soma'], [11,11,'soma'], [11,12,'soma'], [12,12,'soma'],
+      [12,13,'soma'], [13,13,'soma'], [13,14,'soma']
     ],
     8: [ // Tabuada de 2 a 5
-      [3,4,'multiplicacao'], [5,3,'multiplicacao'], [4,5,'multiplicacao'], [2,7,'multiplicacao'],
-      [3,6,'multiplicacao'], [5,8,'multiplicacao'], [4,7,'multiplicacao'], [2,9,'multiplicacao'],
-      [3,8,'multiplicacao'], [5,6,'multiplicacao'], [4,9,'multiplicacao'], [2,10,'multiplicacao']
+      [2,2,'multiplicacao'], [2,3,'multiplicacao'], [2,4,'multiplicacao'], [3,3,'multiplicacao'], [2,5,'multiplicacao'],
+      [3,4,'multiplicacao'], [2,7,'multiplicacao'], [3,5,'multiplicacao'], [4,4,'multiplicacao'], [3,6,'multiplicacao'],
+      [4,5,'multiplicacao'], [3,7,'multiplicacao'], [4,6,'multiplicacao'], [5,5,'multiplicacao'], [3,9,'multiplicacao'],
+      [4,7,'multiplicacao'], [5,6,'multiplicacao'], [4,8,'multiplicacao']
     ],
     9: [ // Tabuada completa
-      [7,8,'multiplicacao'], [6,7,'multiplicacao'], [9,6,'multiplicacao'], [8,8,'multiplicacao'],
-      [7,9,'multiplicacao'], [6,9,'multiplicacao'], [8,7,'multiplicacao'], [9,9,'multiplicacao'],
-      [6,6,'multiplicacao'], [8,9,'multiplicacao'], [7,7,'multiplicacao'], [10,7,'multiplicacao']
+      [2,2,'multiplicacao'], [2,3,'multiplicacao'], [2,4,'multiplicacao'], [3,3,'multiplicacao'], [2,5,'multiplicacao'],
+      [3,4,'multiplicacao'], [2,7,'multiplicacao'], [3,5,'multiplicacao'], [4,4,'multiplicacao'], [3,6,'multiplicacao'],
+      [4,5,'multiplicacao'], [3,7,'multiplicacao'], [4,6,'multiplicacao'], [5,5,'multiplicacao'], [3,9,'multiplicacao'],
+      [4,7,'multiplicacao'], [5,6,'multiplicacao'], [4,8,'multiplicacao']
     ],
     10: [ // Dividir por 2 a 5
-      [12,3,'divisao'], [20,4,'divisao'], [15,5,'divisao'], [18,2,'divisao'],
-      [24,4,'divisao'], [25,5,'divisao'], [16,2,'divisao'], [21,3,'divisao'],
-      [30,5,'divisao'], [28,4,'divisao'], [27,3,'divisao'], [14,2,'divisao']
+      [4,2,'divisao'], [6,2,'divisao'], [8,2,'divisao'], [10,2,'divisao'], [12,2,'divisao'],
+      [14,2,'divisao'], [16,2,'divisao'], [18,2,'divisao'], [20,2,'divisao'], [8,4,'divisao'],
+      [12,4,'divisao'], [16,4,'divisao'], [20,4,'divisao'], [24,4,'divisao'], [28,4,'divisao'],
+      [32,4,'divisao'], [36,4,'divisao'], [40,4,'divisao']
     ],
     11: [ // Divisão completa
-      [56,7,'divisao'], [63,9,'divisao'], [48,6,'divisao'], [72,8,'divisao'],
-      [54,6,'divisao'], [81,9,'divisao'], [42,7,'divisao'], [64,8,'divisao'],
-      [49,7,'divisao'], [36,6,'divisao'], [90,9,'divisao'], [70,10,'divisao']
+      [4,2,'divisao'], [6,2,'divisao'], [8,2,'divisao'], [10,2,'divisao'], [12,2,'divisao'],
+      [14,2,'divisao'], [16,2,'divisao'], [18,2,'divisao'], [20,2,'divisao'], [12,6,'divisao'],
+      [18,6,'divisao'], [24,6,'divisao'], [30,6,'divisao'], [36,6,'divisao'], [42,6,'divisao'],
+      [48,6,'divisao'], [54,6,'divisao'], [60,6,'divisao']
     ],
     12: [ // Tudo junto
-      [47,38,'soma'], [82,45,'subtracao'], [7,9,'multiplicacao'], [56,8,'divisao'],
-      [63,29,'soma'], [91,37,'subtracao'], [8,6,'multiplicacao'], [72,9,'divisao'],
-      [58,34,'soma'], [75,48,'subtracao'], [9,7,'multiplicacao'], [45,5,'divisao']
+      [30,6,'divisao'], [36,6,'divisao'], [42,6,'divisao'], [48,6,'divisao'], [54,6,'divisao'],
+      [20,10,'subtracao'], [21,10,'subtracao'], [22,10,'subtracao'], [23,10,'subtracao'], [24,10,'subtracao'],
+      [25,10,'subtracao'], [26,10,'subtracao'], [27,10,'subtracao'], [28,10,'subtracao'], [29,10,'subtracao'],
+      [10,10,'soma'], [10,11,'soma'], [11,11,'soma']
     ]
   };
 

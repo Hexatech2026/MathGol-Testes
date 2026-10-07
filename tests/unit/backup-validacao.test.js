@@ -150,3 +150,23 @@ test('progresso coerente com as 3 fases → aceito', () => {
   assert.equal(V.validarProgressao({ versao: 1, dados: ok }), true);
   assert.equal(V.validarProgressao({ fasesDesbloqueadas: ['penaltis'] }), true); // legado sem versao
 });
+
+// ---------- v1.5: carteira de Cruzeiros ----------
+test('carteira valida e aceita no backup local', () => {
+  const V = require('../../JS/backup-validacao.js');
+  const c = { versao: 1, dados: { saldo: 40, totalGanho: 300, itens: ['clube:flamengo', 'nome:Furacão', 'avatar:Panda'] } };
+  assert.equal(V.validarCarteira(c), true);
+  const r = V.analisarArquivo(JSON.stringify({ versao: 1, tipo: 'mathgol-backup-local', dados: { mathgol_carteira: JSON.stringify(c) } }));
+  assert.equal(r.ok, true);
+});
+
+test('carteira incoerente ou com item estranho e recusada', () => {
+  const V = require('../../JS/backup-validacao.js');
+  const base = { saldo: 10, totalGanho: 10, itens: [] };
+  assert.equal(V.validarCarteira({ versao: 1, dados: Object.assign({}, base, { saldo: 50 }) }), false); // saldo > ganho
+  assert.equal(V.validarCarteira({ versao: 1, dados: Object.assign({}, base, { saldo: -1 }) }), false);
+  assert.equal(V.validarCarteira({ versao: 1, dados: Object.assign({}, base, { itens: ['<img>:x'] }) }), false);
+  assert.equal(V.validarCarteira({ versao: 1, dados: Object.assign({}, base, { itens: ['clube:a', 'clube:a'] }) }), false);
+  assert.equal(V.validarCarteira({ versao: 1, dados: Object.assign({}, base, { extra: 1 }) }), false);
+  assert.equal(V.validarCarteira({ versao: 2, dados: base }), false);
+});

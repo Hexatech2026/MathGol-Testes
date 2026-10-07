@@ -56,7 +56,10 @@ var NIVEIS = [
     descricao: 'Somas com resultado até 20',
     tipos: ['soma'],
     digitos: 1,
-    faixa: { min: 2, max: 9, resultadoMin: 11, resultadoMax: 18 }
+    // Resultado vai até 20 (e não 18) de propósito: com só 8 resultados
+    // possíveis, 20 perguntas numa fase repetiam demais e o teste DEF-23
+    // reprovava. Com 11..20 são 10 resultados, e o nome do nível fica honesto.
+    faixa: { min: 2, max: 10, resultadoMin: 11, resultadoMax: 20 }
   },
   {
     id: 5,

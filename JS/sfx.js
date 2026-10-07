@@ -159,11 +159,11 @@ var SFX = (function() {
   }
 
   function timerAlerta() {
-    // Tick de urgencia (usado quando timer < 5s). Debounce simples pra não
-    // empilhar ticks caso a função seja chamada mais de uma vez no mesmo
-    // segundo (ex.: reentrância do setInterval do main.js).
+    // Tick de urgencia (segundos 4, 3, 2 e 1). Quem garante "um por
+    // segundo exibido" e o main.js (ultimoSegundoAlertado); este debounce
+    // de 800 ms e so uma rede de seguranca contra ticks empilhados.
     var agora = Date.now();
-    if (agora - ultimoTimerAlerta < 150) return;
+    if (agora - ultimoTimerAlerta < 800) return;
     ultimoTimerAlerta = agora;
     tocarTom(1000, 0.04, 'square', 0.08);
   }

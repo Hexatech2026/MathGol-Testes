@@ -1427,12 +1427,38 @@ function codigoCobranca(c) {
   return c.estourouTempo ? 'T' : 'D';
 }
 
+// A escada de niveis.js tem 12 degraus, mas o esquema 2 do resumo — e as
+// regras do Firestore, e backup-validacao.js — so conhecem 'facil', 'medio'
+// e 'dificil'. Gravar o numero direto faria a regra RECUSAR a escrita e o
+// progresso sumiria em silencio (so um console.warn).
+//
+// Entao o resumo salvo continua no vocabulario antigo. Se um dia o time
+// quiser guardar o nivel exato no historico, e subir o esquema pra 3 e
+// ajustar junto: Config/firestore.rules, JS/backup-validacao.js e
+// tests/rules/.
+function dificuldadeDoNivel(nivel) {
+  if (typeof nivel !== 'number') return nivel; // ja e 'facil'/'medio'/'dificil'
+  if (nivel <= 3) return 'facil';
+  if (nivel <= 7) return 'medio';
+  return 'dificil';
+}
+
 function montarResumoPartida() {
   var tempoTotal = estado.resultadosCobrancas.reduce(function(s, c) { return s + (c.tempoUsado || 0); }, 0);
+  // Nivel efetivo da fase (nivel de partida + um degrau por fase), que e o
+  // que a crianca realmente jogou — nao o que ela escolheu no menu.
+  var nivelJogado = obterNivel(
+    Progressao.dificuldadeEfetiva(
+      Sala.estaNaSala() && Sala.nivelDaSala() ? Sala.nivelDaSala() : estado.dificuldadeId,
+      estado.faseAtual
+    )
+  ).id;
+
   return {
-    versaoEsquema: 2,
+    versaoEsquema: 3,
     faseId: estado.faseAtual,
-    dificuldadeId: estado.dificuldadeId,
+    nivelId: nivelJogado,
+    dificuldadeId: dificuldadeDoNivel(nivelJogado),
     selecaoId: estado.selecaoId,
     gols: estado.gols,
     totalCobrancas: TOTAL_COBRANCAS,
@@ -1468,7 +1494,8 @@ function irParaResultado() {
       avatarSeed: estado.avatarSeed,
       gols: estado.gols,
       pontuacao: estado.pontuacao,
-      fase: fase.id
+      fase: fase.id,
+      nivelId: resumo.nivelId
     });
   }
   atualizarGanhoCarteira();
@@ -1912,7 +1939,57 @@ function initBackup() {
   }
 }
 
+// ---------- Mais opcoes ----------
+//
+// O menu tinha 6 botoes empilhados competindo com o "Jogar". Os quatro que
+// nao sao do dia a dia da crianca moram aqui agora. Fechar o modal antes de
+// trocar de tela e obrigatorio: senao a sobreposicao fica por cima da tela
+// nova e come os cliques.
+function fecharMaisOpcoes() {
+  var m = document.getElementById('sobreposicao-mais');
+  if (m) { m.classList.remove('aberta'); m.setAttribute('aria-hidden', 'true'); }
+}
+
+function initMaisOpcoes() {
+  var abrir = document.getElementById('botao-mais-opcoes');
+  var fechar = document.getElementById('botao-fechar-mais');
+  var modal = document.getElementById('sobreposicao-mais');
+  if (!abrir || !modal) return;
+
+  abrir.addEventListener('click', function() {
+    SFX.clique();
+    modal.classList.add('aberta');
+    modal.setAttribute('aria-hidden', 'false');
+    var primeiro = modal.querySelector('button');
+    if (primeiro) primeiro.focus();
+  });
+  if (fechar) fechar.addEventListener('click', function() { SFX.clique(); fecharMaisOpcoes(); abrir.focus(); });
+  modal.addEventListener('click', function(ev) { if (ev.target === modal) fecharMaisOpcoes(); });
+  document.addEventListener('keydown', function(ev) {
+    if (ev.key === 'Escape' && modal.classList.contains('aberta')) { fecharMaisOpcoes(); abrir.focus(); }
+  });
+
+  // Os quatro botoes de dentro levam pra outra tela ou abrem outro modal:
+  // em todos os casos este tem que sair da frente.
+  ['botao-entrar-sala', 'botao-professor', 'botao-creditos', 'botao-backup'].forEach(function(id) {
+    var b = document.getElementById(id);
+    if (b) b.addEventListener('click', fecharMaisOpcoes);
+  });
+}
+
 // ---------- HU-14: Sala (lado da crianca) ----------
+
+// A sala e a unica tela que NAO funciona offline. Quando a nuvem esta fora,
+// diz o motivo em vez de um "nao consegui" generico — na maioria das vezes e
+// o provedor Anonimo desligado no Console do Firebase.
+function motivoNuvemFora() {
+  if (!window.FirebaseMathGol) return 'O servidor ainda esta carregando. Tente de novo em instantes.';
+  if (window.FirebaseMathGol.nuvemIndisponivel && window.FirebaseMathGol.nuvemIndisponivel()) {
+    return 'O login na nuvem esta desligado neste projeto do Firebase, entao a sala nao funciona. Avise a equipe.';
+  }
+  return 'Sem conexao com o servidor. Tente de novo em instantes.';
+}
+
 
 function atualizarFaixaSala() {
   var faixa = document.getElementById('faixa-sala');
@@ -1973,7 +2050,7 @@ function initEntrarSala() {
     }).then(function(r) {
       if (!r.ok) {
         avisar(r.motivo === 'offline'
-          ? 'Sem conexão com o servidor. Tente de novo em instantes.'
+          ? motivoNuvemFora()
           : 'Sala não encontrada. Confira as letras.', 'erro');
         return;
       }
@@ -2037,7 +2114,22 @@ function renderizarAlunos(lista) {
     img.loading = 'lazy';
     li.appendChild(img);
 
-    li.appendChild(criarSpan('aluno-nome', al.apelido || 'Craque'));
+    // Nome em cima, fase + nivel embaixo: o professor precisa saber ONDE a
+    // crianca esta, nao so quantos gols fez.
+    var info = document.createElement('span');
+    info.className = 'aluno-info';
+    info.appendChild(criarSpan('aluno-nome', al.apelido || 'Craque'));
+
+    var faseObj = al.fase ? Progressao.obterFase(al.fase) : null;
+    var partes = [];
+    if (faseObj) partes.push(faseObj.icone + ' ' + faseObj.nome);
+    if (al.nivelId) {
+      var nv = obterNivel(al.nivelId);
+      partes.push('Nível ' + nv.id + ' · ' + nv.nome);
+    }
+    info.appendChild(criarSpan('aluno-contexto', partes.length ? partes.join(' · ') : 'ainda não jogou'));
+    li.appendChild(info);
+
     li.appendChild(criarSpan('aluno-placar', (al.gols || 0) + ' ⚽'));
     li.appendChild(criarSpan('aluno-pontos', String(al.pontuacao || 0)));
     ul.appendChild(li);
@@ -2107,7 +2199,7 @@ function initProfessor() {
 
   criar.addEventListener('click', function() {
     SFX.selecionar();
-    if (!window.FirebaseMathGol) { avisar('Sem conexão com o servidor.', 'erro'); return; }
+    if (!window.FirebaseMathGol) { avisar(motivoNuvemFora(), 'erro'); return; }
 
     avisar('Criando a sala...');
     Sala.criar({
@@ -2115,7 +2207,7 @@ function initProfessor() {
       nivel: parseInt(document.getElementById('select-nivel-sala').value, 10) || 1,
       tipos: tiposMarcados()
     }).then(function(sala) {
-      if (!sala) { avisar('Não consegui criar a sala. Tente de novo.', 'erro'); return; }
+      if (!sala) { avisar(motivoNuvemFora(), 'erro'); return; }
       avisar('');
       mostrarPainelDaSala(sala);
     });
@@ -2150,6 +2242,7 @@ document.addEventListener('DOMContentLoaded', function() {
   if (typeof initTutorial === 'function') initTutorial();
   initCreditos();
   initBackup();
+  initMaisOpcoes();
   initEntrarSala();
   initProfessor();
   mostrarTela('tela-menu', { focar: false });

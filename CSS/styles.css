@@ -3279,3 +3279,58 @@ body.alto-contraste .chip-tipo,
 body.alto-contraste .campo-sala,
 body.alto-contraste .campo-codigo-sala,
 body.alto-contraste .item-aluno { border-width: 3px; }
+
+/* Linha do aluno no painel: nome em cima, fase e nível embaixo */
+.item-aluno { grid-template-columns: 34px 1fr auto auto; }
+.aluno-info { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; min-width: 0; }
+.aluno-contexto {
+  font-size: 0.68rem;
+  color: var(--grafite-suave);
+  line-height: 1.2;
+  text-align: left;
+}
+body.alto-contraste .aluno-contexto { color: var(--grafite); }
+
+/* ---------- Menu enxuto: link discreto + modal "Mais opções" ---------- */
+
+.link-mais-opcoes {
+  margin-top: 18px;
+  background: none;
+  border: none;
+  color: var(--branco-giz);
+  opacity: 0.75;
+  font-family: var(--fonte-titulo);
+  font-size: 0.82rem;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  padding: 6px 10px;
+}
+.link-mais-opcoes:hover { opacity: 1; }
+.link-mais-opcoes:focus-visible { outline: 3px solid var(--amarelo-sol); outline-offset: 2px; border-radius: 8px; }
+body.alto-contraste .link-mais-opcoes { opacity: 1; }
+
+.painel-mais {
+  background: var(--branco-giz);
+  border: 3px solid var(--grafite);
+  border-radius: var(--raio-grande);
+  padding: 24px;
+  max-width: 360px;
+  width: 100%;
+}
+body.alto-contraste .painel-mais { border-width: 4px; }
+
+.grupo-rotulo {
+  font-family: var(--fonte-titulo);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--grafite-suave);
+  margin: 16px 0 7px;
+}
+body.alto-contraste .grupo-rotulo { color: var(--grafite); }
+
+/* O menu ficou mais curto: deixa o conteúdo subir em vez de centralizar
+   num espaço vazio grande. */
+.tela-menu { justify-content: center; gap: 2px; }

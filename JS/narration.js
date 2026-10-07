@@ -33,10 +33,13 @@ const Narracao = (() => {
     }
   }
 
-  function falar(texto) {
+  // opcoes.forcar: fala mesmo com a narração automática desligada — usado
+  // quando a criança PEDE para ouvir (botão "Ouvir novamente", tutorial).
+  function falar(texto, opcoes) {
     if (!texto) return;
     ultimoTexto = texto;
-    if (!ativa || !('speechSynthesis' in window)) return;
+    var forcar = !!(opcoes && opcoes.forcar);
+    if ((!ativa && !forcar) || !('speechSynthesis' in window)) return;
     cancelar();
     const utterance = new SpeechSynthesisUtterance(texto);
     utterance.lang = 'pt-BR';

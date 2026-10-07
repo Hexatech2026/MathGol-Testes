@@ -140,8 +140,11 @@
     </div>
   </div>
 
+  <!-- Menu enxuto: a criança vê UMA ação principal e duas secundárias.
+       Entrar na sala, Sou professor, Créditos e Backup saíram daqui para o
+       modal "Mais opções" — são de adulto ou de uso raro, e empilhados no
+       menu competiam com o botão Jogar. -->
   <section id="tela-menu" class="tela tela-menu">
-    <img class="logo-hero" src="../Imagens/hexatech-logo-hero.png" alt="HexaTech">
     <svg class="mascote mascote-grande" viewBox="0 0 100 100" aria-hidden="true">
       <circle cx="50" cy="50" r="46" fill="#FFFDF6" stroke="#21303B" stroke-width="5"/>
       <polygon points="50,28 63,38 58,54 42,54 37,38" fill="#21303B"/>
@@ -157,14 +160,9 @@
         <button id="botao-tutorial" class="botao botao-menu-tutorial" type="button">❓ Como jogar</button>
         <button id="botao-loja" class="botao botao-menu-loja" type="button">🛒 Loja</button>
       </div>
-      <div class="linha-botoes-menu">
-        <button id="botao-entrar-sala" class="botao botao-secundario" type="button">🚪 Entrar na sala</button>
-        <button id="botao-professor" class="botao botao-secundario" type="button">🧑‍🏫 Sou professor</button>
-      </div>
-      <button id="botao-creditos" class="botao botao-secundario" type="button">Créditos</button>
-      <button id="botao-backup" class="botao botao-secundario" type="button">💾 Backup</button>
     </div>
     <p id="faixa-sala" class="faixa-sala" hidden></p>
+    <button id="botao-mais-opcoes" class="link-mais-opcoes" type="button">Mais opções</button>
   </section>
 
   <section id="tela-entrar-sala" class="tela">
@@ -416,6 +414,29 @@
     </div>
     <div class="pilha-botoes" style="margin-top: 20px;">
       <button id="botao-fechar-acessibilidade" class="botao" type="button">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Mais opções: tudo que saiu do menu principal -->
+<div id="sobreposicao-mais" class="sobreposicao" aria-hidden="true">
+  <div class="painel-mais" role="dialog" aria-modal="true" aria-labelledby="titulo-mais">
+    <h2 id="titulo-mais" style="text-align:center; margin-bottom:4px;">Mais opções</h2>
+
+    <p class="grupo-rotulo">Para a turma</p>
+    <div class="pilha-botoes">
+      <button id="botao-entrar-sala" class="botao botao-secundario" type="button">🚪 Entrar na sala</button>
+      <button id="botao-professor" class="botao botao-secundario" type="button">🧑‍🏫 Sou professor</button>
+    </div>
+
+    <p class="grupo-rotulo">Sobre o jogo</p>
+    <div class="pilha-botoes">
+      <button id="botao-creditos" class="botao botao-secundario" type="button">🏆 Créditos</button>
+      <button id="botao-backup" class="botao botao-secundario" type="button">💾 Backup</button>
+    </div>
+
+    <div class="pilha-botoes" style="margin-top: 18px;">
+      <button id="botao-fechar-mais" class="botao" type="button">Fechar</button>
     </div>
   </div>
 </div>

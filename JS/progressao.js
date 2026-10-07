@@ -1,7 +1,12 @@
 // progressao.js — sistema de progressao entre fases.
-// Fase 1: Penaltis (3 cobrancas) — ja existe
-// Fase 2: Falta (5 cobrancas, timer menor, dificuldade sobe)
-// Fase 3: Final (7 cobrancas, timer curto, dificuldade maxima)
+// TODAS as fases usam a mesma mecanica de cobranca de penalti (resposta →
+// mira → forca → chute). O que muda de uma fase pra outra e so:
+// quantidade de cobrancas, tempo para responder e nivel das contas.
+// Fase 1: Penaltis (3 cobrancas, 15 s)
+// Fase 2: Falta    (5 cobrancas, 12 s, contas sobem 1 nivel)
+// Fase 3: Final    (7 cobrancas, 10 s, contas sobem mais 1 nivel)
+// Obs.: "Falta" e so o nome da fase; nao existe mecanica de cobranca de
+// falta (barreira etc.).
 //
 // Desbloqueia a proxima fase ao fazer >= 2 gols na fase atual.
 // Progresso salvo em localStorage (e Firebase quando disponivel).
@@ -24,6 +29,7 @@ var Progressao = (function() {
       nome: 'Pênaltis',
       icone: '⚽',
       descricao: '3 cobranças — aqueça o pé!',
+      tituloResultado: 'Fim da fase Pênaltis!',
       cobrancas: 3,
       timerMax: 15,
       golsParaDesbloquear: 2, // gols minimos para desbloquear a proxima
@@ -33,17 +39,19 @@ var Progressao = (function() {
       id: 'falta',
       nome: 'Falta',
       icone: '🥅',
-      descricao: '5 cobranças — goleiro mais esperto!',
+      descricao: '5 cobranças — menos tempo, contas mais difíceis!',
+      tituloResultado: 'Fim da fase Falta!',
       cobrancas: 5,
       timerMax: 12,
       golsParaDesbloquear: 3,
-      dificuldadeForcar: null // sobe 1 nivel automaticamente
+      dificuldadeForcar: null // o nivel sobe via PASSO_POR_FASE
     },
     {
       id: 'final',
       nome: 'Final',
       icone: '🏆',
       descricao: '7 cobranças — vale o título!',
+      tituloResultado: 'Fim da Final!',
       cobrancas: 7,
       timerMax: 10,
       golsParaDesbloquear: null, // ultima fase
@@ -51,15 +59,14 @@ var Progressao = (function() {
     }
   ];
 
-  // Quanto o nível sobe a cada fase.
+  // Quanto o nivel sobe a cada fase.
   //
   // ANTES isto era um mapa de 3 dificuldades e o salto era brutal: quem
-  // escolhia "facil" encarava a fase 3 em "dificil" — ou seja, saía de
-  // 2 + 3 e caía em 7 × 9 e divisões na mesma sessão. Era a reclamação
-  // principal de quem testou.
+  // escolhia "facil" encarava a fase 3 em "dificil" — saia de 2 + 3 e caia
+  // em 7 x 9 e divisao na mesma sessao. Era a reclamacao de quem testou.
   //
   // Agora a escada tem 12 degraus (niveis.js) e cada fase sobe UM. Da fase 1
-  // à 3 o jogador anda 2 degraus pequenos, não 2 abismos.
+  // a 3 o jogador anda 2 degraus pequenos, nao 2 abismos.
   var PASSO_POR_FASE = 1;
 
   var progresso = {
@@ -96,6 +103,33 @@ var Progressao = (function() {
     }
   }
 
+  // Saneia o progresso lido do navegador (DEF-17): mesmos limites da
+  // validacao de backup. Em vez de descartar tudo, corrige o que for
+  // impossivel — recorde acima do que a fase permite, pontos incompativeis
+  // com os gols, fase desbloqueada sem os gols da fase anterior.
+  function sanear() {
+    var gols = {}, pontos = {};
+    FASES.forEach(function(f) {
+      var g = Math.floor(progresso.melhorGols[f.id] || 0);
+      g = Math.min(f.cobrancas, Math.max(0, g));
+      var p = Math.floor(progresso.melhorPontuacao[f.id] || 0);
+      p = Math.min(g * 100, Math.max(0, p));
+      if (g > 0 && p < 10) p = 10 * g;
+      if (g > 0) gols[f.id] = g;
+      if (p > 0) pontos[f.id] = p;
+    });
+    var fases = ['penaltis'];
+    for (var i = 1; i < FASES.length; i++) {
+      var anterior = FASES[i - 1];
+      if (progresso.fasesDesbloqueadas.indexOf(FASES[i].id) === -1) break;
+      if ((gols[anterior.id] || 0) < anterior.golsParaDesbloquear) break;
+      fases.push(FASES[i].id);
+    }
+    progresso.melhorGols = gols;
+    progresso.melhorPontuacao = pontos;
+    progresso.fasesDesbloqueadas = fases;
+  }
+
   function carregar() {
     var bruto;
     try { bruto = JSON.parse(localStorage.getItem(CHAVE_PROGRESSAO)); } catch (e) { bruto = null; }
@@ -110,6 +144,7 @@ var Progressao = (function() {
       // "dados". Migra em vez de descartar o progresso já salvo.
       aplicarDadosSalvos(bruto);
     }
+    sanear();
   }
 
   function salvar() {
@@ -140,22 +175,17 @@ var Progressao = (function() {
     return 0;
   }
 
-  // Nível efetivo de uma fase: o nível de partida + um degrau por fase.
+  // Nivel efetivo da fase: o nivel de partida + um degrau por fase.
   //
-  // Aceita tanto um número (nível novo) quanto 'facil'/'medio'/'dificil'
-  // (progresso salvo antes da escada existir), traduzido por niveis.js.
-  function nivelEfetivo(nivelOuDificuldade, faseId) {
+  // Aceita numero (nivel novo, 1..12) ou 'facil'/'medio'/'dificil' (progresso
+  // salvo antes da escada existir), traduzido por niveis.js — por isso
+  // ninguem perde o que ja tinha.
+  function dificuldadeEfetiva(nivelOuDificuldade, faseId) {
     var base = typeof nivelOuDificuldade === 'number'
       ? nivelOuDificuldade
       : nivelDaDificuldadeAntiga(nivelOuDificuldade);
     var idx = indiceFase(faseId);
-    return obterNivel(base + idx * PASSO_POR_FASE).id; // obterNivel já limita em 1..12
-  }
-
-  // Nome antigo mantido: main.js e qualquer código de fora continuam
-  // chamando dificuldadeEfetiva() sem saber que agora devolve um nível.
-  function dificuldadeEfetiva(nivelOuDificuldade, faseId) {
-    return nivelEfetivo(nivelOuDificuldade, faseId);
+    return obterNivel(base + idx * PASSO_POR_FASE).id; // obterNivel limita em 1..12
   }
 
   // Registra resultado de uma fase. Retorna { desbloqueou: bool, proximaFase: string|null }
@@ -205,7 +235,6 @@ var Progressao = (function() {
     obterFase: obterFase,
     faseDesbloqueada: faseDesbloqueada,
     dificuldadeEfetiva: dificuldadeEfetiva,
-    nivelEfetivo: nivelEfetivo,
     registrarResultado: registrarResultado,
     melhorPontuacao: melhorPontuacao,
     melhorGols: melhorGols

@@ -1,147 +1,238 @@
-// loja.js — carteira de Cruzeiros, escudos dos clubes e lógica de compra.
+// loja.js — Loja do Craque: a criança gasta Cruzeiros (Carteira) em
+// seleções, times do Brasileirão Série A 2026, avatares e nomes.
 //
-// Carteira mora no Firestore (jogadores/{token}), não em localStorage: a
-// criança usa o laboratório e quase nunca pega a mesma máquina duas vezes.
-// Enquanto o Firebase não responde, a loja abre em modo somente-leitura em
-// vez de deixar comprar em cima de um saldo que pode estar errado.
+// Fluxo de compra (pensado para criança, sem compra por engano):
+//   toque em "Comprar" → modal "Comprar X por N Cruzeiros?" → "Sim, comprar!"
+// Sem saldo suficiente, o botão fica desabilitado e mostra quanto falta.
+// Tudo montado com createElement/textContent (nada de innerHTML).
 
 var Loja = (function() {
+  'use strict';
 
-  var token = null;
-  var carteira = { saldo: 0, comprados: [] };
-  var pronta = false;      // já leu do Firebase com sucesso
-  var carregando = false;
+  var abaAtiva = 'selecao';
+  var itemPendente = null;
+  var timerStatus = null;
 
-  // ---------- Carteira ----------
-
-  function estaPronta() { return pronta; }
-  function saldo() { return carteira.saldo; }
-
-  function temItem(tipo, id) {
-    if (estaLiberadoDeInicio(tipo === 'clube' ? 'selecoes' : tipo + 's', id)) return true;
-    return carteira.comprados.indexOf(chaveItem(tipo, id)) !== -1;
-  }
-
-  // Pergunta direta usada pelas telas de escolha: essa opção está disponível?
-  // Clubes nunca nascem liberados; seleções seguem LIBERADO_DE_INICIO.
-  function liberado(tipo, id) {
-    if (tipo === 'clube') {
-      return carteira.comprados.indexOf(chaveItem('clube', id)) !== -1;
-    }
-    var mapa = { selecao: 'selecoes', personagem: 'personagens', animal: 'animais', avatar: 'avatares' };
-    if (estaLiberadoDeInicio(mapa[tipo], id)) return true;
-    return carteira.comprados.indexOf(chaveItem(tipo, id)) !== -1;
-  }
-
-  async function carregar(tokenJogador) {
-    token = tokenJogador;
-    if (!token || !window.FirebaseMathGol) return false;
-    if (carregando) return pronta;
-    carregando = true;
-    try {
-      var remota = await window.FirebaseMathGol.buscarCarteira(token);
-      if (remota) {
-        carteira = remota;
-        pronta = true;
-      }
-    } finally {
-      carregando = false;
-    }
-    atualizarSaldoNaTela();
-    return pronta;
-  }
-
-  // Credita o que a criança ganhou na fase. Só grava se a carteira já foi
-  // lida — senão somaria em cima de um saldo zerado e apagaria o que ela tinha.
-  async function creditar(valor) {
-    if (!pronta || !valor || valor <= 0) return false;
-    carteira.saldo += Math.round(valor);
-    atualizarSaldoNaTela();
-    return await window.FirebaseMathGol.salvarCarteira(token, carteira);
-  }
-
-  async function comprar(tipo, id) {
-    if (!pronta) return { ok: false, motivo: 'offline' };
-    if (liberado(tipo, id)) return { ok: false, motivo: 'ja-tem' };
-
-    var preco = precoDoItem(tipo);
-    if (carteira.saldo < preco) return { ok: false, motivo: 'sem-saldo', falta: preco - carteira.saldo };
-
-    // Só desconta depois que o Firebase confirmou, pra não deixar a criança
-    // sem os Cruzeiros e sem o item se a gravação falhar.
-    var antes = { saldo: carteira.saldo, comprados: carteira.comprados.slice() };
-    carteira.saldo -= preco;
-    carteira.comprados.push(chaveItem(tipo, id));
-
-    var salvou = await window.FirebaseMathGol.salvarCarteira(token, carteira);
-    if (!salvou) {
-      carteira = antes;
-      atualizarSaldoNaTela();
-      return { ok: false, motivo: 'falha-salvar' };
-    }
-    atualizarSaldoNaTela();
-    return { ok: true, preco: preco, saldo: carteira.saldo };
-  }
-
-  function atualizarSaldoNaTela() {
-    var alvos = document.querySelectorAll('[data-saldo-cruzeiros]');
-    for (var i = 0; i < alvos.length; i++) {
-      alvos[i].textContent = pronta ? String(carteira.saldo) : '--';
-    }
-  }
-
-  // ---------- Escudo do clube ----------
-  //
-  // Desenhado por nós: escudo pentagonal com faixa diagonal nas cores do
-  // clube e a sigla no centro. Não reproduz nenhum escudo oficial — esses
-  // são marca registrada dos times.
-  function escudo(clube, tamanho) {
-    var t = tamanho || 56;
-    var idFaixa = 'faixa-' + clube.id;
-    var claro = corEhClara(clube.corPrimaria);
-    var corTexto = claro ? '#21303B' : '#FFFDF6';
-
-    // A sigla fica sobre uma placa na cor primária, não direto sobre a faixa
-    // diagonal. Sem isso, time de faixa branca (Atlético-MG, Botafogo) some a
-    // sigla branca no meio do escudo.
-    return '' +
-      '<svg class="escudo-clube" viewBox="0 0 100 112" width="' + t + '" height="' + Math.round(t * 1.12) + '" role="img" aria-label="Escudo do ' + clube.nome + '">' +
-        '<defs><clipPath id="' + idFaixa + '">' +
-          '<path d="M50 2 L96 20 V60 Q96 92 50 110 Q4 92 4 60 V20 Z"/>' +
-        '</clipPath></defs>' +
-        '<g clip-path="url(#' + idFaixa + ')">' +
-          '<rect x="0" y="0" width="100" height="112" fill="' + clube.corPrimaria + '"/>' +
-          '<polygon points="0,112 40,0 74,0 34,112" fill="' + clube.corSecundaria + '"/>' +
-          '<rect x="0" y="42" width="100" height="34" fill="' + clube.corPrimaria + '"/>' +
-        '</g>' +
-        '<path d="M50 2 L96 20 V60 Q96 92 50 110 Q4 92 4 60 V20 Z" fill="none" stroke="#21303B" stroke-width="5"/>' +
-        '<line x1="4" y1="42" x2="96" y2="42" stroke="#21303B" stroke-width="2.5"/>' +
-        '<line x1="4" y1="76" x2="96" y2="76" stroke="#21303B" stroke-width="2.5"/>' +
-        '<text x="50" y="68" text-anchor="middle" font-family="Fredoka, sans-serif" font-size="27" font-weight="700"' +
-        ' fill="' + corTexto + '">' + clube.sigla + '</text>' +
-      '</svg>';
-  }
-
-  // Luminância relativa simplificada — decide se a sigla sai escura ou clara
-  // pra continuar legível sobre a cor do clube (times de camisa branca).
-  function corEhClara(hex) {
-    var h = String(hex).replace('#', '');
-    if (h.length !== 6) return false;
-    var r = parseInt(h.slice(0, 2), 16);
-    var g = parseInt(h.slice(2, 4), 16);
-    var b = parseInt(h.slice(4, 6), 16);
-    return (0.299 * r + 0.587 * g + 0.114 * b) > 165;
-  }
-
-  return {
-    carregar: carregar,
-    estaPronta: estaPronta,
-    saldo: saldo,
-    liberado: liberado,
-    temItem: temItem,
-    comprar: comprar,
-    creditar: creditar,
-    escudo: escudo,
-    atualizarSaldoNaTela: atualizarSaldoNaTela
+  var NOME_TIPO = {
+    selecao: 'a seleção',
+    clube: 'o time',
+    avatar: 'o avatar',
+    nome: 'o nome'
   };
+
+  function el(id) { return document.getElementById(id); }
+
+  function abrir(origem, aba) {
+    if (origem && origem !== 'tela-loja') origemTela['tela-loja'] = origem;
+    if (aba) abaAtiva = aba;
+    mostrarStatus('');
+    renderizar();
+    mostrarTela('tela-loja');
+  }
+
+  function sair() {
+    reabrirTela(origemTela['tela-loja'] || 'tela-menu');
+  }
+
+  function mostrarStatus(texto) {
+    var s = el('status-loja');
+    if (!s) return;
+    s.textContent = texto;
+    if (timerStatus) clearTimeout(timerStatus);
+    if (texto) timerStatus = setTimeout(function() { s.textContent = ''; }, 5000);
+  }
+
+  function atualizarSaldo() {
+    var saldo = Carteira.saldo();
+    var v = el('saldo-loja-valor');
+    var m = el('saldo-loja-moeda');
+    if (v) v.textContent = String(saldo);
+    if (m) m.textContent = saldo === 1 ? 'Cruzeiro' : 'Cruzeiros';
+  }
+
+  function marcarAbas() {
+    document.querySelectorAll('#abas-loja .aba-loja').forEach(function(b) {
+      var ativa = b.getAttribute('data-aba') === abaAtiva;
+      b.classList.toggle('aba-ativa', ativa);
+      b.setAttribute('aria-pressed', ativa ? 'true' : 'false');
+    });
+  }
+
+  // Desenho do item: bandeira, escudo genérico, avatar ou etiqueta de nome.
+  function criarVisual(item, grande) {
+    if (item.tipo === 'selecao' || item.tipo === 'clube') {
+      var v = criarVisualTime(item.time, 'cartao-bandeira');
+      if (v) return v;
+    }
+    if (item.tipo === 'avatar') {
+      var moldura = document.createElement('span');
+      moldura.className = 'loja-avatar' + (grande ? ' loja-avatar-grande' : '');
+      var img = document.createElement('img');
+      img.src = gerarUrlAvatar(item.seed);
+      img.alt = '';
+      img.loading = 'lazy';
+      img.onerror = function() { this.onerror = null; this.src = gerarAvatarFallbackLocal(item.seed); };
+      moldura.appendChild(img);
+      return moldura;
+    }
+    var etiqueta = document.createElement('span');
+    etiqueta.className = 'loja-etiqueta-nome';
+    etiqueta.textContent = item.subtipo === 'animal' ? '🐾' : '⭐';
+    return etiqueta;
+  }
+
+  function criarPreco(valor) {
+    var p = document.createElement('span');
+    p.className = 'loja-preco';
+    var icone = document.createElement('img');
+    icone.className = 'icone-cruzeiro';
+    icone.src = '../Imagens/estrela-cruzeiro.png';
+    icone.alt = '';
+    p.appendChild(icone);
+    p.appendChild(document.createTextNode(String(valor)));
+    return p;
+  }
+
+  function renderizar() {
+    atualizarSaldo();
+    marcarAbas();
+    var grade = el('grade-loja');
+    grade.textContent = '';
+    var saldo = Carteira.saldo();
+    var itens = catalogoLoja().filter(function(i) { return i.tipo === abaAtiva; });
+
+    if (abaAtiva === 'nome') {
+      // Separa "Personagem" (primeira palavra) de "Animal" (segunda).
+      renderizarGrupo(grade, 'Primeira palavra (personagem)', itens.filter(function(i) { return i.subtipo === 'personagem'; }), saldo);
+      renderizarGrupo(grade, 'Segunda palavra (animal)', itens.filter(function(i) { return i.subtipo === 'animal'; }), saldo);
+      return;
+    }
+    if (abaAtiva === 'clube') {
+      var aviso = document.createElement('p');
+      aviso.className = 'loja-aviso-grupo';
+      aviso.textContent = 'Os 20 times da Série A 2026. Escudos ilustrativos com as cores de cada time.';
+      grade.appendChild(aviso);
+    }
+    var lista = document.createElement('div');
+    lista.className = 'loja-lista';
+    itens.forEach(function(item) { lista.appendChild(criarCartaoItem(item, saldo)); });
+    grade.appendChild(lista);
+  }
+
+  function renderizarGrupo(grade, titulo, itens, saldo) {
+    var h = document.createElement('h3');
+    h.className = 'subtitulo-secao loja-titulo-grupo';
+    h.textContent = titulo;
+    grade.appendChild(h);
+    var lista = document.createElement('div');
+    lista.className = 'loja-lista';
+    itens.forEach(function(item) { lista.appendChild(criarCartaoItem(item, saldo)); });
+    grade.appendChild(lista);
+  }
+
+  function criarCartaoItem(item, saldo) {
+    var possui = Carteira.possui(item.id);
+    var cartao = document.createElement('div');
+    cartao.className = 'item-loja item-loja-' + item.tipo + (possui ? ' item-loja-possui' : '');
+    cartao.setAttribute('data-item', item.id);
+
+    cartao.appendChild(criarVisual(item));
+    var nome = document.createElement('span');
+    nome.className = 'item-loja-nome';
+    nome.textContent = item.nome;
+    cartao.appendChild(nome);
+
+    var botao = document.createElement('button');
+    botao.type = 'button';
+    botao.className = 'botao-comprar';
+    if (possui) {
+      botao.disabled = true;
+      botao.classList.add('comprado');
+      botao.textContent = '✓ É seu!';
+      botao.setAttribute('aria-label', item.nome + ': já é seu');
+    } else {
+      botao.appendChild(document.createTextNode('Comprar '));
+      botao.appendChild(criarPreco(item.preco));
+      var faltam = item.preco - saldo;
+      if (faltam > 0) {
+        botao.disabled = true;
+        botao.classList.add('sem-saldo');
+        botao.setAttribute('aria-label', item.nome + ': custa ' + Carteira.formatar(item.preco) + '. Faltam ' + faltam + '.');
+        var falta = document.createElement('span');
+        falta.className = 'item-loja-falta';
+        falta.textContent = 'Faltam ' + faltam;
+        cartao.appendChild(falta);
+      } else {
+        botao.setAttribute('aria-label', 'Comprar ' + item.nome + ' por ' + Carteira.formatar(item.preco));
+        botao.addEventListener('click', function() { pedirConfirmacao(item, botao); });
+      }
+    }
+    cartao.appendChild(botao);
+    return cartao;
+  }
+
+  function pedirConfirmacao(item, origem) {
+    SFX.clique();
+    itemPendente = item;
+    el('titulo-compra').textContent = 'Comprar ' + item.nome + '?';
+    var visual = el('visual-compra');
+    visual.textContent = '';
+    visual.appendChild(criarVisual(item, true));
+    var texto = el('texto-compra');
+    texto.textContent = 'Comprar ' + NOME_TIPO[item.tipo] + ' ' + item.nome + ' por ' + Carteira.formatar(item.preco) +
+      '? Vão sobrar ' + Carteira.formatar(Carteira.saldo() - item.preco) + '.';
+    Modal.abrir(el('sobreposicao-compra'), origem, { aoFechar: function() { itemPendente = null; } });
+  }
+
+  function confirmarCompra() {
+    var item = itemPendente;
+    if (!item) return;
+    var resultado = Carteira.comprar(item.id, item.preco);
+    itemPendente = null;
+    Modal.fechar();
+    if (resultado.ok) {
+      SFX.faseLiberada();
+      var dica = item.tipo === 'avatar' || item.tipo === 'nome'
+        ? ' Escolha na tela "Monte seu craque".'
+        : ' Escolha na tela "Escolha seu time".';
+      mostrarStatus('🎉 Agora ' + item.nome + ' é seu!' + dica);
+      if (typeof Narracao !== 'undefined') Narracao.falar('Agora ' + item.nome + ' é seu!');
+    } else if (resultado.motivo === 'saldo') {
+      mostrarStatus('Ainda faltam ' + Carteira.formatar(resultado.faltam) + '. Faça mais gols!');
+    } else if (resultado.motivo === 'ja-possui') {
+      mostrarStatus(item.nome + ' já é seu!');
+    }
+    renderizar();
+    // O foco volta para o cartao do item (o botao antigo foi redesenhado).
+    var cartao = document.querySelector('#grade-loja [data-item="' + cssEscapar(item.id) + '"] .botao-comprar');
+    var foco = cartao && !cartao.disabled ? cartao : el('status-loja');
+    if (foco) {
+      if (foco.id === 'status-loja') foco.setAttribute('tabindex', '-1');
+      try { foco.focus({ preventScroll: false }); } catch (e) {}
+    }
+  }
+
+  function cssEscapar(v) {
+    return (window.CSS && CSS.escape) ? CSS.escape(v) : String(v).replace(/["\\]/g, '\\$&');
+  }
+
+  function init() {
+    document.querySelectorAll('#abas-loja .aba-loja').forEach(function(b) {
+      b.addEventListener('click', function() {
+        SFX.clique();
+        abaAtiva = b.getAttribute('data-aba');
+        renderizar();
+      });
+    });
+    el('botao-sair-loja').addEventListener('click', function() { SFX.clique(); sair(); });
+    el('botao-loja').addEventListener('click', function() { SFX.clique(); abrir('tela-menu'); });
+    el('botao-confirmar-compra').addEventListener('click', confirmarCompra);
+    el('botao-cancelar-compra').addEventListener('click', function() { SFX.clique(); Modal.fechar(); });
+    Modal.ligarFundo(el('sobreposicao-compra'));
+    Carteira.aoMudar(function() { if (telaAtivaId() === 'tela-loja') atualizarSaldo(); });
+  }
+
+  return { abrir: abrir, sair: sair, renderizar: renderizar, init: init };
 })();
+
+function initLoja() { Loja.init(); }

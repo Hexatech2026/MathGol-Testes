@@ -20,7 +20,7 @@
   var MAXIMO_RESULTADOS = 500;
 
   // Unicas chaves do localStorage que um backup local pode restaurar.
-  var CHAVES_LOCAIS_PERMITIDAS = ['mathgol_acessibilidade', 'mathgol_progressao', 'mathgol_ultimo_resultado'];
+  var CHAVES_LOCAIS_PERMITIDAS = ['mathgol_acessibilidade', 'mathgol_progressao', 'mathgol_ultimo_resultado', 'mathgol_carteira'];
   // Chaves de versoes antigas: aceitas no arquivo, mas IGNORADAS (o antigo
   // token nunca foi credencial e nao e mais usado para nada).
   var CHAVES_LEGADAS_IGNORADAS = ['mathgol_token'];
@@ -50,13 +50,30 @@
   }
 
   // ---------- Resultado de partida (mesmo esquema das regras) ----------
-  var CAMPOS_RESULTADO = ['versaoEsquema', 'faseId', 'dificuldadeId', 'selecaoId', 'gols',
+  //
+  // ESQUEMA 3 acrescentou "nivelId" (1..12, a escada de JS/niveis.js). Antes
+  // só existia "dificuldadeId" com três baldes, o que perdia a informação de
+  // qual degrau a criança jogou — e é justamente o que o professor precisa ver.
+  //
+  // O esquema 2 continua aceito na LEITURA: backup antigo restaura sem erro.
+  // Só não é mais gerado. "dificuldadeId" segue no esquema 3, com o balde
+  // equivalente, pra qualquer código que ainda leia esse campo.
+  var VERSAO_ATUAL = 3;
+  var CAMPOS_RESULTADO_V2 = ['versaoEsquema', 'faseId', 'dificuldadeId', 'selecaoId', 'gols',
     'totalCobrancas', 'pontuacao', 'tempoTotalSegundos', 'resumoCobrancas', 'data'];
+  var CAMPOS_RESULTADO = CAMPOS_RESULTADO_V2.concat(['nivelId']);
+  var NIVEL_MIN = 1, NIVEL_MAX = 12;
 
   function validarResultadoPartida(r) {
     if (!objetoSimples(r)) return 'resultado não é um objeto';
-    if (!somenteChaves(r, CAMPOS_RESULTADO)) return 'resultado com campos inesperados';
-    if (r.versaoEsquema !== 2) return 'versão do esquema incompatível';
+    if (r.versaoEsquema !== 2 && r.versaoEsquema !== 3) return 'versão do esquema incompatível';
+
+    var ehV3 = r.versaoEsquema === 3;
+    if (!somenteChaves(r, ehV3 ? CAMPOS_RESULTADO : CAMPOS_RESULTADO_V2)) {
+      return 'resultado com campos inesperados';
+    }
+    if (ehV3 && !inteiroEntre(r.nivelId, NIVEL_MIN, NIVEL_MAX)) return 'nível fora do limite';
+
     var total = COBRANCAS_POR_FASE[r.faseId];
     if (!total) return 'fase desconhecida';
     if (r.totalCobrancas !== total) return 'quantidade de cobranças não corresponde à fase';
@@ -72,9 +89,12 @@
     return null;
   }
 
+  // Copia só os campos do esquema do próprio registro: um resumo v2 não
+  // ganha um "nivelId: undefined", que as regras do Firestore recusariam.
   function copiarResultado(r) {
+    var campos = (r && r.versaoEsquema === 3) ? CAMPOS_RESULTADO : CAMPOS_RESULTADO_V2;
     var c = {};
-    CAMPOS_RESULTADO.forEach(function(k) { c[k] = r[k]; });
+    campos.forEach(function(k) { c[k] = r[k]; });
     return c;
   }
 
@@ -147,10 +167,35 @@
       (obj.versao === 1 || obj.versao === 2) && objetoSimples(obj.dados);
   }
 
+  // ---------- Carteira de Cruzeiros (v1.5, Loja) ----------
+  // { versao: 1, dados: { saldo, totalGanho, itens: ["selecao:portugal", ...] } }
+  // saldo nunca passa do total ja ganho; itens unicos e com formato conhecido.
+  var SALDO_MAXIMO = 999999;
+  var MAXIMO_ITENS = 200;
+  var ID_ITEM_LOJA = /^(selecao|clube|avatar|nome):[^<>:\u0000-\u001f]{1,32}$/;
+
+  function validarCarteira(obj) {
+    if (!objetoSimples(obj) || !somenteChaves(obj, ['versao', 'dados']) || obj.versao !== 1) return false;
+    var d = obj.dados;
+    if (!objetoSimples(d) || !somenteChaves(d, ['saldo', 'totalGanho', 'itens'])) return false;
+    if (!inteiroEntre(d.saldo, 0, SALDO_MAXIMO)) return false;
+    if (!inteiroEntre(d.totalGanho, 0, SALDO_MAXIMO * 10)) return false;
+    if (d.saldo > d.totalGanho) return false;
+    if (!Array.isArray(d.itens) || d.itens.length > MAXIMO_ITENS) return false;
+    var vistos = {};
+    for (var i = 0; i < d.itens.length; i++) {
+      var id = d.itens[i];
+      if (typeof id !== 'string' || !ID_ITEM_LOJA.test(id) || vistos[id]) return false;
+      vistos[id] = true;
+    }
+    return true;
+  }
+
   var VALIDADORES_LOCAIS = {
     mathgol_acessibilidade: validarAcessibilidade,
     mathgol_progressao: validarProgressao,
-    mathgol_ultimo_resultado: validarUltimoResultado
+    mathgol_ultimo_resultado: validarUltimoResultado,
+    mathgol_carteira: validarCarteira
   };
 
   // ---------- Backups ----------
@@ -246,7 +291,9 @@
     validarResultadoPartida: validarResultadoPartida,
     validarPerfil: validarPerfil,
     copiarResultado: copiarResultado,
-    validarProgressao: validarProgressao
+    validarProgressao: validarProgressao,
+    validarCarteira: validarCarteira,
+    SALDO_MAXIMO: SALDO_MAXIMO
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = ValidacaoBackup;

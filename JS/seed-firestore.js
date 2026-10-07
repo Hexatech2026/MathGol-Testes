@@ -50,36 +50,21 @@ function getFirestore() {
 
 // ---------- Conteúdo inicial (mesmas listas que ficam fixas em data.js) ----------
 
-const PERSONAGENS = [
-  'Capitão', 'Fera', 'Relâmpago', 'Craque', 'Foguete',
-  'Furacão', 'Campeão', 'Guerreiro', 'Fenômeno', 'Trovão',
-  'Meteoro', 'Torpedo', 'Escudo', 'Cometa', 'Raio',
-  'Capitã', 'Estrela', 'Campeã', 'Guerreira', 'Fênix',
-  'Centelha', 'Valente', 'Coragem', 'Vitória', 'Aurora',
-  'Heroína', 'Lenda', 'Chama', 'Brilho', 'Medalha'
-];
-
-const ANIMAIS = [
-  'Tigre', 'Águia', 'Onça', 'Leão', 'Gavião',
-  'Puma', 'Lobo', 'Falcão', 'Pantera', 'Tubarão',
-  'Golfinho', 'Coruja', 'Raposa', 'Jaguar', 'Fênix',
-  'Coelho', 'Lince', 'Arara', 'Borboleta', 'Flamingo'
-];
-
-const SELECOES = [
-  { id: 'brasil',     nome: 'Brasil',     bandeira: 'br',     corPrimaria: '#2E9E5B', corSecundaria: '#FFC63B' },
-  { id: 'argentina',  nome: 'Argentina',  bandeira: 'ar',     corPrimaria: '#6EC1E4', corSecundaria: '#FFFDF6' },
-  { id: 'alemanha',   nome: 'Alemanha',   bandeira: 'de',     corPrimaria: '#21303B', corSecundaria: '#E0343B' },
-  { id: 'franca',     nome: 'Franca',     bandeira: 'fr',     corPrimaria: '#3A5FCD', corSecundaria: '#E0343B' },
-  { id: 'japao',      nome: 'Japao',      bandeira: 'jp',     corPrimaria: '#FFFDF6', corSecundaria: '#E0343B' },
-  { id: 'portugal',   nome: 'Portugal',   bandeira: 'pt',     corPrimaria: '#2E9E5B', corSecundaria: '#E0343B' },
-  { id: 'espanha',    nome: 'Espanha',    bandeira: 'es',     corPrimaria: '#E0343B', corSecundaria: '#FFC63B' },
-  { id: 'italia',     nome: 'Italia',     bandeira: 'it',     corPrimaria: '#3A5FCD', corSecundaria: '#FFFDF6' },
-  { id: 'inglaterra', nome: 'Inglaterra', bandeira: 'gb-eng', corPrimaria: '#FFFDF6', corSecundaria: '#E0343B' },
-  { id: 'colombia',   nome: 'Colombia',   bandeira: 'co',     corPrimaria: '#FFC63B', corSecundaria: '#3A5FCD' },
-  { id: 'mexico',     nome: 'Mexico',     bandeira: 'mx',     corPrimaria: '#2E9E5B', corSecundaria: '#FFFDF6' },
-  { id: 'coreia',     nome: 'Coreia',     bandeira: 'kr',     corPrimaria: '#E0343B', corSecundaria: '#3A5FCD' }
-];
+// v1.5: o catálogo (nomes, seleções e os 20 clubes da Série A 2026) é
+// lido direto de JS/data.js, pra não existirem duas listas diferentes.
+// Obs.: o jogo agora usa do Firestore só AJUSTES de nome/cores dos times e
+// as dificuldades (ver aplicarConfiguracoesRemotas em data.js).
+const fs = require('fs');
+const path = require('path');
+const vm = require('vm');
+const contexto = {};
+vm.createContext(contexto);
+vm.runInContext(
+  fs.readFileSync(path.join(__dirname, 'data.js'), 'utf8') +
+  '\n;this.__dados = { PERSONAGENS: PERSONAGENS.concat(PERSONAGENS_LOJA), ANIMAIS: ANIMAIS.concat(ANIMAIS_LOJA), SELECOES: SELECOES };',
+  contexto
+);
+const { PERSONAGENS, ANIMAIS, SELECOES } = contexto.__dados;
 
 const DIFICULDADES = [
   { id: 'facil',    nome: 'Fácil',    descricao: '+ e − até 10',      icone: '⭐' },

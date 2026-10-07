@@ -215,6 +215,16 @@ test.describe('18. restauracao de backup pela interface', () => {
     expect(await page.evaluate(() => [localStorage.getItem('evil'), localStorage.getItem('mathgol_acessibilidade')])).toEqual([null, null]);
   });
 
+  test('R10: cancelar a confirmacao nao grava nada', async ({ page }) => {
+    await A.abrirJogo(page);
+    await restaurar(page, 'ok.json', JSON.stringify({ versao: 1, tipo: 'mathgol-backup-local', dados: { mathgol_acessibilidade: '{"altoContraste":true}' } }));
+    await expect(page.locator('#confirmar-restauracao')).toBeVisible();
+    await page.click('#botao-cancelar-restauracao');
+    await expect(page.locator('#confirmar-restauracao')).toBeHidden();
+    await expect(page.locator('#backup-status')).toContainText('cancelada');
+    expect(await page.evaluate(() => localStorage.getItem('mathgol_acessibilidade'))).toBeNull();
+  });
+
   test('arquivo grande demais e recusado', async ({ page }) => {
     await A.abrirJogo(page);
     await restaurar(page, 'grande.json', '{"x":"' + 'a'.repeat(300 * 1024) + '"}');
@@ -230,6 +240,10 @@ test.describe('18. restauracao de backup pela interface', () => {
   test('backup local valido e restaurado', async ({ page }) => {
     await A.abrirJogo(page);
     await restaurar(page, 'ok.json', JSON.stringify({ versao: 1, tipo: 'mathgol-backup-local', dados: { mathgol_acessibilidade: '{"altoContraste":true}', mathgol_token: 'antigo' } }));
+    // R10: pede confirmacao antes de substituir o progresso.
+    await expect(page.locator('#confirmar-restauracao')).toBeVisible();
+    expect(await page.evaluate(() => localStorage.getItem('mathgol_acessibilidade'))).toBeNull();
+    await page.click('#botao-confirmar-restauracao');
     await expect(page.locator('#backup-status')).toContainText('restaurado');
     expect(await page.evaluate(() => [localStorage.getItem('mathgol_acessibilidade'), localStorage.getItem('mathgol_token')]))
       .toEqual(['{"altoContraste":true}', null]);
