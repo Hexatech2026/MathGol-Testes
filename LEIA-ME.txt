@@ -1,0 +1,94 @@
+PATCH — Escudos próprios dos clubes + narração com tons
+MathGol · HexaTech · 13/10/2026
+
+SETE ARQUIVOS. Substitua por cima dos que já existem:
+
+  JS/data.js                   escudos: padrão da camisa de cada clube
+  CSS/styles.css               escudos: os 7 padrões + alto contraste
+  JS/main.js                   escudos + tons da narração
+  JS/narration.js              voz: ranking de vozes e tabela TONS
+  JS/loja.js                   tom 'premio' na compra
+  JS/tutorial.js               tom 'instrucao' no tutorial
+  Docs/laboratorio-de-voz.html arquivo NOVO (ferramenta de ajuste)
+
+Este patch SUBSTITUI o Patch-Escudos-Clubes.zip anterior: o main.js aqui
+já traz as duas mudanças. Não aplique os dois.
+
+===================================================================
+PARTE 1 — ESCUDOS PRÓPRIOS DOS 20 CLUBES
+===================================================================
+
+Cada clube ganhou o campo "padrao" em data.js (como a camisa é pintada)
+e, nos tricolores, "corTerciaria". As cores que já existiam continuam as
+mesmas, então a camisa 3D do jogador não muda.
+
+  liso         Chapecoense, Corinthians, Cruzeiro, Internacional,
+               Palmeiras, Santos
+  vertical     Athletico-PR, Atlético-MG, Botafogo, Coritiba, Vitória
+  horizontal   Flamengo
+  diagonal     Vasco
+  faixa-h      Bragantino, Mirassol, Remo
+  tricolor-v   Fluminense, Grêmio
+  tricolor-h   Bahia, São Paulo
+
+A placa da sigla encolheu e subiu: ela cobria o meio do escudo e
+escondia a faixa que identifica Bahia, Remo e Bragantino.
+
+Padrão desconhecido ou ausente cai em "liso" — lista remota antiga não
+quebra. Em alto contraste todos viram escudo branco com contorno preto.
+
+NÃO são os escudos oficiais: aqueles são marca registrada dos clubes e o
+jogo está publicado na web. O que está aqui são as cores e as listras da
+camisa, que não são protegidas, dentro de um escudo desenhado por nós.
+
+===================================================================
+PARTE 2 — NARRAÇÃO
+===================================================================
+
+Dois problemas deixavam a voz genérica:
+
+1. A voz era a PRIMEIRA voz pt- que o navegador listasse. Em quase todo
+   Windows isso cai numa voz velha e robótica, mesmo havendo uma voz
+   natural instalada ao lado. Agora há um ranking (VOZES_PREFERIDAS) que
+   procura as boas primeiro: Francisca, Thalita, Brenda, Google pt-BR,
+   Luciana. As antigas Daniel e Maria viraram último recurso.
+
+2. Tudo era falado no mesmo rate e no mesmo pitch — a pergunta, o gol e a
+   defesa saíam no mesmo tom morto. Agora cada situação tem seu tom
+   (tabela TONS, no topo de narration.js):
+
+     pergunta   0.92 / 1.02   clareza antes de animação
+     gol        1.18 / 1.38   rápido e agudo, é a festa
+     quase      1.06 / 1.15   bola fora, animado sem festa
+     defesa     0.94 / 0.96   acolhedor, nunca de repreensão
+     resultado  1.00 / 1.12   fim da fase, com o placar
+     premio     1.10 / 1.30   compra na Loja
+     instrucao  0.90 / 1.05   tutorial, didático
+     padrao     0.95 / 1.05   quem chamar sem informar o tom
+
+COMO AJUSTAR
+
+Abra Docs/laboratorio-de-voz.html no navegador. Ele lista as vozes da
+máquina, deixa arrastar velocidade e altura ouvindo as frases reais do
+jogo, e gera a tabela TONS pronta para colar em narration.js.
+
+Mexa SÓ na tabela TONS e na lista VOZES_PREFERIDAS. O resto de
+narration.js não precisa ser tocado.
+
+Faixas que valem respeitar:
+  rate  abaixo de 0,80 arrasta; acima de 1,25 a criança perde o número
+  pitch acima de 1,40 fica estridente no alto-falante de Chromebook;
+        abaixo de 0,90 fica pesado demais para criança
+
+A API de voz usa o que está instalado no aparelho, então o mesmo número
+soa um pouco diferente em cada máquina. Ajustem pelo pior caso, que
+costuma ser o Chromebook do laboratório.
+
+===================================================================
+TESTES
+===================================================================
+
+  npm run test:unit   37/37 passando
+  npm run test:e2e    69/69 passando
+
+Nenhum teste precisou ser alterado.

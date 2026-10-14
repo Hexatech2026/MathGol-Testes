@@ -599,16 +599,27 @@ var BANDEIRAS_POR_ID = {
   colombia:'co', mexico:'mx', coreia:'kr'
 };
 
-// Escudo generico do clube: duas cores do time + sigla. NAO e o escudo
-// oficial (marca registrada); so ajuda a crianca a reconhecer o time.
+// Escudo PROPRIO do clube: cores e padrao da camisa + sigla. NAO e o
+// escudo oficial — esse e marca registrada do clube e o jogo esta
+// publicado na web. Cores e listras nao sao protegidas, e sao elas que
+// a crianca usa pra reconhecer o time de longe.
+// O desenho de cada padrao mora no CSS (.escudo-clube[data-padrao=...]).
 function criarEscudoClube(time, classeExtra) {
   var escudo = document.createElement('span');
   escudo.className = 'escudo-clube' + (classeExtra ? ' ' + classeExtra : '');
   escudo.setAttribute('aria-hidden', 'true');
   var c1 = COR_VALIDA.test(time.corPrimaria || '') ? time.corPrimaria : '#21303B';
   var c2 = COR_VALIDA.test(time.corSecundaria || '') ? time.corSecundaria : '#FFFDF6';
+  // Tricolor sem a 3a cor cai no bicolor em vez de sumir com uma faixa.
+  var c3 = COR_VALIDA.test(time.corTerciaria || '') ? time.corTerciaria : c2;
   escudo.style.setProperty('--cor-1', c1);
   escudo.style.setProperty('--cor-2', c2);
+  escudo.style.setProperty('--cor-3', c3);
+  // Padrao desconhecido (ou lista remota antiga, sem o campo) vira 'liso'.
+  escudo.setAttribute('data-padrao', padraoDoEscudo(time.padrao));
+  // Camisa clara precisa de aro escuro pra nao sumir no fundo da Loja.
+  if (corEhClara(c1)) escudo.setAttribute('data-claro', '1');
+
   var sigla = document.createElement('span');
   sigla.className = 'escudo-sigla';
   sigla.textContent = (time.sigla || time.nome.slice(0, 3)).toUpperCase();
@@ -616,6 +627,13 @@ function criarEscudoClube(time, classeExtra) {
   sigla.style.color = corEhClara(c1) ? '#111111' : '#FFFFFF';
   escudo.appendChild(sigla);
   return escudo;
+}
+
+function padraoDoEscudo(valor) {
+  var conhecidos = (typeof PADROES_ESCUDO !== 'undefined')
+    ? PADROES_ESCUDO
+    : ['liso', 'vertical', 'horizontal', 'diagonal', 'faixa-h', 'tricolor-v', 'tricolor-h'];
+  return conhecidos.indexOf(valor) === -1 ? 'liso' : valor;
 }
 
 function corEhClara(hex) {
@@ -1016,7 +1034,7 @@ function carregarProximaPergunta() {
 
   estado.etapa = ETAPA.RESPOSTA;
   atualizarBolinhasProgresso();
-  Narracao.falar(estado.perguntaAtual.textoFalado);
+  Narracao.falar(estado.perguntaAtual.textoFalado, { tom: 'pergunta' });
   iniciarTimer();
 }
 
@@ -1027,7 +1045,7 @@ function initFase1() {
       // Pedido explicito da crianca: fala mesmo com a narracao automatica
       // desligada (antes o botao nao fazia nada nesse caso).
       SFX.clique();
-      if (estado.perguntaAtual) Narracao.falar(estado.perguntaAtual.textoFalado, { forcar: true });
+      if (estado.perguntaAtual) Narracao.falar(estado.perguntaAtual.textoFalado, { forcar: true, tom: 'pergunta' });
     });
   }
   desenharFaixaIdealForca('meia');
@@ -1335,13 +1353,13 @@ function finalizarCobranca(detalhes) {
     feedback.textContent = 'GOOOL! +' + pontosGanhos + ' ';
     feedback.appendChild(criarIconeCruzeiro(''));
     feedback.appendChild(document.createTextNode('Cruzeiros!'));
-    Narracao.falar('Gol!');
+    Narracao.falar('Gol!', { tom: 'gol' });
   } else if (resultado === 'fora') {
     // Reaproveita o som existente de "sem gol" — nao criar SFX novo.
     SFX.defesa();
     var motivo = MENSAGEM_FORA[detalhes.motivo] ? detalhes.motivo : 'lado';
     feedback.textContent = MENSAGEM_FORA[motivo];
-    Narracao.falar(NARRACAO_FORA[motivo]);
+    Narracao.falar(NARRACAO_FORA[motivo], { tom: 'quase' });
   } else {
     SFX.defesa();
     var frase = FRASES_INCENTIVO[Math.floor(Math.random() * FRASES_INCENTIVO.length)];
@@ -1351,7 +1369,8 @@ function finalizarCobranca(detalhes) {
     incentivo.textContent = frase;
     incentivo.hidden = false;
     incentivo.classList.remove('animar'); void incentivo.offsetWidth; incentivo.classList.add('animar');
-    Narracao.falar(detalhes.estourouTempo ? 'Tempo esgotado! O goleiro defendeu.' : 'O goleiro defendeu!');
+    Narracao.falar(detalhes.estourouTempo ? 'Tempo esgotado! O goleiro defendeu.' : 'O goleiro defendeu!',
+      { tom: 'defesa' });
   }
 
   estado.resultadosCobrancas.push({
@@ -1532,7 +1551,7 @@ function irParaResultado() {
     window.FirebaseMathGol.salvarProgresso(resumo);
   }
 
-  Narracao.falar(mensagem);
+  Narracao.falar(mensagem, { tom: 'resultado' });
   mostrarTela('tela-resultado');
 }
 
@@ -1610,7 +1629,22 @@ var Modal = (function() {
     atual.sobreposicao.setAttribute('aria-hidden', 'true');
     fundo().forEach(function(el) { el.removeAttribute('inert'); el.removeAttribute('aria-hidden'); });
     if (atual.aoFechar) atual.aoFechar();
-    if (atual.origem && typeof atual.origem.focus === 'function') atual.origem.focus();
+    devolverFoco(atual.origem);
+  }
+
+  // Modal aberto de DENTRO de outro (ex.: Creditos a partir de "Mais
+  // opcoes"): quando este fecha, o botao que o abriu ja esta escondido
+  // junto com o modal de fora. Focar um elemento invisivel joga o foco no
+  // <body> e o teclado volta pro topo do documento. Nesse caso devolvemos
+  // pro "Mais opcoes", que e o elemento visivel mais proximo da origem.
+  function visivel(el) {
+    return !!el && typeof el.focus === 'function' && !el.hidden && el.offsetParent !== null;
+  }
+
+  function devolverFoco(origem) {
+    if (visivel(origem)) { origem.focus(); return; }
+    var alternativa = document.getElementById('botao-mais-opcoes');
+    if (visivel(alternativa)) alternativa.focus();
   }
 
   document.addEventListener('keydown', function(ev) {
@@ -1945,9 +1979,17 @@ function initBackup() {
 // nao sao do dia a dia da crianca moram aqui agora. Fechar o modal antes de
 // trocar de tela e obrigatorio: senao a sobreposicao fica por cima da tela
 // nova e come os cliques.
+// Usa o mesmo Modal dos outros (Acessibilidade, Creditos, Backup): foco
+// entra no titulo, Tab fica preso dentro, Escape fecha e o fundo vira inert.
+// A primeira versao deste modal tinha logica propria e por isso nao punha o
+// fundo em inert nem prendia o Tab — o leitor de tela passeava pela tela
+// atras da sobreposicao (DEF-A11Y-01).
 function fecharMaisOpcoes() {
   var m = document.getElementById('sobreposicao-mais');
-  if (m) { m.classList.remove('aberta'); m.setAttribute('aria-hidden', 'true'); }
+  if (!m) return;
+  if (m.classList.contains('aberta')) { Modal.fechar(); return; }
+  m.classList.remove('aberta');
+  m.setAttribute('aria-hidden', 'true');
 }
 
 function initMaisOpcoes() {
@@ -1958,20 +2000,16 @@ function initMaisOpcoes() {
 
   abrir.addEventListener('click', function() {
     SFX.clique();
-    modal.classList.add('aberta');
-    modal.setAttribute('aria-hidden', 'false');
-    var primeiro = modal.querySelector('button');
-    if (primeiro) primeiro.focus();
+    Modal.abrir(modal, abrir);
   });
-  if (fechar) fechar.addEventListener('click', function() { SFX.clique(); fecharMaisOpcoes(); abrir.focus(); });
-  modal.addEventListener('click', function(ev) { if (ev.target === modal) fecharMaisOpcoes(); });
-  document.addEventListener('keydown', function(ev) {
-    if (ev.key === 'Escape' && modal.classList.contains('aberta')) { fecharMaisOpcoes(); abrir.focus(); }
-  });
+  if (fechar) fechar.addEventListener('click', function() { SFX.clique(); Modal.fechar(); });
+  Modal.ligarFundo(modal);
 
-  // Os quatro botoes de dentro levam pra outra tela ou abrem outro modal:
-  // em todos os casos este tem que sair da frente.
-  ['botao-entrar-sala', 'botao-professor', 'botao-creditos', 'botao-backup'].forEach(function(id) {
+  // Entrar na sala e Sou professor TROCAM DE TELA: a sobreposicao tem que
+  // sair da frente antes, senao fica por cima da tela nova e come os cliques.
+  // Creditos e Backup abrem outro modal — Modal.abrir ja fecha este sozinho,
+  // e o foco volta pro "Mais opcoes" quando o de cima fechar.
+  ['botao-entrar-sala', 'botao-professor'].forEach(function(id) {
     var b = document.getElementById(id);
     if (b) b.addEventListener('click', fecharMaisOpcoes);
   });

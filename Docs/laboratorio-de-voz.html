@@ -1,0 +1,462 @@
+<title>Laboratório de Voz MathGol</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@400;600&display=swap">
+
+<style>
+/* Bancada de ajuste: coluna de controle à esquerda, os sete tons empilhados
+   à direita, e o código pronto embaixo. Cores do próprio MathGol:
+   gramado, céu noturno do estádio e o amarelo da bola. */
+:root {
+  --campo:      #15314F;
+  --campo-2:    #1E4A6E;
+  --grama:      #17683A;
+  --grama-viva: #2E9E5B;
+  --bola:       #FFC63B;
+  --papel:      #FFFDF6;
+  --tinta:      #19262F;
+  --tinta-2:    #5A6A75;
+  --linha:      #DDD8C7;
+  --cartao:     #FFFFFF;
+  --alerta:     #B4232A;
+
+  --fonte-titulo: 'Fredoka', system-ui, sans-serif;
+  --fonte-corpo: 'Atkinson Hyperlegible', system-ui, sans-serif;
+  --fonte-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --campo: #0C1B2B; --campo-2: #16314A; --grama: #37B36B; --grama-viva: #4FCF8A;
+    --bola: #FFD264; --papel: #0F1821; --tinta: #E8EEF2; --tinta-2: #9FB0BC;
+    --linha: #2A3B49; --cartao: #16222D; --alerta: #FF8A84;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --campo: #0C1B2B; --campo-2: #16314A; --grama: #37B36B; --grama-viva: #4FCF8A;
+  --bola: #FFD264; --papel: #0F1821; --tinta: #E8EEF2; --tinta-2: #9FB0BC;
+  --linha: #2A3B49; --cartao: #16222D; --alerta: #FF8A84;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--papel);
+  color: var(--tinta);
+  font-family: var(--fonte-corpo);
+  line-height: 1.55;
+}
+.pagina { max-width: 1120px; margin: 0 auto; padding: 0 16px; padding-block: 0 56px; }
+
+/* ---------- cabeçalho ---------- */
+.capa {
+  background: linear-gradient(104deg, var(--campo) 0%, var(--campo-2) 100%);
+  color: #FFFFFF;
+  border-radius: 0 0 20px 20px;
+  padding: 26px 22px 22px;
+  margin-bottom: 26px;
+}
+.capa h1 {
+  font-family: var(--fonte-titulo); font-weight: 700;
+  font-size: clamp(1.5rem, 4.4vw, 2.2rem);
+  margin: 0 0 6px; letter-spacing: -0.015em; text-wrap: balance;
+}
+.capa p { margin: 0; max-width: 62ch; font-size: 0.95rem; opacity: 0.9; }
+.capa .marca {
+  display: inline-block; font-family: var(--fonte-titulo); font-weight: 600;
+  font-size: 0.7rem; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--bola); margin-bottom: 8px;
+}
+
+/* ---------- blocos ---------- */
+.bancada { display: grid; grid-template-columns: minmax(0, 300px) minmax(0, 1fr); gap: 22px; align-items: start; }
+@media (max-width: 760px) { .bancada { grid-template-columns: minmax(0, 1fr); } }
+
+.painel {
+  background: var(--cartao);
+  border: 1px solid var(--linha);
+  border-radius: 14px;
+  padding: 18px;
+}
+.painel h2 {
+  font-family: var(--fonte-titulo); font-weight: 600;
+  font-size: 1.02rem; margin: 0 0 4px; color: var(--tinta);
+}
+.painel .ajuda { margin: 0 0 14px; font-size: 0.82rem; color: var(--tinta-2); }
+
+label.campo { display: block; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--tinta-2); margin: 0 0 6px; }
+select, button, input[type="range"] { font-family: inherit; }
+select {
+  width: 100%; padding: 9px 10px; border-radius: 9px;
+  border: 1px solid var(--linha); background: var(--papel); color: var(--tinta);
+  font-size: 0.9rem;
+}
+.aviso {
+  margin-top: 14px; padding: 10px 12px; border-radius: 10px;
+  background: color-mix(in srgb, var(--alerta) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--alerta) 35%, transparent);
+  color: var(--alerta); font-size: 0.82rem;
+}
+.lista-vozes { margin: 14px 0 0; padding: 0; list-style: none; font-size: 0.8rem; }
+.lista-vozes li {
+  display: flex; justify-content: space-between; gap: 10px;
+  padding: 5px 0; border-bottom: 1px dashed var(--linha); color: var(--tinta-2);
+}
+.lista-vozes li:last-child { border-bottom: 0; }
+.lista-vozes .etiqueta {
+  font-family: var(--fonte-mono); font-size: 0.7rem;
+  padding: 1px 6px; border-radius: 20px; white-space: nowrap;
+  background: color-mix(in srgb, var(--grama) 16%, transparent); color: var(--grama);
+}
+.lista-vozes .etiqueta.remota { background: color-mix(in srgb, var(--bola) 26%, transparent); color: #7A5400; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .lista-vozes .etiqueta.remota { color: var(--bola); } }
+:root[data-theme="dark"] .lista-vozes .etiqueta.remota { color: var(--bola); }
+
+/* ---------- tons ---------- */
+.tons { display: grid; gap: 12px; }
+.tom {
+  background: var(--cartao); border: 1px solid var(--linha);
+  border-left: 5px solid var(--grama);
+  border-radius: 12px; padding: 14px 16px;
+}
+.tom[data-chave="gol"]    { border-left-color: var(--bola); }
+.tom[data-chave="defesa"] { border-left-color: var(--tinta-2); }
+.tom-topo { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 2px; }
+.tom-nome { font-family: var(--fonte-titulo); font-weight: 600; font-size: 1rem; }
+.tom-chave { font-family: var(--fonte-mono); font-size: 0.72rem; color: var(--tinta-2); }
+.tom-frase { margin: 0 0 12px; font-size: 0.88rem; color: var(--tinta-2); }
+.tom-frase b { color: var(--tinta); font-weight: 400; font-style: italic; }
+
+.controles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) auto; gap: 12px; align-items: end; }
+@media (max-width: 620px) { .controles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.controle label {
+  display: flex; justify-content: space-between; gap: 6px;
+  font-size: 0.74rem; font-weight: 700; letter-spacing: 0.05em;
+  text-transform: uppercase; color: var(--tinta-2); margin-bottom: 3px;
+}
+.controle label .valor {
+  font-family: var(--fonte-mono); font-variant-numeric: tabular-nums;
+  letter-spacing: 0; text-transform: none; color: var(--tinta);
+}
+input[type="range"] { width: 100%; accent-color: var(--grama-viva); margin: 0; }
+
+button {
+  cursor: pointer; border-radius: 9px; border: 1px solid transparent;
+  font-weight: 700; font-size: 0.86rem; padding: 9px 14px;
+  background: var(--grama); color: #FFFFFF;
+  transition: filter 0.15s ease;
+}
+button:hover { filter: brightness(1.12); }
+button:focus-visible { outline: 3px solid var(--bola); outline-offset: 2px; }
+button.secundario { background: transparent; color: var(--tinta); border-color: var(--linha); }
+button.ouvir { white-space: nowrap; }
+button:disabled { opacity: 0.45; cursor: not-allowed; filter: none; }
+
+.barra-acoes { display: flex; flex-wrap: wrap; gap: 10px; margin: 20px 0 0; }
+
+/* ---------- código ---------- */
+.saida { margin-top: 26px; }
+.saida-topo { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+pre {
+  margin: 0; padding: 16px; border-radius: 12px; overflow-x: auto;
+  background: var(--campo); color: #E6EEF5;
+  font-family: var(--fonte-mono); font-size: 0.78rem; line-height: 1.6;
+  border: 1px solid var(--linha);
+}
+pre .c { color: #8FB4CC; }
+pre .n { color: var(--bola); }
+pre .k { color: #7FD6A2; }
+.rodape { margin-top: 26px; font-size: 0.82rem; color: var(--tinta-2); max-width: 70ch; }
+.rodape code { font-family: var(--fonte-mono); font-size: 0.78rem; }
+</style>
+
+<div class="capa">
+  <div class="pagina" style="padding-block:0">
+    <span class="marca">MathGol · HexaTech</span>
+    <h1>Laboratório de Voz</h1>
+    <p>Arraste os controles, ouça a frase real do jogo e cole o resultado na tabela <code>TONS</code> de <code>JS/narration.js</code>. As vozes listadas são as que existem <em>nesta</em> máquina — a criança vai ouvir a voz da máquina dela.</p>
+  </div>
+</div>
+
+<div class="pagina">
+  <div class="bancada">
+
+    <div>
+      <div class="painel">
+        <h2>Voz</h2>
+        <p class="ajuda">O jogo escolhe sozinho pela ordem de qualidade. Aqui você força uma para comparar.</p>
+        <label class="campo" for="seletor-voz">Voz em uso no teste</label>
+        <select id="seletor-voz"><option>Carregando vozes…</option></select>
+        <div id="aviso-voz" class="aviso" hidden></div>
+        <ul class="lista-vozes" id="lista-vozes"></ul>
+      </div>
+
+      <div class="painel" style="margin-top:16px">
+        <h2>Como usar</h2>
+        <p class="ajuda" style="margin:0">
+          1. Ouça cada tom como está.<br>
+          2. Ajuste velocidade e altura até agradar.<br>
+          3. Copie o código e substitua a tabela <code>TONS</code>.<br>
+          4. Teste no jogo com <strong>Ctrl + F5</strong>.
+        </p>
+      </div>
+    </div>
+
+    <div>
+      <div class="tons" id="tons"></div>
+      <div class="barra-acoes">
+        <button id="tocar-tudo">▶ Ouvir a sequência de uma cobrança</button>
+        <button id="parar" class="secundario">■ Parar</button>
+        <button id="restaurar" class="secundario">Voltar aos valores atuais do jogo</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="saida">
+    <div class="saida-topo">
+      <h2 style="font-family:var(--fonte-titulo);font-size:1.05rem;margin:0">Cole isto no lugar da tabela <code>TONS</code></h2>
+      <button id="copiar">Copiar código</button>
+    </div>
+    <pre id="codigo"></pre>
+  </div>
+
+  <p class="rodape">
+    A Web Speech API usa a voz instalada no aparelho, então o mesmo <code>rate</code> soa um pouco diferente em cada máquina — ajuste pelo que for aceitável no pior caso, que costuma ser o Chromebook do laboratório. Se nenhuma voz em português aparecer na lista, o navegador vai ler com sotaque da voz padrão do sistema: nesse caso vale instalar a voz pt-BR no sistema operacional, não mexer nestes números.
+  </p>
+</div>
+
+<script>
+// Espelha a tabela TONS de JS/narration.js. Mantenha os mesmos nomes.
+const PADROES = {
+  pergunta:  { rate: 0.92, pitch: 1.02, volume: 1,    nome: 'Pergunta',  frase: 'Quanto é 7 mais 5?',
+               dica: 'A fala mais importante do jogo. Clareza vem antes de animação.' },
+  gol:       { rate: 1.18, pitch: 1.38, volume: 1,    nome: 'Gol',       frase: 'Gol!',
+               dica: 'Momento de festa: rápido e agudo.' },
+  quase:     { rate: 1.06, pitch: 1.15, volume: 1,    nome: 'Quase',     frase: 'Forte demais! Por cima do gol.',
+               dica: 'Bola fora. Animado, mas sem festa.' },
+  defesa:    { rate: 0.94, pitch: 0.96, volume: 0.95, nome: 'Defesa',    frase: 'O goleiro defendeu!',
+               dica: 'Acolhedor. Subir a altura aqui soa como deboche.' },
+  resultado: { rate: 1.0,  pitch: 1.12, volume: 1,    nome: 'Resultado', frase: 'Você fez 2 gols em 3 cobranças!',
+               dica: 'Fim da fase, com o placar.' },
+  premio:    { rate: 1.1,  pitch: 1.3,  volume: 1,    nome: 'Prêmio',    frase: 'Agora o Palmeiras é seu!',
+               dica: 'Compra na Loja. Comemoração curta.' },
+  instrucao: { rate: 0.9,  pitch: 1.05, volume: 1,    nome: 'Instrução', frase: 'Escolha onde chutar. Toque no gol para mirar.',
+               dica: 'Tutorial. Didático, sem pressa.' },
+  padrao:    { rate: 0.95, pitch: 1.05, volume: 1,    nome: 'Padrão',    frase: 'Vamos lá, craque!',
+               dica: 'Qualquer fala que não informe o tom.' }
+};
+const CHAVES = Object.keys(PADROES);
+const atual = {};
+CHAVES.forEach(k => { atual[k] = { rate: PADROES[k].rate, pitch: PADROES[k].pitch, volume: PADROES[k].volume }; });
+
+const temVoz = 'speechSynthesis' in window;
+let vozes = [];
+let vozEscolhida = null;
+
+const PREFERIDAS = ['francisca','thalita','brenda','google portugues do brasil',
+  'google português do brasil','luciana','joana','antonio','daniel','maria'];
+const semAcento = t => String(t||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+
+function melhorVoz(lista) {
+  const pt = lista.filter(v => v.lang && v.lang.toLowerCase().startsWith('pt'));
+  const base = pt.length ? pt : lista;
+  for (const alvo of PREFERIDAS) {
+    const a = base.find(v => semAcento(v.name).includes(semAcento(alvo)));
+    if (a) return a;
+  }
+  return pt.find(v => v.lang.toLowerCase() === 'pt-br') || pt[0] || lista[0] || null;
+}
+
+function carregarVozes() {
+  if (!temVoz) return;
+  vozes = window.speechSynthesis.getVoices();
+  if (!vozes.length) return;
+  const pt = vozes.filter(v => v.lang && v.lang.toLowerCase().startsWith('pt'));
+  const sel = document.getElementById('seletor-voz');
+  sel.textContent = '';
+  const fonte = pt.length ? pt : vozes;
+  const sugerida = melhorVoz(vozes);
+  fonte.forEach(v => {
+    const o = document.createElement('option');
+    o.value = v.name;
+    o.textContent = v.name + ' · ' + v.lang + (v === sugerida ? '  (escolha do jogo)' : '');
+    sel.appendChild(o);
+  });
+  if (sugerida) { sel.value = sugerida.name; vozEscolhida = sugerida; }
+
+  const ul = document.getElementById('lista-vozes');
+  ul.textContent = '';
+  if (!pt.length) {
+    const aviso = document.getElementById('aviso-voz');
+    aviso.textContent = 'Nenhuma voz em português encontrada nesta máquina. O teste vai usar a voz padrão do sistema e o sotaque não será o do jogo real.';
+    aviso.hidden = false;
+  }
+  pt.forEach(v => {
+    const li = document.createElement('li');
+    const n = document.createElement('span'); n.textContent = v.name;
+    const e = document.createElement('span');
+    e.className = 'etiqueta' + (v.localService ? '' : ' remota');
+    e.textContent = v.localService ? 'local' : 'rede';
+    li.append(n, e); ul.appendChild(li);
+  });
+}
+
+if (temVoz) {
+  carregarVozes();
+  window.speechSynthesis.onvoiceschanged = carregarVozes;
+  // Em alguns navegadores getVoices() só responde depois de um tempo — e em
+  // alguns ambientes nunca responde. Sem este aviso o seletor ficaria preso
+  // em "Carregando vozes…" para sempre, sem explicar nada.
+  setTimeout(() => {
+    if (vozes.length) return;
+    const sel = document.getElementById('seletor-voz');
+    sel.textContent = '';
+    const o = document.createElement('option');
+    o.textContent = 'Nenhuma voz disponível neste navegador';
+    sel.appendChild(o);
+    sel.disabled = true;
+    const aviso = document.getElementById('aviso-voz');
+    aviso.textContent = 'O navegador não entregou nenhuma voz. Os controles abaixo continuam funcionando e o código de saída é válido, mas não dá para ouvir aqui — abra em Chrome, Edge ou Safari numa máquina com voz pt-BR instalada.';
+    aviso.hidden = false;
+  }, 1800);
+} else {
+  const aviso = document.getElementById('aviso-voz');
+  aviso.textContent = 'Este navegador não tem síntese de voz. Abra em Chrome, Edge ou Safari para ouvir.';
+  aviso.hidden = false;
+}
+
+document.getElementById('seletor-voz').addEventListener('change', e => {
+  vozEscolhida = vozes.find(v => v.name === e.target.value) || null;
+});
+
+function falar(chave, aoTerminar) {
+  if (!temVoz) { if (aoTerminar) aoTerminar(); return; }
+  window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(PADROES[chave].frase);
+  u.lang = 'pt-BR';
+  if (vozEscolhida) u.voice = vozEscolhida;
+  u.rate = atual[chave].rate;
+  u.pitch = atual[chave].pitch;
+  u.volume = atual[chave].volume;
+  if (aoTerminar) { u.onend = aoTerminar; u.onerror = aoTerminar; }
+  window.speechSynthesis.speak(u);
+}
+
+// ---------- montagem dos sete tons ----------
+const LIMITES = { rate: [0.6, 1.5, 0.01], pitch: [0.6, 1.8, 0.01], volume: [0, 1, 0.05] };
+const ROTULOS = { rate: 'Velocidade', pitch: 'Altura', volume: 'Volume' };
+
+const caixaTons = document.getElementById('tons');
+CHAVES.forEach(chave => {
+  const d = PADROES[chave];
+  const card = document.createElement('div');
+  card.className = 'tom'; card.dataset.chave = chave;
+
+  const topo = document.createElement('div'); topo.className = 'tom-topo';
+  const nome = document.createElement('span'); nome.className = 'tom-nome'; nome.textContent = d.nome;
+  const cod = document.createElement('code'); cod.className = 'tom-chave'; cod.textContent = chave;
+  topo.append(nome, cod);
+
+  const frase = document.createElement('p'); frase.className = 'tom-frase';
+  const b = document.createElement('b'); b.textContent = '“' + d.frase + '”';
+  frase.append(b, document.createTextNode(' — ' + d.dica));
+
+  const ctrls = document.createElement('div'); ctrls.className = 'controles';
+  ['rate', 'pitch', 'volume'].forEach(prop => {
+    const [min, max, passo] = LIMITES[prop];
+    const wrap = document.createElement('div'); wrap.className = 'controle';
+    const lab = document.createElement('label');
+    lab.setAttribute('for', 'r-' + chave + '-' + prop);
+    const txt = document.createElement('span'); txt.textContent = ROTULOS[prop];
+    const val = document.createElement('span'); val.className = 'valor';
+    val.id = 'v-' + chave + '-' + prop;
+    val.textContent = atual[chave][prop].toFixed(2);
+    lab.append(txt, val);
+    const r = document.createElement('input');
+    r.type = 'range'; r.id = 'r-' + chave + '-' + prop;
+    r.min = min; r.max = max; r.step = passo; r.value = atual[chave][prop];
+    r.addEventListener('input', () => {
+      atual[chave][prop] = parseFloat(r.value);
+      val.textContent = atual[chave][prop].toFixed(2);
+      escreverCodigo();
+    });
+    wrap.append(lab, r); ctrls.appendChild(wrap);
+  });
+  const btn = document.createElement('button');
+  btn.className = 'ouvir'; btn.type = 'button'; btn.textContent = '▶ Ouvir';
+  btn.addEventListener('click', () => falar(chave));
+  ctrls.appendChild(btn);
+
+  card.append(topo, frase, ctrls);
+  caixaTons.appendChild(card);
+});
+
+// ---------- sequência de uma cobrança ----------
+document.getElementById('tocar-tudo').addEventListener('click', () => {
+  const roteiro = ['pergunta', 'gol', 'quase', 'defesa', 'resultado'];
+  let i = 0;
+  (function proximo() {
+    if (i >= roteiro.length) return;
+    falar(roteiro[i++], () => setTimeout(proximo, 420));
+  })();
+});
+document.getElementById('parar').addEventListener('click', () => {
+  if (temVoz) window.speechSynthesis.cancel();
+});
+document.getElementById('restaurar').addEventListener('click', () => {
+  CHAVES.forEach(k => {
+    ['rate', 'pitch', 'volume'].forEach(p => {
+      atual[k][p] = PADROES[k][p];
+      document.getElementById('r-' + k + '-' + p).value = PADROES[k][p];
+      document.getElementById('v-' + k + '-' + p).textContent = PADROES[k][p].toFixed(2);
+    });
+  });
+  escreverCodigo();
+});
+
+// ---------- código de saída ----------
+function escreverCodigo() {
+  const pre = document.getElementById('codigo');
+  pre.textContent = '';
+  const linha = (texto, classe) => {
+    const s = document.createElement('span');
+    if (classe) s.className = classe;
+    s.textContent = texto;
+    pre.appendChild(s);
+  };
+  linha('  const TONS = {\n');
+  CHAVES.forEach((k, i) => {
+    const a = atual[k];
+    linha('    // ' + PADROES[k].dica + '\n', 'c');
+    linha('    ' + (k + ':').padEnd(11));
+    linha('{ rate: ');
+    linha(a.rate.toFixed(2), 'n');
+    linha(', pitch: ');
+    linha(a.pitch.toFixed(2), 'n');
+    linha(', volume: ');
+    linha(a.volume === 1 ? '1' : a.volume.toFixed(2), 'n');
+    linha(' }' + (i < CHAVES.length - 1 ? ',' : '') + '\n');
+  });
+  linha('  };\n');
+}
+escreverCodigo();
+
+document.getElementById('copiar').addEventListener('click', async () => {
+  const btn = document.getElementById('copiar');
+  const texto = document.getElementById('codigo').textContent;
+  try {
+    await navigator.clipboard.writeText(texto);
+    btn.textContent = 'Copiado';
+    setTimeout(() => { btn.textContent = 'Copiar código'; }, 1800);
+  } catch (e) {
+    const faixa = document.createRange();
+    faixa.selectNodeContents(document.getElementById('codigo'));
+    const sel = window.getSelection();
+    sel.removeAllRanges(); sel.addRange(faixa);
+    btn.textContent = 'Selecionado — use Ctrl+C';
+    setTimeout(() => { btn.textContent = 'Copiar código'; }, 2600);
+  }
+});
+</script>

@@ -149,7 +149,7 @@ var Tutorial = (function() {
     proximo.textContent = ultimo ? (aoTerminar ? 'Bora jogar! ⚽' : 'Entendi! ✅') : 'Próximo →';
     el('botao-tutorial-pular').hidden = ultimo;
 
-    if (typeof Narracao !== 'undefined') Narracao.falar(p.titulo + '. ' + p.texto);
+    if (typeof Narracao !== 'undefined') Narracao.falar(p.titulo + '. ' + p.texto, { tom: 'instrucao' });
   }
 
   function irPara(novo) {

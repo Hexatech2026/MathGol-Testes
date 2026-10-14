@@ -2623,16 +2623,77 @@ body.alto-contraste .preenchimento-altura { background: var(--grafite); }
   background: linear-gradient(90deg, var(--cor-1) 0 50%, var(--cor-2) 50% 100%);
   box-shadow: inset 0 0 0 2px rgba(0,0,0,0.25);
 }
+
+/* ---------- Padrao da camisa dentro do escudo proprio ----------
+   O escudo e nosso; o que identifica o time aqui sao as CORES e as
+   LISTRAS da camisa, que nao sao marca registrada. O escudo oficial de
+   cada clube e, e por isso nao entra no jogo.
+   data-padrao vem de SELECOES (JS/data.js) e so aceita os sete valores
+   de PADROES_ESCUDO. --cor-3 existe so nos tricolores.                */
+
+.escudo-clube[data-padrao="liso"]::before {
+  background: var(--cor-1);
+  box-shadow: inset 0 0 0 3px var(--cor-2), inset 0 0 0 5px rgba(0,0,0,0.25);
+}
+.escudo-clube[data-padrao="vertical"]::before {
+  background: repeating-linear-gradient(90deg,
+    var(--cor-1) 0 18%, var(--cor-2) 18% 36%);
+}
+.escudo-clube[data-padrao="horizontal"]::before {
+  background: repeating-linear-gradient(180deg,
+    var(--cor-1) 0 13%, var(--cor-2) 13% 26%);
+}
+/* Faixa atravessada (Vasco): a camisa e CLARA com a faixa escura, entao
+   aqui a base e a cor-2 e a faixa e a cor-1 — ao contrario dos demais.
+   Inverter no CSS em vez de nos dados mantem a camisa 3D como esta. */
+.escudo-clube[data-padrao="diagonal"]::before {
+  background: linear-gradient(118deg,
+    var(--cor-2) 0 34%, var(--cor-1) 34% 60%, var(--cor-2) 60% 100%);
+}
+.escudo-clube[data-padrao="faixa-h"]::before {
+  background: linear-gradient(180deg,
+    var(--cor-1) 0 46%, var(--cor-2) 46% 72%, var(--cor-1) 72% 100%);
+}
+.escudo-clube[data-padrao="tricolor-v"]::before {
+  background: repeating-linear-gradient(90deg,
+    var(--cor-1) 0 12%, var(--cor-2) 12% 24%, var(--cor-3) 24% 36%);
+}
+.escudo-clube[data-padrao="tricolor-h"]::before {
+  background: linear-gradient(180deg,
+    var(--cor-1) 0 40%, var(--cor-2) 40% 68%, var(--cor-3) 68% 100%);
+}
+
+/* Camisa muito clara (Corinthians, Santos, Bragantino, Sao Paulo) perde o
+   contorno no fundo claro da loja: um aro escuro resolve sem mudar a cor. */
+.escudo-clube[data-claro="1"]::before {
+  box-shadow: inset 0 0 0 2px rgba(0,0,0,0.45);
+}
+.escudo-clube[data-claro="1"][data-padrao="liso"]::before {
+  box-shadow: inset 0 0 0 3px var(--cor-2), inset 0 0 0 5px rgba(0,0,0,0.35);
+}
+
+/* Alto contraste: o padrao vira contorno grosso, como no resto do jogo. */
+body.alto-contraste .escudo-clube::before {
+  background: #FFFFFF;
+  box-shadow: inset 0 0 0 3px #000000;
+}
+body.alto-contraste .escudo-sigla {
+  background: #FFFFFF;
+  color: #000000 !important;
+  outline: 2px solid #000000;
+}
 .escudo-sigla {
   position: relative;
-  margin-top: -10px;
-  padding: 1px 4px;
+  /* Sobe e encolhe: a placa da sigla cobria o meio do escudo e escondia
+     justamente a faixa que identifica o time (Bahia, Remo, Bragantino). */
+  margin-top: -16px;
+  padding: 0 3px;
   border-radius: 4px;
   background: var(--cor-1);
   font-family: var(--fonte-titulo);
   font-weight: 700;
-  font-size: 0.82rem;
-  letter-spacing: 0.04em;
+  font-size: 0.7rem;
+  letter-spacing: 0.02em;
   outline: 2px solid rgba(255,255,255,0.65);
 }
 .subtitulo-clubes { margin-top: 20px; }

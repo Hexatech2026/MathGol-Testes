@@ -196,7 +196,7 @@ var Loja = (function() {
         ? ' Escolha na tela "Monte seu craque".'
         : ' Escolha na tela "Escolha seu time".';
       mostrarStatus('🎉 Agora ' + item.nome + ' é seu!' + dica);
-      if (typeof Narracao !== 'undefined') Narracao.falar('Agora ' + item.nome + ' é seu!');
+      if (typeof Narracao !== 'undefined') Narracao.falar('Agora ' + item.nome + ' é seu!', { tom: 'premio' });
     } else if (resultado.motivo === 'saldo') {
       mostrarStatus('Ainda faltam ' + Carteira.formatar(resultado.faltam) + '. Faça mais gols!');
     } else if (resultado.motivo === 'ja-possui') {
