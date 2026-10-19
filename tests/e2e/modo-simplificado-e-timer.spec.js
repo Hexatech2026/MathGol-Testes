@@ -14,7 +14,10 @@ test('7. Three.js ausente: modo simplificado, sem gol automatico', async ({ page
   await A.fixarForca(page, 0); // forca ruim
   await A.fixarAltura(page, 0.5);
   await A.responder(page, true);
-  await page.waitForTimeout(700);
+  // Espera o ESTADO, nao um tempo fixo: a pausa entre acertar a conta e
+  // mirar deixou de ser 300 ms quando a etapa 1 (grito da torcida + pose
+  // do batedor) entrou, e um waitForTimeout(700) aqui so testava o relogio.
+  await A.esperarEtapa(page, 'mira');
   // Resposta certa leva para a mira — nunca direto ao gol.
   expect(await page.evaluate(() => estado.etapa)).toBe('mira');
   expect(await page.evaluate(() => estado.gols)).toBe(0);
@@ -60,7 +63,7 @@ test('8. WebGLRenderer lancando erro ativa o modo simplificado', async ({ page }
   await expect(page.locator('#jogo-penalti .cena-2d')).toHaveCount(1);
   await expect(page.locator('#aviso-modo-jogo')).toBeVisible();
   await A.responder(page, true);
-  await page.waitForTimeout(700);
+  await A.esperarEtapa(page, 'mira');
   expect(await page.evaluate(() => estado.etapa)).toBe('mira');
   expect(erros).toEqual([]);
 });
@@ -138,6 +141,7 @@ test('QA-2 (DEF-06): CDNs travadas (Firebase, Three.js e fontes) nao impedem o m
   expect(await page.evaluate(() => estado.jogoPenalti.modo)).toBe('2d');
   await page.waitForTimeout(10500); // relatorio: observar por 10,5 s
   await page.evaluate(() => sairParaMenu());
+  await A.abrirMaisOpcoes(page);
   await page.locator('#botao-creditos').click();
   await expect(page.locator('#sobreposicao-creditos')).toHaveClass(/aberta/);
   expect(erros).toEqual([]);

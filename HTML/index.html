@@ -299,6 +299,13 @@
         </div>
         <p id="incentivo-jogo" class="incentivo-jogo" aria-hidden="true" hidden></p>
         <p id="aviso-modo-jogo" class="aviso-modo-jogo" role="status" hidden></p>
+        <!-- Festa: confete e fogos desenhados em canvas, por cima do campo.
+             Decorativo (aria-hidden): quem usa leitor de tela recebe o
+             mesmo recado pela faixa abaixo, que tem role="status". -->
+        <canvas id="festa-canvas" class="festa-canvas" aria-hidden="true" hidden></canvas>
+        <div id="faixa-celebracao" class="faixa-celebracao" role="status" aria-live="assertive" hidden>
+          <span id="faixa-celebracao-texto" class="faixa-celebracao-texto"></span>
+        </div>
       </div>
 
       <div class="painel-etapa">
@@ -610,6 +617,7 @@
 <script src="../JS/banco-questoes.js"></script>
 <script src="../JS/narration.js"></script>
 <script src="../JS/sfx.js"></script>
+<script src="../JS/festa.js"></script>
 <script src="../JS/game.js"></script>
 <script src="../JS/game-2d.js"></script>
 <script src="../JS/progressao.js"></script>

@@ -70,7 +70,9 @@ var TIMER_MAX = 15;
 
 // Pausa entre a resposta correta e o inicio da mira.
 // v1.5: animacoes mais rapidas (antes 500 ms).
-var PAUSA_ANTES_DA_MIRA = 300;
+// Sobe de 300 para 900 ms: a etapa 1 (conta certa) precisa de tempo de
+// tela para a crianca ver a torcida reagir antes de ir para a mira.
+var PAUSA_ANTES_DA_MIRA = 900;
 // Tempo que o resultado fica na tela antes da proxima pergunta. Tem que ser
 // maior que TEMPO.ANTES_DE_RESETAR (game.js) pra bola ja estar na marca.
 // v1.5: 2200 → 1500 ms (ANTES_DE_RESETAR agora e 1200 ms).
@@ -102,6 +104,101 @@ var VERSAO_ULTIMO_RESULTADO = 2;
 
 // Ordem fixa das 5 alternativas <-> 5 zonas (usada no caminho de defesa).
 var ORDEM_ZONAS = ['topo-esquerda', 'topo-direita', 'meio', 'baixo-esquerda', 'baixo-direita'];
+
+// ======================================================================
+// Festa da jogada — as duas etapas (Sprint 4)
+// ======================================================================
+//
+// O retorno do professor na Sprint 4 foi: "tanto quando a crianca acerta
+// quanto quando erra aparece um feedback, mas sem destaque; precisei
+// prestar muita atencao para ver". A .mensagem-feedback continua no
+// lugar (e dela que os testes leem o texto), mas quem fala com a
+// crianca agora e a FAIXA, que ocupa o meio do campo.
+//
+// A jogada tem duas etapas, e elas sao avaliadas separadamente:
+//
+//   ETAPA 1  a conta. Acertou -> torcida da um grito curto, o batedor
+//            fica em pose confiante e a faixa marca "conta certa".
+//   ETAPA 2  o chute. Gol -> festa completa. Fora/defesa COM a conta
+//            certa -> acolhimento, porque a parte de matematica, que e
+//            o que o jogo ensina, ela acertou.
+//
+// Por isso existem tres conjuntos de frase, e nao dois: errar o chute
+// depois de acertar a conta nao e a mesma coisa que errar a conta.
+var FRASES_GOL = [
+  'GOLAÇO! Você é um craque da matemática!',
+  'INCRÍVEL! Resposta e chute perfeitos!',
+  'QUE GOL! A conta certa virou gol!',
+  'ESPETACULAR! Matemática e futebol juntos!',
+  'SHOW DE BOLA! Você acertou tudo!'
+];
+// Acertou a conta, perdeu o gol. Nunca "voce errou": a conta estava certa.
+var FRASES_QUASE = [
+  'Quase lá! Sua conta estava certinha, você é muito inteligente. Tente o chute de novo, você consegue!',
+  'A conta você matou! Faltou só o chute. Na próxima a bola entra!',
+  'Isso! A matemática estava perfeita. Agora é só caprichar na pontaria!',
+  'Você acertou o mais difícil, que era a conta. O gol vem na próxima!'
+];
+// Errou a conta: convida a tentar de novo, sem dizer que ela é ruim.
+var FRASES_CONTA = [
+  'Não foi dessa vez! Vamos tentar a próxima conta juntos?',
+  'Ops! Essa escapou. A próxima é sua!',
+  'Errar faz parte do treino. Bora para a próxima!'
+];
+var FRASES_ACERTO_CONTA = ['Conta certa! Agora é o chute!', 'Isso! Resposta correta!', 'Acertou! Prepara o pé!'];
+
+function sortear(lista) { return lista[Math.floor(Math.random() * lista.length)]; }
+
+// Mostra a faixa grande no meio do campo. duracao em ms; 0 = fica ate
+// alguem chamar esconderFaixa(). Sempre passa pela sessao: sair da
+// partida no meio nao pode deixar a faixa acesa na tela seguinte.
+// Tempo minimo que a faixa fica na tela. Existe por causa do movimento
+// reduzido: ali as animacoes duram 1 ms, a cobranca seguinte entra quase
+// na hora e a faixa era apagada antes de alguem conseguir ler. A frase e
+// conteudo, nao enfeite — quem desligou animacao tambem precisa dela.
+var TEMPO_MINIMO_FAIXA = 1600;
+var faixaDesde = 0;
+
+function mostrarFaixa(tipo, texto, duracao) {
+  var faixa = document.getElementById('faixa-celebracao');
+  var alvo = document.getElementById('faixa-celebracao-texto');
+  if (!faixa || !alvo) return;
+  faixa.classList.remove('saindo');
+  faixa.setAttribute('data-tipo', tipo);
+  alvo.textContent = texto;
+  faixa.hidden = false;
+  faixaDesde = Date.now();
+  if (duracao > 0) agendarNaSessao(function() { esconderFaixa(); }, duracao);
+}
+
+// Chamada quando a pergunta seguinte entra. Se a faixa acabou de subir,
+// adia a limpeza ate completar o tempo minimo de leitura.
+function limparFaixaDaCobrancaAnterior() {
+  var faixa = document.getElementById('faixa-celebracao');
+  if (!faixa || faixa.hidden) return;
+  var naTela = Date.now() - faixaDesde;
+  if (naTela >= TEMPO_MINIMO_FAIXA) { esconderFaixa(); return; }
+  agendarNaSessao(function() { esconderFaixa(); }, TEMPO_MINIMO_FAIXA - naTela);
+}
+
+function esconderFaixa() {
+  var faixa = document.getElementById('faixa-celebracao');
+  if (!faixa || faixa.hidden) return;
+  faixa.classList.add('saindo');
+  // Espera a animacao de saida; se o navegador estiver com movimento
+  // reduzido ela nao roda, mas o timeout fecha do mesmo jeito.
+  agendarNaSessao(function() {
+    faixa.hidden = true;
+    faixa.classList.remove('saindo');
+  }, 260);
+}
+
+// Pede a cena 3D a reacao de torcida + pose do batedor. A cena 2D nao
+// tem reagir(): neste caso so a faixa aparece, e esta tudo certo.
+function reagirNaCena(tipo) {
+  var jogo = estado.jogoPenalti;
+  if (jogo && typeof jogo.reagir === 'function') jogo.reagir(tipo);
+}
 
 // Mensagens do chute que nao entrou, por motivo (regras-chute.js).
 var MENSAGEM_FORA = {
@@ -297,10 +394,14 @@ function encerrarJogoEmAndamento() {
   }
   var camada = document.getElementById('camada-mira');
   if (camada) camada.hidden = true;
-  ['bloco-forca', 'bloco-altura', 'mensagem-etapa', 'incentivo-jogo'].forEach(function(id) {
+  ['bloco-forca', 'bloco-altura', 'mensagem-etapa', 'incentivo-jogo', 'faixa-celebracao'].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.hidden = true;
   });
+  // A festa roda em requestAnimationFrame proprio: sem isto ela
+  // continuaria desenhando depois de sair da partida (mesma familia dos
+  // defeitos DEF-01/DEF-02 da Sprint 3).
+  if (typeof Festa !== 'undefined') Festa.parar();
   var tela = document.getElementById('tela-fase1');
   if (tela) tela.classList.remove('foco-campo');
 }
@@ -1014,6 +1115,10 @@ function carregarProximaPergunta() {
   var nivelDaVez = Progressao.dificuldadeEfetiva(nivelBase, estado.faseAtual);
   estado.perguntaAtual = BancoQuestoes.sortearPergunta(nivelDaVez, Sala.filtrosDaSala());
   document.getElementById('mensagem-feedback').textContent = '';
+  // A faixa da cobranca anterior sai, mas so depois de ter ficado tempo
+  // suficiente na tela para ser lida (ver TEMPO_MINIMO_FAIXA).
+  limparFaixaDaCobrancaAnterior();
+  if (typeof Festa !== 'undefined') Festa.parar();
   document.getElementById('pergunta-texto').textContent = estado.perguntaAtual.texto;
   mostrarEtapaRespostas();
 
@@ -1070,6 +1175,11 @@ function responderAlternativa(botaoClicado) {
     estado.etapa = ETAPA.TRANSICAO;
     SFX.selecionar();
     document.getElementById('mensagem-feedback').textContent = '✓ Resposta correta!';
+    // ETAPA 1: grito curto da torcida + batedor em pose confiante,
+    // enquanto a faixa confirma a conta. A pausa antes da mira subiu de
+    // 300 para 900 ms: com 300 a crianca nem via que tinha acertado.
+    reagirNaCena('acerto');
+    mostrarFaixa('acerto', sortear(FRASES_ACERTO_CONTA), PAUSA_ANTES_DA_MIRA - 120);
     agendarNaSessao(function() { avancarParaMira(tempoUsadoMs); }, PAUSA_ANTES_DA_MIRA);
     return;
   }
@@ -1354,12 +1464,21 @@ function finalizarCobranca(detalhes) {
     feedback.appendChild(criarIconeCruzeiro(''));
     feedback.appendChild(document.createTextNode('Cruzeiros!'));
     Narracao.falar('Gol!', { tom: 'gol' });
+    // ETAPA 2 — gol: torcida a loucura, batedor pula e soca o ar,
+    // fogos e confete na tela, faixa verde por cima de tudo.
+    reagirNaCena('gol');
+    if (typeof Festa !== 'undefined') Festa.iniciar('gol');
+    mostrarFaixa('gol', sortear(FRASES_GOL), 2600);
   } else if (resultado === 'fora') {
     // Reaproveita o som existente de "sem gol" — nao criar SFX novo.
     SFX.defesa();
     var motivo = MENSAGEM_FORA[detalhes.motivo] ? detalhes.motivo : 'lado';
     feedback.textContent = MENSAGEM_FORA[motivo];
     Narracao.falar(NARRACAO_FORA[motivo], { tom: 'quase' });
+    // ETAPA 2 — a conta estava certa e o chute saiu: lamento leve, e a
+    // faixa diz em primeiro lugar que a MATEMATICA estava certa.
+    reagirNaCena('erro');
+    mostrarFaixa('quase', sortear(FRASES_QUASE), 3200);
   } else {
     SFX.defesa();
     var frase = FRASES_INCENTIVO[Math.floor(Math.random() * FRASES_INCENTIVO.length)];
@@ -1371,6 +1490,18 @@ function finalizarCobranca(detalhes) {
     incentivo.classList.remove('animar'); void incentivo.offsetWidth; incentivo.classList.add('animar');
     Narracao.falar(detalhes.estourouTempo ? 'Tempo esgotado! O goleiro defendeu.' : 'O goleiro defendeu!',
       { tom: 'defesa' });
+    reagirNaCena('erro');
+    // Defesa cai em dois casos bem diferentes: a crianca acertou a conta
+    // e o goleiro pegou, ou ela errou a conta (e ai o chute nem era dela).
+    // A frase tem que distinguir — dizer "sua conta estava certinha" para
+    // quem errou a conta seria mentira, e a crianca percebe.
+    if (detalhes.respostaCorreta) {
+      mostrarFaixa('quase', sortear(FRASES_QUASE), 3200);
+    } else {
+      mostrarFaixa('conta', detalhes.estourouTempo
+        ? 'O tempo acabou dessa vez. Na próxima você responde antes!'
+        : sortear(FRASES_CONTA), 3000);
+    }
   }
 
   estado.resultadosCobrancas.push({
@@ -2258,6 +2389,23 @@ function initProfessor() {
   });
 }
 
+
+// ---------- Endereco direto (#professor e #entrar) ----------
+// Os dois PACKs entregues ao portal anunciam math-gol.vercel.app/#professor
+// como "link exclusivo para professores". Sem isto o endereco cai no menu
+// comum e o professor nao encontra a sala. Fecha o modal "Mais opcoes" antes
+// de trocar de tela: a sobreposicao aberta fica por cima da tela nova e come
+// os cliques (mesmo motivo comentado em fecharMaisOpcoes).
+var TELAS_POR_HASH = { professor: 'tela-professor', entrar: 'tela-entrar-sala' };
+
+function abrirPeloEndereco() {
+  var chave = (location.hash || '').replace('#', '').toLowerCase();
+  var tela = TELAS_POR_HASH[chave];
+  if (!tela) return;
+  fecharMaisOpcoes();
+  mostrarTela(tela);
+}
+
 // ---------- Init ----------
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -2284,6 +2432,10 @@ document.addEventListener('DOMContentLoaded', function() {
   initEntrarSala();
   initProfessor();
   mostrarTela('tela-menu', { focar: false });
+
+  // Depois do menu, para que o endereco direto mande na tela inicial.
+  abrirPeloEndereco();
+  window.addEventListener('hashchange', abrirPeloEndereco);
 
 });
 

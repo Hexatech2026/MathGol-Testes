@@ -70,8 +70,12 @@ const TEMPO = {
   BOLA_NA_REDE: 280,      // a bola afunda na rede depois do gol    (400)
   REBOTE: 280,            // rebote na defesa                       (400)
   VIBRACAO_REDE: 220,     // rede balanca                           (300)
-  COMEMORA_TORCIDA: 1100, // torcida vibra no gol                   (1600)
-  LAMENTA_TORCIDA: 420,   // torcida lamenta na defesa/fora         (600)
+  COMEMORA_TORCIDA: 1600, // torcida vibra no gol
+  LAMENTA_TORCIDA: 700,   // torcida lamenta na defesa/fora
+  ANIMA_TORCIDA: 900,     // grito curto quando a crianca acerta a conta
+  POSE_BATEDOR: 420,      // troca de pose do batedor
+  COMEMORA_BATEDOR: 1500, // pulo e soco no ar depois do gol
+  LAMENTA_BATEDOR: 1100,  // maos na cabeca depois de perder
   ANTES_DE_RESETAR: 1200  // pausa antes de resetar                 (1800)
 };
 
@@ -158,6 +162,9 @@ function criarJogoPenalti(containerId, selecaoId) {
   const LINHAS = 4, COLUNAS = 36;
   const cabecas = new THREE.InstancedMesh(new THREE.SphereGeometry(0.3, 8, 6), mat(0xffffff), LINHAS * COLUNAS);
   const corpos = new THREE.InstancedMesh(new THREE.BoxGeometry(0.75, 0.7, 0.5), mat(0xffffff), LINHAS * COLUNAS);
+  // Bracos: um par por torcedor, escondido (escala 0) quando abaixado.
+  // Instanciado junto com o resto pra nao custar 144 objetos na cena.
+  const bracos = new THREE.InstancedMesh(new THREE.BoxGeometry(0.72, 0.62, 0.22), mat(0xffffff), LINHAS * COLUNAS);
   const matriz = new THREE.Matrix4();
   const corTmp = new THREE.Color();
   let idx = 0;
@@ -172,8 +179,15 @@ function criarJogoPenalti(containerId, selecaoId) {
     for (let c = 0; c < COLUNAS; c++) {
       const x = (c - COLUNAS / 2) * 1.15 + (r % 2) * 0.55;
       corTmp.setHex(CORES_TORCIDA[(c * 3 + r) % CORES_TORCIDA.length]);
+      // Cada torcedor tem fase, amplitude e ritmo proprios: sincronizados,
+      // 144 pessoas pulando viram um bloco so, que e o que fazia a
+      // arquibancada parecer parada. "sorteio" decide quem levanta o braco
+      // primeiro e nunca muda, pra o mesmo torcedor nao piscar entre quadros.
       baseTorcida.push({ x: x, y: yLinha, z: zLinha, cor: corTmp.getHex(),
-        fase: ((idx * 0.618) % 1) * Math.PI * 2, amplitude: 0.18 + 0.3 * (((idx * 37) % 10) / 10) });
+        fase: ((idx * 0.618) % 1) * Math.PI * 2,
+        amplitude: 0.18 + 0.3 * (((idx * 37) % 10) / 10),
+        ritmo: 0.82 + ((idx * 53) % 7) / 18,
+        sorteio: ((idx * 0.7548) % 1) });
       matriz.makeTranslation(x, yLinha, zLinha);
       cabecas.setMatrixAt(idx, matriz);
       cabecas.setColorAt(idx, corTmp);
@@ -186,7 +200,7 @@ function criarJogoPenalti(containerId, selecaoId) {
   const paredao = new THREE.Mesh(new THREE.BoxGeometry(50, 9, 0.5), mat(0x1c2b3a));
   paredao.position.set(0, 4.5, -13);
   cena.add(paredao);
-  torcida.add(cabecas, corpos);
+  torcida.add(cabecas, corpos, bracos);
   cena.add(torcida);
 
   // ---------- Gol e rede ----------
@@ -411,7 +425,111 @@ function criarJogoPenalti(containerId, selecaoId) {
   let vivo = true;
   let rafId = 0;
 
+  // ===================== TORCIDA VIVA ============================
+  //
+  // Antes a arquibancada inteira subia e descia junto (uma linha no loop
+  // de render movia o grupo). 144 pessoas no mesmo compasso leem como um
+  // bloco parado. Agora cada torcedor tem fase, amplitude e ritmo
+  // proprios, e tres coisas variam com UMA intensidade (0 a 1):
+  //
+  //   altura do pulo · quantos levantam o braco · brilho da camisa
+  //
+  // Intensidade por situacao:
+  //   0.10  repouso, so um bolinho de movimento (sem clarear NADA: o
+  //         teste exige voltar a cor-base exata, e repouso e o estado
+  //         em que o jogo passa a maior parte do tempo)
+  //   0.50  'acerto'  — a crianca acertou a conta, grito curto
+  //   1.00  'gol'     — vai a loucura
+  //  -1.00  'erro'    — "uhh": cabeca baixa, bracos abaixados
+  //
+  // A cor so e tocada quando a intensidade passa de REPOUSO; abaixo
+  // disso escrevemos a cor-base exata, entao torcidaClareamento volta a 0.
+  const REPOUSO = 0.10;
+  let intensidade = REPOUSO;   // valor corrente, movido por tweens
+  let torcidaSuja = true;      // obriga uma escrita de cor no proximo quadro
+  let ultimoDesenho = 0;
+
+  const brancoTorcida = new THREE.Color(0xffffff);
+  const baseCor = new THREE.Color();
+
+  // t = relogio em segundos. Chamada pelo loop de render, no maximo ~24x
+  // por segundo: torcida nao precisa de 60 fps e o Chromebook agradece.
+  function desenharTorcida(t) {
+    const forca = Math.max(0, intensidade);
+    const abatida = Math.max(0, -intensidade);          // o "uhh"
+    const animando = forca > REPOUSO + 0.001 || abatida > 0.001;
+    const pintar = animando || torcidaSuja;
+
+    for (let i = 0; i < baseTorcida.length; i++) {
+      const b = baseTorcida[i];
+      // Pulo: onda propria de cada um. No repouso vira um bolinho de
+      // ombro; no gol, pulo de verdade.
+      const onda = reduzMovimento ? 0
+        : Math.abs(Math.sin(t * (2.1 + forca * 5.2) * b.ritmo + b.fase));
+      const salto = b.amplitude * onda * forca;
+      const afunda = abatida * 0.3 * (0.6 + b.sorteio * 0.4);
+      const y = b.y + salto - afunda;
+
+      matriz.makeTranslation(b.x, y, b.z);
+      cabecas.setMatrixAt(i, matriz);
+      matriz.makeTranslation(b.x, y - 0.6, b.z);
+      corpos.setMatrixAt(i, matriz);
+
+      // Bracos pra cima: quanto maior a intensidade, maior a fatia da
+      // arquibancada que levanta. Quem levanta e sempre o mesmo grupo
+      // (b.sorteio fixo), entao ninguem pisca.
+      let bracoAlto = 0;
+      if (!reduzMovimento && abatida < 0.3) {
+        const limiar = 1 - (forca * 0.95);
+        if (b.sorteio > limiar) {
+          // Sobe e desce um pouco, sem sincronizar com o pulo.
+          bracoAlto = 0.55 + 0.45 * Math.sin(t * 3.4 * b.ritmo + b.fase * 1.7);
+        }
+      }
+      // Quem esta de braco abaixado e a maioria em repouso: sai barato
+      // deixar a matriz dele como esta em vez de reescrever 144 por vez.
+      if (bracoAlto > 0.02) {
+        matriz.makeScale(0.42, bracoAlto, 0.42);
+        matriz.setPosition(b.x, y + 0.42 + bracoAlto * 0.3, b.z);
+        bracos.setMatrixAt(i, matriz);
+        b.bracoVisivel = true;
+      } else if (b.bracoVisivel !== false) {
+        matriz.makeScale(0.0001, 0.0001, 0.0001);
+        matriz.setPosition(b.x, y, b.z);
+        bracos.setMatrixAt(i, matriz);
+        b.bracoVisivel = false;
+      }
+
+      if (pintar) {
+        baseCor.setHex(b.cor);
+        if (animando) {
+          // Brilho SEMPRE a partir da cor-base: nunca acumula ate o branco.
+          const brilho = 0.28 * onda * Math.max(0, forca - REPOUSO) / (1 - REPOUSO);
+          corTmp.copy(baseCor).lerp(brancoTorcida, Math.max(0, brilho));
+        } else {
+          corTmp.copy(baseCor);
+        }
+        cabecas.setColorAt(i, corTmp);
+        corpos.setColorAt(i, corTmp);
+        bracos.setColorAt(i, corTmp);
+      }
+    }
+    cabecas.instanceMatrix.needsUpdate = true;
+    corpos.instanceMatrix.needsUpdate = true;
+    bracos.instanceMatrix.needsUpdate = true;
+    if (pintar) {
+      cabecas.instanceColor.needsUpdate = true;
+      corpos.instanceColor.needsUpdate = true;
+      bracos.instanceColor.needsUpdate = true;
+      torcidaSuja = animando;   // ainda animando? continua repintando
+    }
+  }
+
+  // Volta a cor e a posicao exatas de cada torcedor. Usada no reset e no
+  // fim de cada reacao — e o que garante torcidaClareamento == 0.
   function aplicarTorcidaBase() {
+    intensidade = REPOUSO;
+    torcidaSuja = true;
     for (let i = 0; i < baseTorcida.length; i++) {
       const b = baseTorcida[i];
       corTmp.setHex(b.cor);
@@ -419,9 +537,52 @@ function criarJogoPenalti(containerId, selecaoId) {
       cabecas.setMatrixAt(i, matriz); cabecas.setColorAt(i, corTmp);
       matriz.makeTranslation(b.x, b.y - 0.6, b.z);
       corpos.setMatrixAt(i, matriz); corpos.setColorAt(i, corTmp);
+      matriz.makeScale(0.0001, 0.0001, 0.0001);
+      matriz.setPosition(b.x, b.y, b.z);
+      bracos.setMatrixAt(i, matriz); bracos.setColorAt(i, corTmp);
+      b.bracoVisivel = false;
     }
     cabecas.instanceMatrix.needsUpdate = true; corpos.instanceMatrix.needsUpdate = true;
+    bracos.instanceMatrix.needsUpdate = true;
     cabecas.instanceColor.needsUpdate = true; corpos.instanceColor.needsUpdate = true;
+    bracos.instanceColor.needsUpdate = true;
+  }
+
+  // Leva a intensidade ate `alvo`, segura, e volta ao repouso.
+  function moverIntensidade(alvo, duracao) {
+    const partida = intensidade;
+    animar(d(duracao), function(e, u) {
+      // Sobe rapido (ate 25% do tempo), segura, desce no fim.
+      const envelope = u < 0.25 ? u / 0.25 : (u > 0.7 ? (1 - u) / 0.3 : 1);
+      intensidade = partida + (alvo - partida) * Math.max(0, Math.min(1, envelope));
+    }, aplicarTorcidaBase);
+  }
+
+  // Unica porta de entrada para as reacoes da arquibancada.
+  function reagirTorcida(tipo) {
+    if (tipo === 'gol')    return moverIntensidade(1, TEMPO.COMEMORA_TORCIDA);
+    if (tipo === 'acerto') return moverIntensidade(0.5, TEMPO.ANIMA_TORCIDA);
+    if (tipo === 'erro')   return moverIntensidade(-1, TEMPO.LAMENTA_TORCIDA);
+  }
+
+  // Guardamos a pose corrente pra 'neutro' saber de onde sair e pra o
+  // reset nao deixar o boneco travado com as maos na cabeca.
+  let poseAtual = 'neutro';
+
+  const POSES = {
+    neutro:    { tronco: 0,     bracoE: 0,    bracoD: 0,    abreE: 0,    abreD: 0,    altura: 0 },
+    confiante: { tronco: -0.12, bracoE: 0.35, bracoD: 0.35, abreE: 0.55, abreD: -0.55, altura: 0 },
+    comemora:  { tronco: -0.2,  bracoE: -2.5, bracoD: -2.5, abreE: 0.35, abreD: -0.35, altura: 0 },
+    frustrado: { tronco: 0.42,  bracoE: -2.2, bracoD: -2.2, abreE: 0.95, abreD: -0.95, altura: 0 }
+  };
+
+  function aplicarPose(alvo, mistura, extraY, balanco) {
+    batedorObj.tronco.rotation.x = alvo.tronco * mistura + balanco * 0.1;
+    batedorObj.bracoE.rotation.x = alvo.bracoE * mistura;
+    batedorObj.bracoD.rotation.x = alvo.bracoD * mistura;
+    batedorObj.bracoE.rotation.z = alvo.abreE * mistura;
+    batedorObj.bracoD.rotation.z = alvo.abreD * mistura;
+    batedorObj.raiz.position.y = (alvo.altura * mistura) + extraY;
   }
 
   function resetar() {
@@ -439,40 +600,88 @@ function criarJogoPenalti(containerId, selecaoId) {
     rede.scale.set(1, 1, 1);
     offTorcida = 0;
     aplicarTorcidaBase();
+    poseAtual = 'neutro';
+    aplicarPose(POSES.neutro, 1, 0, 0);
     goleiroLivre = true;
   }
   resetar();
 
-  // Comemoracao: cada torcedor pula com fase e amplitude proprias (grupos
-  // nao sincronizados) e o brilho e SEMPRE calculado a partir da cor-base,
-  // entao nunca acumula ate o branco. No fim volta suavemente a base.
-  function comemorarTorcida() {
-    const branco = new THREE.Color(0xffffff);
-    const base = new THREE.Color();
-    animar(d(TEMPO.COMEMORA_TORCIDA), function(e, u) {
-      const envelope = Math.sin(Math.PI * Math.min(1, u * 1.15)); // sobe e desce suave
-      for (let i = 0; i < baseTorcida.length; i++) {
-        const b = baseTorcida[i];
-        const onda = Math.abs(Math.sin(u * Math.PI * 5 + b.fase));
-        const salto = b.amplitude * onda * Math.max(0, envelope);
-        matriz.makeTranslation(b.x, b.y + salto, b.z);
-        cabecas.setMatrixAt(i, matriz);
-        matriz.makeTranslation(b.x, b.y - 0.6 + salto, b.z);
-        corpos.setMatrixAt(i, matriz);
-        base.setHex(b.cor);
-        corTmp.copy(base).lerp(branco, 0.28 * onda * Math.max(0, envelope));
-        cabecas.setColorAt(i, corTmp);
-        corpos.setColorAt(i, corTmp);
+  // Mantidos pelos nomes antigos: o resto do arquivo (e os testes) chamam
+  // por aqui. Agora sao so atalhos para a reacao correspondente.
+  function comemorarTorcida() { reagirTorcida('gol'); }
+  function lamentarTorcida() { reagirTorcida('erro'); }
+
+  // ===================== POSES DO BATEDOR =========================
+  //
+  // O batedor so tinha a animacao do chute. Agora tem quatro estados, e
+  // cada um e um tween curto sobre os mesmos pivos que o chute ja usa
+  // (tronco, bracos, raiz) — nenhum osso novo, nenhum modelo novo.
+  //
+  //   'confiante'  antes de chutar, quando a conta esta certa:
+  //                peito estufado, maos na cintura
+  //   'comemora'   depois do gol: pula, soco no ar, bracos pra cima
+  //   'frustrado'  bola fora ou defesa: maos na cabeca, cabeca baixa
+  //   'neutro'     volta ao descanso
+  //
+  // nome: chave de POSES. Em 'comemora' o boneco ainda pula duas vezes.
+  function poseBatedor(nome) {
+    const alvo = POSES[nome] || POSES.neutro;
+    const anterior = POSES[poseAtual] || POSES.neutro;
+    poseAtual = POSES[nome] ? nome : 'neutro';
+
+    if (reduzMovimento) { aplicarPose(alvo, 1, 0, 0); return; }
+
+    const duracao = nome === 'comemora' ? TEMPO.COMEMORA_BATEDOR
+                  : nome === 'frustrado' ? TEMPO.LAMENTA_BATEDOR
+                  : TEMPO.POSE_BATEDOR;
+
+    animar(duracao, function(e, u) {
+      // Entra rapido na pose (primeiros 25%) e fica nela.
+      const entrada = Math.min(1, u / 0.25);
+      const mistura = entrada;
+      let extraY = 0, balanco = 0;
+      if (nome === 'comemora') {
+        // Dois pulos, perdendo altura, e um soco no ar em cima de cada um.
+        const pulo = Math.abs(Math.sin(u * Math.PI * 2));
+        extraY = pulo * 0.42 * (1 - u * 0.45);
+        batedorObj.bracoD.rotation.x = alvo.bracoD * mistura - pulo * 0.5;
+      } else if (nome === 'frustrado') {
+        // Afunda os ombros devagar, como quem suspira.
+        balanco = -Math.sin(u * Math.PI) * 0.6;
+        extraY = -Math.sin(u * Math.PI) * 0.05;
+      } else if (nome === 'confiante') {
+        // Respiracao: mostra que o boneco esta vivo esperando o chute.
+        balanco = Math.sin(u * Math.PI * 3) * 0.25;
       }
-      cabecas.instanceMatrix.needsUpdate = true; corpos.instanceMatrix.needsUpdate = true;
-      cabecas.instanceColor.needsUpdate = true; corpos.instanceColor.needsUpdate = true;
-    }, aplicarTorcidaBase);
+      // Interpola a partir da pose anterior, pra nao dar salto visual.
+      const misturado = {
+        tronco: anterior.tronco + (alvo.tronco - anterior.tronco) * mistura,
+        bracoE: anterior.bracoE + (alvo.bracoE - anterior.bracoE) * mistura,
+        bracoD: anterior.bracoD + (alvo.bracoD - anterior.bracoD) * mistura,
+        abreE: anterior.abreE + (alvo.abreE - anterior.abreE) * mistura,
+        abreD: anterior.abreD + (alvo.abreD - anterior.abreD) * mistura,
+        altura: 0
+      };
+      aplicarPose(misturado, 1, extraY, balanco);
+      if (nome === 'comemora') {
+        const pulo = Math.abs(Math.sin(u * Math.PI * 2));
+        batedorObj.bracoD.rotation.x = misturado.bracoD - pulo * 0.5;
+      }
+    }, function() {
+      // Comemoracao e lamento sao momentaneos: voltam ao descanso.
+      if (nome === 'comemora' || nome === 'frustrado') {
+        poseAtual = 'neutro';
+        aplicarPose(POSES.neutro, 1, 0, 0);
+      }
+    }, { ease: EASE.sineOut });
   }
 
-  function lamentarTorcida() {
-    animar(d(TEMPO.LAMENTA_TORCIDA), function(e, u) {
-      offTorcida = -Math.sin(u * Math.PI) * 0.22;
-    }, function() { offTorcida = 0; });
+  // Porta unica usada pelo main.js para as duas etapas da jogada.
+  function reagir(tipo) {
+    if (tipo === 'acerto')    { reagirTorcida('acerto'); poseBatedor('confiante'); return; }
+    if (tipo === 'gol')       { reagirTorcida('gol');    poseBatedor('comemora');  return; }
+    if (tipo === 'erro')      { reagirTorcida('erro');   poseBatedor('frustrado'); return; }
+    if (tipo === 'neutro')    { poseBatedor('neutro'); }
   }
 
   function ajustarTamanho() {
@@ -496,7 +705,13 @@ function criarJogoPenalti(containerId, selecaoId) {
     rafId = requestAnimationFrame(quadro);
     atualizarTweens(agora);
     const t = agora / 1000;
-    torcida.position.y = (reduzMovimento ? 0 : Math.sin(t * 4.2) * 0.06) + offTorcida;
+    torcida.position.y = offTorcida;
+    // Cadencia adaptativa. A torcida sao 144 pessoas x 3 malhas: reescrever
+    // tudo a 60 fps rouba quadro do goleiro e da bola, que SAO medidos
+    // (os testes de animacao amostram quadro a quadro). Em repouso 10 fps
+    // dao conta de um balanco de ombros; so a reacao precisa de 24 fps.
+    const cadencia = (intensidade > REPOUSO + 0.001 || intensidade < -0.001) ? 42 : 100;
+    if (agora - ultimoDesenho > cadencia) { ultimoDesenho = agora; desenharTorcida(t); }
     if (goleiroLivre && !reduzMovimento) goleiro.position.x = GOLEIRO_BASE.x + Math.sin(t * 1.6) * 0.18;
     sombraBola.visible = bola.visible;
     sombraBola.position.set(bola.position.x, 0.02, bola.position.z);
@@ -889,5 +1104,6 @@ function criarJogoPenalti(containerId, selecaoId) {
     if (renderer.domElement.parentNode) renderer.domElement.parentNode.removeChild(renderer.domElement);
   }
 
-  return { modo: '3d', chutar, iniciarMira, moverMiraTela, moverMiraDelta, pararMira, chutarLivre, depurar, destruir };
+  return { modo: '3d', chutar, iniciarMira, moverMiraTela, moverMiraDelta, pararMira, chutarLivre,
+           reagir, poseBatedor, depurar, destruir };
 }

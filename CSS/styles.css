@@ -3395,3 +3395,110 @@ body.alto-contraste .grupo-rotulo { color: var(--grafite); }
 /* O menu ficou mais curto: deixa o conteúdo subir em vez de centralizar
    num espaço vazio grande. */
 .tela-menu { justify-content: center; gap: 2px; }
+
+
+/* ====================================================================
+   FESTA DA JOGADA — faixa de celebração, confete e fogos
+   --------------------------------------------------------------------
+   O professor apontou na Sprint 4: "aparece um feedback, mas sem
+   destaque. Precisei prestar muita atenção para ver." A .mensagem-feedback
+   continua existindo (é ela que os testes leem), mas quem comunica o
+   resultado para a criança agora é esta faixa, que ocupa o campo inteiro.
+   ==================================================================== */
+
+.festa-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  border-radius: var(--raio-grande);
+  z-index: 3;
+}
+
+.faixa-celebracao {
+  position: absolute;
+  left: 50%;
+  bottom: 7%;
+  translate: -50% 0;
+  width: min(92%, 420px);
+  padding: 16px 20px;
+  border-radius: 20px;
+  text-align: center;
+  pointer-events: none;
+  z-index: 4;
+  border: 3px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 10px 28px rgba(11, 30, 61, 0.45);
+  animation: faixa-entra 420ms cubic-bezier(0.18, 1.3, 0.45, 1) both;
+}
+.faixa-celebracao-texto {
+  display: block;
+  font-family: var(--fonte-titulo);
+  font-weight: 700;
+  font-size: clamp(1.05rem, 4.6vw, 1.7rem);
+  line-height: 1.2;
+  color: #FFFFFF;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.35);
+  text-wrap: balance;
+}
+
+/* Gol: verde-bandeira com um brilho amarelo pulsando atrás. */
+.faixa-celebracao[data-tipo="gol"] {
+  background: linear-gradient(145deg, #2E9E5B 0%, #17683A 100%);
+  animation: faixa-entra 420ms cubic-bezier(0.18, 1.3, 0.45, 1) both,
+             faixa-pulsa 900ms 420ms ease-in-out 2;
+}
+/* Acertou a conta mas perdeu o gol: azul acolhedor, NUNCA vermelho.
+   Vermelho aqui diria "você errou", e a conta estava certa. */
+.faixa-celebracao[data-tipo="quase"] {
+  background: linear-gradient(145deg, #3AA9D6 0%, #0F5C8C 100%);
+}
+/* Errou a conta: âmbar de "vamos de novo", também sem vermelho. */
+.faixa-celebracao[data-tipo="conta"] {
+  background: linear-gradient(145deg, #E8AC1D 0%, #8A5A00 100%);
+}
+/* Etapa 1: selo curto de "conta certa", antes da mira. */
+.faixa-celebracao[data-tipo="acerto"] {
+  background: linear-gradient(145deg, #2E9E5B 0%, #17683A 100%);
+  width: auto;
+  padding: 10px 22px;
+  bottom: auto;
+  top: 9%;
+}
+.faixa-celebracao[data-tipo="acerto"] .faixa-celebracao-texto {
+  font-size: clamp(0.95rem, 3.4vw, 1.25rem);
+}
+
+@keyframes faixa-entra {
+  from { opacity: 0; translate: -50% 14px; scale: 0.7; }
+  to   { opacity: 1; translate: -50% 0;    scale: 1; }
+}
+@keyframes faixa-pulsa {
+  0%, 100% { box-shadow: 0 10px 28px rgba(11, 30, 61, 0.45); }
+  50%      { box-shadow: 0 10px 28px rgba(11, 30, 61, 0.45), 0 0 0 10px rgba(255, 198, 59, 0.35); }
+}
+.faixa-celebracao.saindo {
+  animation: faixa-sai 260ms ease-in both;
+}
+@keyframes faixa-sai {
+  to { opacity: 0; scale: 0.9; }
+}
+
+/* Movimento reduzido: a faixa aparece inteira, sem entrada nem pulso.
+   O conteúdo é o mesmo — só o movimento sai. */
+@media (prefers-reduced-motion: reduce) {
+  .faixa-celebracao,
+  .faixa-celebracao[data-tipo="gol"],
+  .faixa-celebracao.saindo { animation: none; }
+}
+
+/* Alto contraste: o gradiente vira cor chapada com contorno grosso. */
+body.alto-contraste .faixa-celebracao {
+  background: #000000;
+  border-color: #FFFFFF;
+  border-width: 4px;
+}
+body.alto-contraste .faixa-celebracao-texto {
+  color: #FFFFFF;
+  text-shadow: none;
+}
