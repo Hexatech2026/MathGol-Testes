@@ -317,9 +317,14 @@ function desenharFaixaIdealForca(tipoId) {
   faixa.style.width = (fim - ini) + '%';
 }
 
-// URL SEMPRE com pixel-art, nunca outro estilo. Seed muda = rosto muda.
+// Os avatares sao arquivos NOSSOS, servidos junto com o jogo. Antes vinham
+// da api.dicebear.com: isso custava uma requisicao a um dominio de terceiro
+// no navegador da crianca (apontamento SEC-05 de LGPD), levava mais de 6
+// segundos para desenhar numa conexao boa e, pior, sorteava um rosto humano
+// qualquer — o avatar chamado "Tigre" nunca foi um tigre. O nome do arquivo
+// e a MESMA seed de antes, entao os perfis ja salvos continuam valendo.
 function gerarUrlAvatar(seed) {
-  return 'https://api.dicebear.com/9.x/pixel-art/svg?seed=' + encodeURIComponent(seed);
+  return '../Imagens/avatares/' + encodeURIComponent(seed) + '.svg';
 }
 
 function gerarAvatarFallbackLocal(seed) {

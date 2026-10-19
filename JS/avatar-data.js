@@ -1,15 +1,23 @@
-// avatar-data.js - avatares usando EXCLUSIVAMENTE a biblioteca pixel-art
-// do DiceBear (https://api.dicebear.com/9.x/pixel-art/svg).
-// Cada seed gera um rosto diferente.
+// avatar-data.js - avatares ORIGINAIS da equipe, em SVG, servidos junto com
+// o jogo a partir de Imagens/avatares/<seed>.svg.
 //
-// v1.5: lista REDUZIDA (antes eram 48 rostos em 6 abas). Agora a criança
-// começa com 6 avatares grátis e libera os outros na Loja com Cruzeiros.
-// `nome` é o texto mostrado/lido pelo leitor de tela; `seed` é o que vai
-// para a URL do DiceBear (e para o perfil salvo).
+// Antes os rostos vinham da api.dicebear.com. Saiu por tres motivos:
+//   1. era uma requisicao a um dominio de terceiro feita pelo navegador da
+//      crianca (apontamento SEC-05 de LGPD do relatorio da Sprint 3);
+//   2. demorava mais de 6 segundos para desenhar numa conexao boa, e o jogo
+//      nao abre direito se a CDN travar (cartao R02 do quadro);
+//   3. a biblioteca sorteava um ROSTO HUMANO a partir da seed, entao o
+//      avatar chamado "Tigre" nunca foi um tigre, "Leao" nunca foi um leao,
+//      e assim por diante. Agora cada desenho e o que o nome diz.
+//
+// `seed` continua sendo a MESMA de antes de proposito: e o que esta gravado
+// nos perfis salvos (localStorage e Firestore). Trocar a seed apagaria o
+// avatar escolhido de quem ja joga. `seed` tambem e o nome do arquivo.
+// `nome` e o texto mostrado e lido pelo leitor de tela.
 
-var ESTILO_AVATAR = 'pixel-art';
+var PASTA_AVATARES = '../Imagens/avatares/';
 
-// Grátis desde o início.
+// Gratis desde o inicio.
 var AVATARES_GRATIS = [
   { seed: 'Pele',     nome: 'Craque' },
   { seed: 'Marta',    nome: 'Craque Rainha' },
