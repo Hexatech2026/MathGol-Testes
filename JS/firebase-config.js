@@ -16,12 +16,26 @@
 // PRÉ-REQUISITO: habilitar o provedor "Anônimo" em Firebase Console →
 // Authentication → Método de login. Sem isso, o login falha e o jogo segue
 // normalmente, só que sem salvar na nuvem.
+//
+// v2.0 — CÓDIGO DO CRAQUE (ver JS/codigo-craque.js)
+// A criança pode transformar a conta anônima numa conta com código, para
+// continuar de outro aparelho. Usa o provedor "E-mail/senha" do Firebase
+// com um e-mail SINTÉTICO (não é e-mail de ninguém) e o código como senha.
+// PRÉ-REQUISITO: habilitar também o provedor "E-mail/senha" no Console.
+// Sem ele, "Criar meu código" mostra um aviso e o resto do jogo segue igual.
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
 import {
   getAuth,
   signInAnonymously,
-  onAuthStateChanged
+  onAuthStateChanged,
+  EmailAuthProvider,
+  linkWithCredential,
+  unlink,
+  signInWithEmailAndPassword,
+  reauthenticateWithCredential,
+  signOut,
+  deleteUser
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
 import {
   getFirestore,
@@ -29,6 +43,7 @@ import {
   setDoc,
   getDoc,
   getDocs,
+  deleteDoc,
   collection,
   serverTimestamp,
   writeBatch,
@@ -57,44 +72,34 @@ const ESPERA_MAXIMA_AUTH_MS = 15000;
 // ---------- Autenticação anônima ----------
 
 let usuarioAtual = null;
-let authIndisponivel = false;
 let resolverUsuario;
-const usuarioPronto = new Promise(resolve => { resolverUsuario = resolve; });
+let usuarioPronto = new Promise(resolve => { resolverUsuario = resolve; });
+let loginAnonimoFalhou = false;
+const ouvintesConta = [];
+
+function avisarConta() {
+  const status = statusConta();
+  ouvintesConta.forEach(fn => { try { fn(status); } catch (e) { console.warn('Erro num ouvinte da conta:', e); } });
+}
 
 onAuthStateChanged(auth, user => {
   if (user) {
     usuarioAtual = user;
     resolverUsuario(user);
+    avisarConta();
     return;
   }
+  usuarioAtual = null;
+  avisarConta();
   // Sem sessão salva: cria um usuário anônimo.
   signInAnonymously(auth).catch(erro => {
-    authIndisponivel = true;
-    resolverUsuario(null); // libera quem está esperando, em vez de deixar travado até o timeout
-
-    // auth/configuration-not-found não é bug de código: é o provedor
-    // "Anônimo" desligado no Console do Firebase. Vale uma mensagem que
-    // diz o que fazer, em vez de despejar o stack trace do SDK.
-    if (erro && erro.code === 'auth/configuration-not-found') {
-      console.warn(
-        '[MathGol] Login anônimo DESLIGADO no Firebase.\n' +
-        '  Console do Firebase → Authentication → Sign-in method → Anonymous → Ativar.\n' +
-        '  Até lá o jogo funciona normalmente, mas NADA é salvo na nuvem:\n' +
-        '  sem progresso, sem carteira e sem Sala do Professor.'
-      );
-      return;
-    }
-    console.warn('[MathGol] Login anônimo indisponível; jogo segue offline:', erro);
+    loginAnonimoFalhou = true;
+    avisarConta();
+    console.warn('Login anônimo indisponível (o provedor "Anônimo" está habilitado?). Jogo segue offline:', erro);
   });
 }, erro => {
-  authIndisponivel = true;
-  resolverUsuario(null);
-  console.warn('[MathGol] Falha ao observar a autenticação:', erro);
+  console.warn('Falha ao observar a autenticação:', erro);
 });
-
-// Quem precisa explicar ao usuário por que a nuvem não respondeu (ex.: a tela
-// da Sala) consulta isto em vez de adivinhar.
-function nuvemIndisponivel() { return authIndisponivel; }
 
 // Enfileira quem chama até o uid existir (sem bloquear o jogo). Se o login
 // não ficar pronto no tempo limite, devolve null e a gravação é pulada.
@@ -109,6 +114,168 @@ function aguardarUsuario(limiteMs = ESPERA_MAXIMA_AUTH_MS) {
 function validador() {
   if (!window.ValidacaoBackup) throw new Error('backup-validacao.js não carregou');
   return window.ValidacaoBackup;
+}
+
+// ---------- v2.0: Código do craque ----------
+
+function temCodigo(user) {
+  return !!(user && user.providerData && user.providerData.some(p => p.providerId === 'password'));
+}
+
+function statusConta() {
+  return {
+    pronta: !!usuarioAtual,
+    nuvemFora: !usuarioAtual && loginAnonimoFalhou,
+    temCodigo: temCodigo(usuarioAtual)
+  };
+}
+
+function aoMudarConta(fn) {
+  if (typeof fn !== 'function') return;
+  ouvintesConta.push(fn);
+  fn(statusConta());
+}
+
+// Erros do Auth em frases que uma criança (ou o professor) entende.
+function erroAmigavel(erro) {
+  if (erro && erro.code === 'codigo-invalido') return erro; // já é uma frase pronta
+  const c = erro && erro.code;
+  const mapa = {
+    'auth/operation-not-allowed': 'O código do craque ainda não foi ligado neste servidor. Peça para a professora ou o professor avisar a equipe.',
+    'auth/invalid-credential': 'Código não encontrado. Confira cada letra e tente de novo.',
+    'auth/wrong-password': 'Código não encontrado. Confira cada letra e tente de novo.',
+    'auth/user-not-found': 'Código não encontrado. Confira cada letra e tente de novo.',
+    'auth/invalid-email': 'Código não encontrado. Confira cada letra e tente de novo.',
+    'auth/too-many-requests': 'Muitas tentativas seguidas. Espere alguns minutos e tente de novo.',
+    'auth/network-request-failed': 'Sem internet agora. Tente de novo quando a conexão voltar.',
+    'auth/user-disabled': 'Este código foi desativado.',
+    'auth/requires-recent-login': 'Por segurança, digite seu código atual antes de continuar.'
+  };
+  const e = new Error(mapa[c] || 'Não deu certo agora. Tente de novo em instantes.');
+  e.code = c || 'desconhecido';
+  return e;
+}
+
+function credencialDoCodigo(codigo) {
+  const C = window.CodigoCraque;
+  const email = C && C.email(codigo, firebaseConfig.authDomain);
+  if (!email) {
+    const e = new Error('O código tem 16 letras e números. Confira se digitou todos.');
+    e.code = 'codigo-invalido';
+    throw e;
+  }
+  return EmailAuthProvider.credential(email, C.senha(codigo));
+}
+
+// Cria (ou troca) o código da conta ATUAL. O uid continua o mesmo, então
+// nada do que a criança já fez se perde. Trocar = desliga o código antigo
+// (ele para de funcionar na hora) e liga um novo. Devolve o código.
+async function criarCodigo() {
+  const user = await aguardarUsuario();
+  if (!user) throw erroAmigavel({ code: 'auth/network-request-failed' });
+  try {
+    if (temCodigo(user)) await unlink(user, 'password');
+    // O começo do código vira o "e-mail" sintético; se outro código já
+    // começar igual (raríssimo), sorteia de novo.
+    for (let tentativa = 0; tentativa < 4; tentativa++) {
+      const codigo = window.CodigoCraque.gerar();
+      try {
+        await linkWithCredential(user, credencialDoCodigo(codigo));
+        avisarConta();
+        return codigo;
+      } catch (erro) {
+        if (erro && (erro.code === 'auth/email-already-in-use' || erro.code === 'auth/credential-already-in-use')) continue;
+        throw erro;
+      }
+    }
+    throw new Error('Não foi possível gerar um código livre.');
+  } catch (erro) {
+    throw erro && erro.code ? erroAmigavel(erro) : erro;
+  }
+}
+
+// Entra numa conta que já tem código (outro aparelho). A sessão anônima
+// deste navegador é trocada pela do código. Devolve o estado salvo na nuvem.
+async function entrarComCodigo(codigo) {
+  credencialDoCodigo(codigo); // valida o formato antes de ir à rede
+  const C = window.CodigoCraque;
+  try {
+    const resultado = await signInWithEmailAndPassword(auth, C.email(codigo, firebaseConfig.authDomain), C.senha(codigo));
+    usuarioAtual = resultado.user;
+    avisarConta();
+    return await buscarEstado();
+  } catch (erro) {
+    throw erroAmigavel(erro);
+  }
+}
+
+// "Trocar de jogador" neste aparelho (computador da escola): encerra a
+// sessão. O onAuthStateChanged cria uma conta anônima nova em seguida.
+async function sairDaConta() {
+  usuarioPronto = new Promise(resolve => { resolverUsuario = resolve; });
+  await signOut(auth);
+}
+
+// ---------- v2.0: Estado do craque (tudo o que a criança conquistou) ----------
+// Gravado em jogadores/{uid}.estado — validado aqui e nas regras.
+
+async function salvarEstado(estado) {
+  const limpo = validador().validarEstadoNuvem(estado);
+  if (!limpo) { console.warn('Estado inválido; não foi salvo na nuvem.'); return false; }
+  const user = await aguardarUsuario();
+  if (!user) return false;
+  try {
+    await setDoc(doc(db, 'jogadores', user.uid), {
+      estado: limpo,
+      ultimoAcessoEm: serverTimestamp()
+    }, { merge: true });
+    return true;
+  } catch (erro) {
+    console.warn('Estado salvo só localmente (Firebase indisponível):', erro);
+    return false;
+  }
+}
+
+// { perfil: {apelido, avatarSeed} | null, estado: {...} | null }
+async function buscarEstado() {
+  const user = await aguardarUsuario();
+  if (!user) return null;
+  const snap = await getDoc(doc(db, 'jogadores', user.uid));
+  if (!snap.exists()) return { perfil: null, estado: null };
+  const dados = snap.data();
+  return {
+    perfil: validador().validarPerfil({ apelido: dados.apelido, avatarSeed: dados.avatarSeed }),
+    estado: dados.estado ? validador().validarEstadoNuvem(dados.estado) : null
+  };
+}
+
+// LGPD (art. 18, eliminação): a própria criança/responsável apaga TUDO o
+// que está na nuvem — histórico, perfil, estado, a vaga na sala e a conta.
+// codigoAtual só é pedido se o Firebase exigir login recente.
+async function apagarMeusDados(opcoes) {
+  const user = await aguardarUsuario();
+  if (!user) throw erroAmigavel({ code: 'auth/network-request-failed' });
+  try {
+    const jogadorRef = doc(db, 'jogadores', user.uid);
+    const resultados = await getDocs(collection(jogadorRef, 'resultados'));
+    for (let i = 0; i < resultados.docs.length; i += 400) {
+      const batch = writeBatch(db);
+      resultados.docs.slice(i, i + 400).forEach(d => batch.delete(d.ref));
+      await batch.commit();
+    }
+    await deleteDoc(doc(db, 'apelidos', user.uid));
+    await deleteDoc(jogadorRef);
+    const sala = opcoes && opcoes.codigoSala ? normalizarCodigoSala(opcoes.codigoSala) : '';
+    if (sala.length === 7) {
+      await deleteDoc(doc(collection(doc(db, 'salas', sala), 'alunos'), user.uid)).catch(() => {});
+    }
+    if (temCodigo(user) && opcoes && opcoes.codigoAtual) {
+      await reauthenticateWithCredential(user, credencialDoCodigo(opcoes.codigoAtual));
+    }
+    await deleteUser(user);
+  } catch (erro) {
+    throw erro && erro.code ? erroAmigavel(erro) : erro;
+  }
 }
 
 // ---------- Configurações (listas que também existem fixas no data.js) ----------
@@ -286,26 +453,13 @@ async function buscarSala(codigo) {
   }
 }
 
-// Só manda os campos que mudaram. Mandar o objeto inteiro aqui apagaria o
-// nome da turma a cada troca de nível, porque quem chama não tem o nome em
-// mãos — era um bug na primeira versão disto.
 async function atualizarSala(codigo, mudancas) {
   const cod = normalizarCodigoSala(codigo);
   if (cod.length !== 7) return false;
-
-  const TIPOS_OK = ['soma', 'subtracao', 'multiplicacao', 'divisao'];
-  const dados = {};
-  if (mudancas && mudancas.nivel !== undefined) {
-    const n = parseInt(mudancas.nivel, 10);
-    dados.nivel = (isFinite(n) && n >= 1 && n <= 12) ? n : 1;
-  }
-  if (mudancas && Array.isArray(mudancas.tipos)) {
-    dados.tipos = mudancas.tipos.filter(t => TIPOS_OK.indexOf(t) !== -1);
-  }
-  if (!Object.keys(dados).length) return true; // nada a fazer
-
   try {
-    await setDoc(doc(db, 'salas', cod), dados, { merge: true });
+    await setDoc(doc(db, 'salas', cod), limparDadosSala(
+      Object.assign({ nome: 'Turma' }, mudancas)
+    ), { merge: true });
     return true;
   } catch (erro) {
     console.warn('Nao foi possivel atualizar a sala:', erro);
@@ -324,7 +478,6 @@ async function entrarNaSala(codigo, aluno) {
 
   const gols = parseInt(aluno && aluno.gols, 10);
   const pontos = parseInt(aluno && aluno.pontuacao, 10);
-  const nivel = parseInt(aluno && aluno.nivelId, 10);
 
   try {
     await setDoc(doc(collection(doc(db, 'salas', cod), 'alunos'), user.uid), {
@@ -333,7 +486,6 @@ async function entrarNaSala(codigo, aluno) {
       gols: isFinite(gols) && gols >= 0 ? gols : 0,
       pontuacao: isFinite(pontos) && pontos >= 0 ? pontos : 0,
       fase: String((aluno && aluno.fase) || '').slice(0, 20),
-      nivelId: (isFinite(nivel) && nivel >= 1 && nivel <= 12) ? nivel : 1,
       atualizadoEm: serverTimestamp()
     }, { merge: true });
     return true;
@@ -431,7 +583,15 @@ async function restaurarDadosFirebase(dadosValidados) {
 // Exporta pro escopo global pra ser usado pelo main.js (que não é módulo ES)
 window.FirebaseMathGol = {
   aguardarUsuario,
-  nuvemIndisponivel,
+  statusConta,
+  aoMudarConta,
+  nuvemIndisponivel: () => !usuarioAtual && loginAnonimoFalhou,
+  criarCodigo,
+  entrarComCodigo,
+  sairDaConta,
+  salvarEstado,
+  buscarEstado,
+  apagarMeusDados,
   carregarConfiguracoes,
   salvarPerfil,
   salvarProgresso,

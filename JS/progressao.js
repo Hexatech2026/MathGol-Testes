@@ -230,7 +230,17 @@ var Progressao = (function() {
   // Inicializa ao carregar
   carregar();
 
+  // Estado da nuvem (codigo do craque): exporta uma copia e, ao entrar de
+  // outro aparelho, relê o que foi gravado no localStorage.
+  function exportar() { return JSON.parse(JSON.stringify(progresso)); }
+  function recarregar() {
+    progresso = { fasesDesbloqueadas: ['penaltis'], melhorPontuacao: {}, melhorGols: {} };
+    carregar();
+  }
+
   return {
+    exportar: exportar,
+    recarregar: recarregar,
     obterFases: obterFases,
     obterFase: obterFase,
     faseDesbloqueada: faseDesbloqueada,

@@ -20,7 +20,8 @@
   var MAXIMO_RESULTADOS = 500;
 
   // Unicas chaves do localStorage que um backup local pode restaurar.
-  var CHAVES_LOCAIS_PERMITIDAS = ['mathgol_acessibilidade', 'mathgol_progressao', 'mathgol_ultimo_resultado', 'mathgol_carteira'];
+  var CHAVES_LOCAIS_PERMITIDAS = ['mathgol_acessibilidade', 'mathgol_progressao', 'mathgol_ultimo_resultado', 'mathgol_carteira',
+    'mathgol_conquistas', 'mathgol_perfil'];
   // Chaves de versoes antigas: aceitas no arquivo, mas IGNORADAS (o antigo
   // token nunca foi credencial e nao e mais usado para nada).
   var CHAVES_LEGADAS_IGNORADAS = ['mathgol_token'];
@@ -50,30 +51,13 @@
   }
 
   // ---------- Resultado de partida (mesmo esquema das regras) ----------
-  //
-  // ESQUEMA 3 acrescentou "nivelId" (1..12, a escada de JS/niveis.js). Antes
-  // só existia "dificuldadeId" com três baldes, o que perdia a informação de
-  // qual degrau a criança jogou — e é justamente o que o professor precisa ver.
-  //
-  // O esquema 2 continua aceito na LEITURA: backup antigo restaura sem erro.
-  // Só não é mais gerado. "dificuldadeId" segue no esquema 3, com o balde
-  // equivalente, pra qualquer código que ainda leia esse campo.
-  var VERSAO_ATUAL = 3;
-  var CAMPOS_RESULTADO_V2 = ['versaoEsquema', 'faseId', 'dificuldadeId', 'selecaoId', 'gols',
+  var CAMPOS_RESULTADO = ['versaoEsquema', 'faseId', 'dificuldadeId', 'selecaoId', 'gols',
     'totalCobrancas', 'pontuacao', 'tempoTotalSegundos', 'resumoCobrancas', 'data'];
-  var CAMPOS_RESULTADO = CAMPOS_RESULTADO_V2.concat(['nivelId']);
-  var NIVEL_MIN = 1, NIVEL_MAX = 12;
 
   function validarResultadoPartida(r) {
     if (!objetoSimples(r)) return 'resultado não é um objeto';
-    if (r.versaoEsquema !== 2 && r.versaoEsquema !== 3) return 'versão do esquema incompatível';
-
-    var ehV3 = r.versaoEsquema === 3;
-    if (!somenteChaves(r, ehV3 ? CAMPOS_RESULTADO : CAMPOS_RESULTADO_V2)) {
-      return 'resultado com campos inesperados';
-    }
-    if (ehV3 && !inteiroEntre(r.nivelId, NIVEL_MIN, NIVEL_MAX)) return 'nível fora do limite';
-
+    if (!somenteChaves(r, CAMPOS_RESULTADO)) return 'resultado com campos inesperados';
+    if (r.versaoEsquema !== 2) return 'versão do esquema incompatível';
     var total = COBRANCAS_POR_FASE[r.faseId];
     if (!total) return 'fase desconhecida';
     if (r.totalCobrancas !== total) return 'quantidade de cobranças não corresponde à fase';
@@ -89,12 +73,9 @@
     return null;
   }
 
-  // Copia só os campos do esquema do próprio registro: um resumo v2 não
-  // ganha um "nivelId: undefined", que as regras do Firestore recusariam.
   function copiarResultado(r) {
-    var campos = (r && r.versaoEsquema === 3) ? CAMPOS_RESULTADO : CAMPOS_RESULTADO_V2;
     var c = {};
-    campos.forEach(function(k) { c[k] = r[k]; });
+    CAMPOS_RESULTADO.forEach(function(k) { c[k] = r[k]; });
     return c;
   }
 
@@ -172,7 +153,7 @@
   // saldo nunca passa do total ja ganho; itens unicos e com formato conhecido.
   var SALDO_MAXIMO = 999999;
   var MAXIMO_ITENS = 200;
-  var ID_ITEM_LOJA = /^(selecao|clube|avatar|nome):[^<>:\u0000-\u001f]{1,32}$/;
+  var ID_ITEM_LOJA = /^(selecao|clube|avatar|nome|borda):[^<>:\u0000-\u001f]{1,32}$/;
 
   function validarCarteira(obj) {
     if (!objetoSimples(obj) || !somenteChaves(obj, ['versao', 'dados']) || obj.versao !== 1) return false;
@@ -191,11 +172,71 @@
     return true;
   }
 
+  // ---------- Conquistas (v2.0) ----------
+  // { versao: 1, dados: { feitas: { id: 'ISO' }, contadores: { contasCertas,
+  //   gols, partidas, compras, dias, ultimoDia: 'AAAA-MM-DD' | '' } } }
+  var ID_CONQUISTA = /^[a-z0-9-]{1,32}$/;
+  var CONTADORES_CONQUISTA = ['contasCertas', 'gols', 'partidas', 'compras', 'dias'];
+  var MAXIMO_CONQUISTAS = 50;
+
+  function validarConquistas(obj) {
+    if (!objetoSimples(obj) || !somenteChaves(obj, ['versao', 'dados']) || obj.versao !== 1) return false;
+    var d = obj.dados;
+    if (!objetoSimples(d) || !somenteChaves(d, ['feitas', 'contadores'])) return false;
+    if (!objetoSimples(d.feitas) || Object.keys(d.feitas).length > MAXIMO_CONQUISTAS) return false;
+    var feitasOk = Object.keys(d.feitas).every(function(id) { return ID_CONQUISTA.test(id) && dataIsoValida(d.feitas[id]); });
+    if (!feitasOk) return false;
+    var c = d.contadores;
+    if (!objetoSimples(c) || !somenteChaves(c, CONTADORES_CONQUISTA.concat(['ultimoDia']))) return false;
+    var contadoresOk = CONTADORES_CONQUISTA.every(function(k) { return c[k] === undefined || inteiroEntre(c[k], 0, 1000000); });
+    if (!contadoresOk) return false;
+    return c.ultimoDia === undefined || c.ultimoDia === '' ||
+      (typeof c.ultimoDia === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(c.ultimoDia));
+  }
+
+  // ---------- Perfil local (v2.0): nome escolhido, avatar e borda ----------
+  // { versao: 1, dados: { personagem, animal, avatarSeed, borda } } — tudo
+  // opcional, tudo texto curto escolhido de listas (nunca texto livre).
+  var CAMPOS_PERFIL_LOCAL = ['personagem', 'animal', 'avatarSeed', 'borda'];
+
+  function validarPerfilLocal(obj) {
+    if (!objetoSimples(obj) || !somenteChaves(obj, ['versao', 'dados']) || obj.versao !== 1) return false;
+    var d = obj.dados;
+    if (!objetoSimples(d) || !somenteChaves(d, CAMPOS_PERFIL_LOCAL)) return false;
+    return CAMPOS_PERFIL_LOCAL.every(function(k) { return d[k] === undefined || textoAte(d[k], 40); });
+  }
+
+  // ---------- Estado do craque na nuvem (v2.0, codigo do craque) ----------
+  // Tudo o que a crianca conquistou, num pacote so, para ela continuar de
+  // outro aparelho: { versao: 1, atualizadoEm: ms, carteira, progressao,
+  // conquistas, perfil } — cada parte com o MESMO formato e a MESMA
+  // validacao do localStorage. Devolve uma copia limpa ou null.
+  function validarEstadoNuvem(e) {
+    if (!objetoSimples(e) || e.versao !== 1) return null;
+    if (!somenteChaves(e, ['versao', 'atualizadoEm', 'carteira', 'progressao', 'conquistas', 'perfil'])) return null;
+    if (!inteiroEntre(e.atualizadoEm, 0, 9007199254740991)) return null;
+    var limpo = { versao: 1, atualizadoEm: e.atualizadoEm };
+    var partes = {
+      carteira: validarCarteira, progressao: validarProgressao,
+      conquistas: validarConquistas, perfil: validarPerfilLocal
+    };
+    var ok = Object.keys(partes).every(function(k) {
+      if (e[k] === undefined || e[k] === null) return true;
+      var envelope = { versao: 1, dados: e[k] };
+      if (!partes[k](envelope)) return false;
+      limpo[k] = JSON.parse(JSON.stringify(e[k]));
+      return true;
+    });
+    return ok ? limpo : null;
+  }
+
   var VALIDADORES_LOCAIS = {
     mathgol_acessibilidade: validarAcessibilidade,
     mathgol_progressao: validarProgressao,
     mathgol_ultimo_resultado: validarUltimoResultado,
-    mathgol_carteira: validarCarteira
+    mathgol_carteira: validarCarteira,
+    mathgol_conquistas: validarConquistas,
+    mathgol_perfil: validarPerfilLocal
   };
 
   // ---------- Backups ----------
@@ -293,6 +334,9 @@
     copiarResultado: copiarResultado,
     validarProgressao: validarProgressao,
     validarCarteira: validarCarteira,
+    validarConquistas: validarConquistas,
+    validarPerfilLocal: validarPerfilLocal,
+    validarEstadoNuvem: validarEstadoNuvem,
     SALDO_MAXIMO: SALDO_MAXIMO
   };
 

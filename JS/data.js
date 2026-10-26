@@ -212,6 +212,10 @@ function catalogoLoja() {
   ANIMAIS_LOJA.forEach(function(n) {
     itens.push({ id: 'nome:' + n, tipo: 'nome', subtipo: 'animal', nome: n, preco: PRECO_NOME_LOJA });
   });
+  // v2.0: bordas do avatar (bordas.js). As de conquista nao sao vendidas.
+  (typeof BORDAS !== 'undefined' ? BORDAS : []).forEach(function(b) {
+    if (b.origem === 'loja') itens.push({ id: 'borda:' + b.id, tipo: 'borda', nome: b.nome, preco: b.preco, borda: b.id });
+  });
   return itens;
 }
 

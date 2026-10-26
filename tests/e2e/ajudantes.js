@@ -126,6 +126,13 @@ async function esperarEtapa(page, etapa, timeout = 15000) {
   await page.waitForFunction(e => estado.etapa === e, etapa, { timeout });
 }
 
+// Desde 19/10, Entrar na sala, Sou professor, Creditos e Backup moram no
+// modal "Mais opcoes" (o menu ficou so com Jogar e os atalhos).
+async function abrirMaisOpcoes(page) {
+  await page.click('#botao-mais-opcoes');
+  await page.waitForFunction(() => document.getElementById('sobreposicao-mais').classList.contains('aberta'));
+}
+
 async function centroDoPalco(page) {
   const box = await page.locator('.palco-penalti').boundingBox();
   return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
@@ -133,5 +140,6 @@ async function centroDoPalco(page) {
 
 module.exports = {
   prepararRede, monitorarErros, abrirJogo, iniciarPartida, espionar,
-  fixarForca, fixarAltura, confirmarEtapa, mirarEChutar, responder, esperarEtapa, centroDoPalco
+  fixarForca, fixarAltura, confirmarEtapa, mirarEChutar, responder, esperarEtapa, centroDoPalco,
+  abrirMaisOpcoes
 };

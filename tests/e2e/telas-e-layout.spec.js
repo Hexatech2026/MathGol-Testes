@@ -204,6 +204,7 @@ for (const vp of [
 
 test.describe('18. restauracao de backup pela interface', () => {
   async function restaurar(page, nome, conteudo) {
+    await A.abrirMaisOpcoes(page); // Backup mora em "Mais opcoes" desde 19/10
     await page.click('#botao-backup');
     await page.setInputFiles('#input-restaurar', { name: nome, mimeType: 'application/json', buffer: Buffer.from(conteudo) });
   }
@@ -267,11 +268,14 @@ test('modais: foco entra, Tab fica preso, Escape fecha e o foco volta', async ({
   await expect(botao).toBeFocused();
   expect(await page.evaluate(() => document.getElementById('app').hasAttribute('inert'))).toBe(false);
 
-  const creditos = page.locator('#botao-creditos');
-  await creditos.click();
+  // Creditos abre de dentro de "Mais opcoes". Ao fechar, o botao que o
+  // abriu ja sumiu junto com o modal de fora: o foco volta para o
+  // "Mais opcoes", o elemento visivel mais proximo (Modal.devolverFoco).
+  await A.abrirMaisOpcoes(page);
+  await page.locator('#botao-creditos').click();
   await expect(page.locator('#titulo-creditos')).toBeFocused();
   await page.keyboard.press('Escape');
-  await expect(creditos).toBeFocused();
+  await expect(page.locator('#botao-mais-opcoes')).toBeFocused();
 });
 
 test('configuracao remota maliciosa nao injeta HTML', async ({ page }) => {

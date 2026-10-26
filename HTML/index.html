@@ -15,6 +15,10 @@
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
 
 <link rel="stylesheet" href="../CSS/styles.css">
+<!-- v2.0: visual novo (menu, perfil, conquistas, bordas, avisos). Vem
+     depois do styles.css e so sobrescreve o necessario. -->
+<link rel="stylesheet" href="../CSS/tema-v2.css">
+<meta name="theme-color" content="#0B1E3D">
 </head>
 <body>
 
@@ -109,17 +113,8 @@
   </svg>
 </div>
 
-<div class="fundo-tematico" aria-hidden="true">
-  <span class="item-flutuante item-1">5+5</span>
-  <span class="item-flutuante item-3">7−2</span>
-  <span class="item-flutuante item-5">3×2</span>
-  <span class="item-flutuante item-6">9÷3</span>
-  <span class="item-flutuante item-7">6+4</span>
-  <span class="item-flutuante item-9">8−3</span>
-  <span class="item-flutuante item-10">4×2</span>
-  <span class="item-flutuante item-13">2+6</span>
-  <span class="item-flutuante item-14">10−1</span>
-</div>
+<!-- v2.0: as contas boiando agora fazem parte do fundo vivo (JS/fundo.js),
+     que troca o desenho acima por um <canvas>. Sem JS, fica o SVG. -->
 
 <div id="app">
 
@@ -144,25 +139,110 @@
        Entrar na sala, Sou professor, Créditos e Backup saíram daqui para o
        modal "Mais opções" — são de adulto ou de uso raro, e empilhados no
        menu competiam com o botão Jogar. -->
+  <!-- v2.0: menu limpo. No alto, o cartao do jogador (perfil, bordas e
+       codigo). No meio, o titulo e UMA acao principal (Jogar). Embaixo,
+       tres atalhos grandes com icone: Conquistas, Loja e Como jogar. -->
   <section id="tela-menu" class="tela tela-menu">
-    <svg class="mascote mascote-grande" viewBox="0 0 100 100" aria-hidden="true">
-      <circle cx="50" cy="50" r="46" fill="#FFFDF6" stroke="#21303B" stroke-width="5"/>
-      <polygon points="50,28 63,38 58,54 42,54 37,38" fill="#21303B"/>
-      <circle cx="34" cy="40" r="4.5" fill="#21303B"/>
-      <circle cx="66" cy="40" r="4.5" fill="#21303B"/>
-      <path d="M35 60 Q50 74 65 60" stroke="#21303B" stroke-width="5" fill="none" stroke-linecap="round"/>
-    </svg>
-    <h1>MathGol</h1>
-    <p class="subtitulo subtitulo-curto">Chuta, acerta e faz o gol! ⚽</p>
+    <button id="cartao-jogador" class="cartao-jogador" type="button" aria-label="Meu craque: ver perfil, bordas e código">
+      <span id="cartao-jogador-avatar" class="cartao-jogador-avatar" aria-hidden="true"></span>
+      <span class="cartao-jogador-info">
+        <span id="cartao-jogador-nome" class="cartao-jogador-nome">Novo craque</span>
+        <span id="cartao-jogador-detalhe" class="cartao-jogador-detalhe">🏅 0/18</span>
+      </span>
+      <span class="cartao-jogador-seta" aria-hidden="true">›</span>
+    </button>
+
+    <div class="hero-menu">
+      <svg class="mascote mascote-grande" viewBox="0 0 100 100" aria-hidden="true">
+        <circle cx="50" cy="50" r="46" fill="#FFFDF6" stroke="#21303B" stroke-width="5"/>
+        <polygon points="50,28 63,38 58,54 42,54 37,38" fill="#21303B"/>
+        <circle cx="34" cy="40" r="4.5" fill="#21303B"/>
+        <circle cx="66" cy="40" r="4.5" fill="#21303B"/>
+        <path d="M35 60 Q50 74 65 60" stroke="#21303B" stroke-width="5" fill="none" stroke-linecap="round"/>
+      </svg>
+      <h1 class="titulo-logo">Math<span>Gol</span></h1>
+      <p class="subtitulo subtitulo-curto">Chuta, acerta e faz o gol! ⚽</p>
+    </div>
+
     <div class="pilha-botoes">
       <button id="botao-jogar" class="botao botao-cta" type="button">Jogar</button>
-      <div class="linha-botoes-menu">
-        <button id="botao-tutorial" class="botao botao-menu-tutorial" type="button">❓ Como jogar</button>
-        <button id="botao-loja" class="botao botao-menu-loja" type="button">🛒 Loja</button>
+      <div class="grade-atalhos">
+        <button id="botao-conquistas" class="atalho atalho-conquistas" type="button">
+          <span class="atalho-icone" aria-hidden="true">🏆</span>
+          <span class="atalho-texto">Conquistas</span>
+          <span id="selo-conquistas" class="selo-contagem">0/18</span>
+        </button>
+        <button id="botao-loja" class="atalho atalho-loja" type="button">
+          <span class="atalho-icone" aria-hidden="true">🛒</span>
+          <span class="atalho-texto">Loja</span>
+        </button>
+        <button id="botao-tutorial" class="atalho atalho-tutorial" type="button">
+          <span class="atalho-icone" aria-hidden="true">❓</span>
+          <span class="atalho-texto">Como jogar</span>
+        </button>
       </div>
     </div>
     <p id="faixa-sala" class="faixa-sala" hidden></p>
-    <button id="botao-mais-opcoes" class="link-mais-opcoes" type="button">Mais opções</button>
+    <div class="links-menu">
+      <button id="botao-tenho-codigo" class="link-mais-opcoes" type="button">🔑 Já tenho meu código</button>
+      <button id="botao-mais-opcoes" class="link-mais-opcoes" type="button">Mais opções</button>
+    </div>
+  </section>
+
+  <section id="tela-perfil" class="tela tela-perfil">
+    <h2 data-titulo-tela>⭐ Meu craque</h2>
+    <div class="perfil-cabecalho">
+      <div id="perfil-avatar-grande" class="perfil-avatar-grande"></div>
+      <p id="perfil-nome" class="perfil-nome">Novo craque</p>
+      <div class="perfil-numeros">
+        <span class="numero-perfil"><strong id="perfil-gols">0</strong> gols</span>
+        <button id="botao-perfil-conquistas" class="numero-perfil numero-perfil-botao" type="button"><strong id="perfil-conquistas">0/18</strong> conquistas</button>
+        <span class="numero-perfil"><strong id="perfil-partidas">0</strong> partidas</span>
+      </div>
+      <button id="botao-editar-craque" class="botao botao-secundario botao-compacto" type="button">✏️ Trocar nome e avatar</button>
+    </div>
+
+    <h3 class="subtitulo-secao">🖼️ Bordas do avatar</h3>
+    <p class="texto-apoio texto-apoio-curto">Toque para usar. As com 🔒 você ganha na Loja ou nas conquistas.</p>
+    <div id="grade-bordas" class="grade-bordas" role="group" aria-label="Bordas do avatar"></div>
+
+    <section class="cartao-codigo" aria-labelledby="titulo-codigo">
+      <h3 id="titulo-codigo" class="titulo-cartao-codigo">🔑 Código do craque</h3>
+      <p id="codigo-status" class="codigo-status">Crie um código para continuar de outro computador ou celular sem perder nada.</p>
+      <div class="pilha-botoes">
+        <button id="botao-criar-codigo" class="botao botao-cta-simples" type="button">Criar meu código</button>
+        <button id="botao-entrar-codigo" class="botao botao-secundario" type="button">Entrar com outro código</button>
+      </div>
+      <p id="aviso-codigo-conta" class="aviso-sala" role="status" aria-live="polite"></p>
+      <details class="privacidade">
+        <summary>🛡️ Como cuidamos dos seus dados</summary>
+        <ul>
+          <li>Não pedimos nome de verdade, e-mail, telefone, escola nem data de nascimento. O seu nome no jogo é escolhido de uma lista.</li>
+          <li>O código é a sua chave. Ele não diz quem você é. Guarde com um adulto e <strong>não mande para ninguém</strong>.</li>
+          <li>Guardamos só o que é do jogo: Cruzeiros, itens, fases, conquistas, avatar e borda.</li>
+          <li>Você pode apagar tudo quando quiser, aqui embaixo em “Apagar meus dados”.</li>
+          <li>Pais e responsáveis: os dados ficam no Google Firebase e servem só para o jogo funcionar (LGPD, art. 14).</li>
+        </ul>
+      </details>
+      <div class="acoes-conta">
+        <button id="botao-sair-conta" class="link-mais-opcoes" type="button">🚪 Sair deste aparelho</button>
+        <button id="botao-apagar-dados" class="link-mais-opcoes link-perigo" type="button">🗑️ Apagar meus dados</button>
+      </div>
+    </section>
+
+    <div class="pilha-botoes" style="margin-top: 18px;">
+      <button id="botao-voltar-perfil" class="botao" type="button">Voltar</button>
+    </div>
+  </section>
+
+  <section id="tela-conquistas" class="tela tela-conquistas">
+    <h2 data-titulo-tela>🏆 Conquistas</h2>
+    <p id="conquistas-resumo" class="subtitulo">0 de 18 conquistas</p>
+    <div class="barra-geral" aria-hidden="true"><span id="conquistas-barra"></span></div>
+    <ul id="lista-conquistas" class="lista-conquistas"></ul>
+    <div class="pilha-botoes" style="margin-top: 18px;">
+      <button id="botao-voltar-conquistas" class="botao" type="button">Voltar</button>
+    </div>
   </section>
 
   <section id="tela-entrar-sala" class="tela">
@@ -343,6 +423,7 @@
 
   <section id="tela-resultado" class="tela">
     <h2 id="titulo-resultado">Fim da fase Pênaltis!</h2>
+    <div id="estrelas-resultado" class="estrelas-resultado" role="img" aria-label="0 estrelas de 3"></div>
     <p id="placar-final" class="placar-grande">0 / 3</p>
     <p id="pontuacao-final" class="pontuacao-resultado">0 <img class="icone-cruzeiro" src="../Imagens/estrela-cruzeiro.png" alt="">Cruzeiros</p>
     <p id="ganho-carteira" class="ganho-carteira" aria-live="polite"></p>
@@ -369,6 +450,7 @@
       <button type="button" class="aba-loja" data-aba="clube" aria-pressed="false">🇧🇷 Brasileirão</button>
       <button type="button" class="aba-loja" data-aba="avatar" aria-pressed="false">🙂 Avatares</button>
       <button type="button" class="aba-loja" data-aba="nome" aria-pressed="false">🏷️ Nomes</button>
+      <button type="button" class="aba-loja" data-aba="borda" aria-pressed="false">🖼️ Bordas</button>
     </div>
     <p id="status-loja" class="status-loja" role="status" aria-live="polite"></p>
     <div id="grade-loja" class="grade-loja"></div>
@@ -600,6 +682,65 @@
   </div>
 </div>
 
+<!-- v2.0: Código do craque — mostrado UMA vez, logo depois de criado. Só
+     fecha no "Já guardei!" (clicar fora não fecha: a criança não pode
+     perder o código por um toque sem querer). -->
+<div id="sobreposicao-codigo" class="sobreposicao" aria-hidden="true">
+  <div class="painel-codigo" role="dialog" aria-modal="true" aria-labelledby="titulo-mostrar-codigo" aria-describedby="texto-mostrar-codigo">
+    <h2 id="titulo-mostrar-codigo">🔑 Seu código do craque</h2>
+    <p id="texto-mostrar-codigo" class="texto-apoio">Com ele você continua de qualquer computador ou celular. Anote ou baixe o cartão e <strong>guarde com um adulto</strong>.</p>
+    <p id="codigo-exibido" class="codigo-exibido"></p>
+    <p class="aviso-segredo">🤫 É segredo! Não mande para ninguém e não mostre em vídeo.</p>
+    <div class="linha-botoes-codigo">
+      <button id="botao-copiar-codigo" class="botao botao-secundario botao-compacto" type="button">📋 Copiar</button>
+      <button id="botao-baixar-cartao" class="botao botao-secundario botao-compacto" type="button">🖼️ Baixar cartão</button>
+    </div>
+    <p id="status-cartao-codigo" class="status-loja" role="status" aria-live="polite"></p>
+    <div class="pilha-botoes">
+      <button id="botao-guardei-codigo" class="botao botao-cta-simples" type="button">Já guardei! ✅</button>
+    </div>
+  </div>
+</div>
+
+<!-- v2.0: Entrar com um código (outro aparelho). -->
+<div id="sobreposicao-entrar-codigo" class="sobreposicao" aria-hidden="true">
+  <div class="painel-codigo" role="dialog" aria-modal="true" aria-labelledby="titulo-entrar-codigo">
+    <h2 id="titulo-entrar-codigo">🔑 Entrar com meu código</h2>
+    <p class="texto-apoio">Digite as 16 letras e números do seu código do craque.</p>
+    <label class="somente-leitor-tela" for="input-codigo-craque">Código do craque</label>
+    <input id="input-codigo-craque" class="campo-codigo-craque" type="text" inputmode="text" maxlength="19"
+           placeholder="ABCD-EFGH-JKMN-PQRS" autocomplete="off" autocapitalize="characters" spellcheck="false">
+    <p id="aviso-entrar-codigo" class="aviso-sala" role="status" aria-live="polite"></p>
+    <p class="texto-apoio texto-apoio-curto">O que foi feito neste aparelho sem código será trocado pelo progresso do código.</p>
+    <div class="pilha-botoes">
+      <button id="botao-confirmar-codigo" class="botao botao-cta-simples" type="button">Entrar</button>
+      <button id="botao-cancelar-codigo" class="botao botao-cancelar" type="button">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- v2.0: confirmação de "Sair deste aparelho" e "Apagar meus dados". -->
+<div id="sobreposicao-confirmar-conta" class="sobreposicao" aria-hidden="true">
+  <div class="painel-codigo" role="dialog" aria-modal="true" aria-labelledby="titulo-confirmar-conta" aria-describedby="texto-confirmar-conta">
+    <h2 id="titulo-confirmar-conta">Tem certeza?</h2>
+    <p id="texto-confirmar-conta" class="texto-apoio">--</p>
+    <div id="campo-codigo-confirmar" hidden>
+      <label class="rotulo-campo" for="input-codigo-confirmar">Seu código do craque</label>
+      <input id="input-codigo-confirmar" class="campo-codigo-craque" type="text" maxlength="19"
+             placeholder="ABCD-EFGH-JKMN-PQRS" autocomplete="off" autocapitalize="characters" spellcheck="false">
+    </div>
+    <p id="aviso-confirmar-conta" class="aviso-sala" role="status" aria-live="polite"></p>
+    <div class="pilha-botoes">
+      <button id="botao-confirmar-conta" class="botao botao-cta-simples" type="button">Sim</button>
+      <button id="botao-cancelar-conta" class="botao botao-cancelar" type="button">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- v2.0: avisos que deslizam no topo (conquistas, boas-vindas). Fora do
+     #app: continuam legíveis quando um modal deixa o fundo inerte. -->
+<div id="toasts" class="toasts" aria-live="polite"></div>
+
 <!-- Dependências externas (Three.js e Firebase) são carregadas SEM bloquear
      a página por JS/carregar-externos.js: se um CDN travar, o menu abre
      normalmente; sem Three.js o jogo usa o modo simplificado 2D e sem
@@ -612,7 +753,10 @@
 <script src="../JS/niveis.js"></script>
 <script src="../JS/sala.js"></script>
 <script src="../JS/avatar-data.js"></script>
+<script src="../JS/bordas.js"></script>
+<script src="../JS/codigo-craque.js"></script>
 <script src="../JS/carteira.js"></script>
+<script src="../JS/conquistas.js"></script>
 <script src="../JS/questions.js"></script>
 <script src="../JS/banco-questoes.js"></script>
 <script src="../JS/narration.js"></script>
@@ -624,6 +768,9 @@
 <script src="../JS/main.js"></script>
 <script src="../JS/loja.js"></script>
 <script src="../JS/tutorial.js"></script>
+<script src="../JS/conta.js"></script>
+<script src="../JS/telas-v2.js"></script>
+<script src="../JS/fundo.js"></script>
 <script src="../JS/carregar-externos.js"></script>
 
 <!-- Alterna a foto da equipe no modal de créditos (sem depender do main.js) -->

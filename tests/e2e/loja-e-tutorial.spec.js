@@ -107,8 +107,28 @@ test('fim da partida deposita os Cruzeiros na carteira', async ({ page }) => {
     irParaResultado();
   });
   await expect(page.locator('#ganho-carteira')).toContainText('+150 Cruzeiros');
-  await expect(page.locator('#ganho-carteira')).toContainText('Saldo: 250 Cruzeiros');
-  await expect(page.locator('#saldo-topo')).toHaveText('250');
+  // v2.0: 2 gols tambem rendem as medalhas "Primeiro Gol" (+20) e "Rumo a
+  // Falta" (+30, fase desbloqueada) — o bonus aparece separado na frase.
+  await expect(page.locator('#ganho-carteira')).toContainText('+50 de conquistas');
+  await expect(page.locator('#ganho-carteira')).toContainText('Saldo: 300 Cruzeiros');
+  await expect(page.locator('#saldo-topo')).toHaveText('300');
+});
+
+test('v2.0: sem medalha nova, o saldo e so o da partida', async ({ page }) => {
+  await A.abrirJogo(page, { carteira: carteira(100) });
+  await page.evaluate(() => {
+    // Ja tinha as medalhas desta partida: nada de bonus.
+    localStorage.setItem('mathgol_conquistas', JSON.stringify({ versao: 1, dados: {
+      feitas: { 'primeiro-gol': '2026-10-20T10:00:00.000Z', 'fase-falta': '2026-10-20T10:00:00.000Z' },
+      contadores: { contasCertas: 0, gols: 1, partidas: 0, compras: 0, dias: 0, ultimoDia: '' } } }));
+    Conquistas.recarregar();
+    estado.selecaoId = 'brasil'; estado.dificuldadeId = 'facil'; estado.faseAtual = 'penaltis';
+    TOTAL_COBRANCAS = 3; estado.gols = 2; estado.pontuacao = 150;
+    estado.resultadosCobrancas = [
+      { resultado: 'gol', tempoUsado: 3 }, { resultado: 'gol', tempoUsado: 4 }, { resultado: 'defesa', tempoUsado: 15, estourouTempo: true }];
+    irParaResultado();
+  });
+  await expect(page.locator('#ganho-carteira')).toHaveText('+150 Cruzeiros na sua carteira! Saldo: 250 Cruzeiros.');
 });
 
 test('carteira adulterada no navegador e ignorada (comeca zerada)', async ({ page }) => {

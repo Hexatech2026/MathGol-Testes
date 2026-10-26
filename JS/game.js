@@ -1027,6 +1027,14 @@ function criarJogoPenalti(containerId, selecaoId) {
           aceno = levanta * 0.22 * Math.sin(t * 5 * b.ritmo + b.fase);
         }
       }
+      // Quem segura placa fica de bracos erguidos enquanto ela esta no ar.
+      const segurador = placas && placas.porTorcedor[i];
+      if (segurador) {
+        const p = Math.min(1, alturaPlaca(segurador, t));
+        ang = ang + (0.22 - ang) * p;
+        escala = escala + (0.92 - escala) * p;
+        aceno *= 1 - p;
+      }
       dummy.position.set(b.x + balanco * 0.3, y - 0.33, b.z);
       dummy.rotation.set(ang, 0, aceno);
       dummy.scale.set(1, escala, 1);
@@ -1049,6 +1057,7 @@ function criarJogoPenalti(containerId, selecaoId) {
     cabelos.instanceMatrix.needsUpdate = true;
     corpos.instanceMatrix.needsUpdate = true;
     bracos.instanceMatrix.needsUpdate = true;
+    desenharPlacas(t);
     if (pintar) {
       corpos.instanceColor.needsUpdate = true;
       torcidaSuja = animando;   // ainda animando? continua repintando
@@ -1076,6 +1085,163 @@ function criarJogoPenalti(containerId, selecaoId) {
       else if (u < 0.65) intensidade = alvo;
       else intensidade = alvo + (REPOUSO - alvo) * EASE.sineInOut((u - 0.65) / 0.35);
     }, function() { reacaoTorcida = null; aplicarTorcidaBase(); }, { canal: 'torcida' });
+  }
+
+  // ===================== PLACAS DA TORCIDA (v2.0) =================
+  //
+  // Alguns torcedores levantam placas conforme o lance — sempre frases de
+  // incentivo, nunca de deboche (quem joga e crianca):
+  //   'inicio'  apito inicial      VAMOS! · VAI! · MATHGOL
+  //   'acerto'  conta certa        BOA! · ISSO! · CERTO!
+  //   'gol'     gol                GOL! · GOLAÇO · CRAQUE! · 10
+  //   'erro'    defesa / fora      QUASE! · VAI DAR! · FORÇA!
+  // Sobem numa "ola" da esquerda para a direita, balancam e descem. Uma
+  // malha instanciada por frase (textura de canvas) + uma para os cabos:
+  // poucos desenhos, e so ficam visiveis enquanto ha placa no ar.
+  const FRASES_PLACAS = {
+    inicio: [['VAMOS!', '#FFC63B', '#21303B'], ['VAI!', '#2E9E5B', '#FFFDF6'], ['MATHGOL', '#3A5FCD', '#FFFDF6']],
+    acerto: [['BOA!', '#2E9E5B', '#FFFDF6'], ['ISSO!', '#FFC63B', '#21303B'], ['CERTO!', '#FFFDF6', '#17683A']],
+    gol: [['GOL!', '#FFC63B', '#B4232A'], ['GOLAÇO', '#2E9E5B', '#FFFDF6'], ['CRAQUE!', '#3A5FCD', '#FFFDF6'], ['10', '#FFFDF6', '#21303B']],
+    erro: [['QUASE!', '#3A5FCD', '#FFFDF6'], ['VAI DAR!', '#FFFDF6', '#0F5C8C'], ['FORÇA!', '#FFC63B', '#21303B']]
+  };
+  const DURACAO_PLACAS = { inicio: 2.6, acerto: 1.6, gol: 2.8, erro: 2.2 };
+  const SEGURADORES = { inicio: 22, acerto: 14, gol: 30, erro: 16 };
+  const CAPACIDADE_PLACA = 12;
+  // Grandes o bastante para ler a 30 m (sobrepoem um pouco os vizinhos,
+  // como placa de verdade na arquibancada).
+  const geoPlaca = new THREE.PlaneGeometry(1.5, 0.86);
+  const ESCONDIDA = new THREE.Matrix4().makeScale(0.0001, 0.0001, 0.0001);
+  const malhasPlaca = {};
+
+  function texturaPlaca(texto, fundo, cor) {
+    const cv = document.createElement('canvas');
+    cv.width = 256; cv.height = 146;
+    const g = cv.getContext('2d');
+    if (!g) return null;
+    g.fillStyle = '#FFFDF6';
+    g.beginPath(); g.roundRect ? g.roundRect(0, 0, 256, 146, 18) : g.rect(0, 0, 256, 146); g.fill();
+    g.fillStyle = fundo;
+    g.beginPath(); g.roundRect ? g.roundRect(8, 8, 240, 130, 13) : g.rect(8, 8, 240, 130); g.fill();
+    let tamanho = 86;
+    g.font = '900 ' + tamanho + 'px "Arial Black", Arial, sans-serif';
+    while (g.measureText(texto).width > 220 && tamanho > 30) { tamanho -= 4; g.font = '900 ' + tamanho + 'px "Arial Black", Arial, sans-serif'; }
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.lineJoin = 'round'; g.lineWidth = 8;
+    g.strokeStyle = cor === '#FFFDF6' ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.5)';
+    g.strokeText(texto, 128, 78);
+    g.fillStyle = cor;
+    g.fillText(texto, 128, 78);
+    return new THREE.CanvasTexture(cv);
+  }
+
+  Object.keys(FRASES_PLACAS).forEach(function(tipo) {
+    malhasPlaca[tipo] = FRASES_PLACAS[tipo].map(function(f) {
+      const tex = texturaPlaca(f[0], f[1], f[2]);
+      const m = new THREE.InstancedMesh(geoPlaca,
+        new THREE.MeshBasicMaterial({ map: tex, color: tex ? 0xffffff : 0xfffdf6, side: THREE.DoubleSide }), CAPACIDADE_PLACA);
+      m.frustumCulled = false;
+      m.visible = false;
+      // Sem isto a instancia nasce na origem (no meio do gol) e pisca la
+      // por um quadro antes da primeira posicao ser calculada.
+      for (let k = 0; k < CAPACIDADE_PLACA; k++) m.setMatrixAt(k, ESCONDIDA);
+      m.count = 0;
+      torcida.add(m);
+      return m;
+    });
+  });
+  const cabosPlaca = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.03, 0.03, 0.9, 5), mat(0x8a5a33), 40);
+  for (let k = 0; k < 40; k++) cabosPlaca.setMatrixAt(k, ESCONDIDA);
+  cabosPlaca.frustumCulled = false;
+  cabosPlaca.visible = false;
+  cabosPlaca.count = 0;
+  torcida.add(cabosPlaca);
+
+  let placas = null; // { tipo, inicio, dur, seguradores: [{ i, malha, slot, atraso }], porTorcedor: {} }
+
+  function levantarPlacas(tipo) {
+    const frases = malhasPlaca[tipo];
+    if (!frases) return;
+    // No apito inicial a cena acabou de nascer e ainda nao desenhou nenhum
+    // quadro (relogioCena = 0): usa o mesmo relogio do requestAnimationFrame,
+    // senao o primeiro quadro acharia que as placas ja tinham acabado.
+    const t = (relogioCena || performance.now()) / 1000;
+    if (placas && placas.tipo === tipo && t - placas.inicio < 0.5) return; // mesmo lance pedido duas vezes
+    esconderPlacas();
+    // So as duas fileiras da frente: a camera fechada no gol corta as de
+    // tras. Espalha pela largura toda.
+    const candidatos = [];
+    baseTorcida.forEach(function(b, i) { if (i < COLUNAS * 2) candidatos.push(i); });
+    for (let k = candidatos.length - 1; k > 0; k--) {
+      const j = Math.floor(Math.random() * (k + 1));
+      const tmp = candidatos[k]; candidatos[k] = candidatos[j]; candidatos[j] = tmp;
+    }
+    const n = Math.min(SEGURADORES[tipo], frases.length * CAPACIDADE_PLACA, candidatos.length);
+    const usados = frases.map(function() { return 0; });
+    const seguradores = [];
+    const porTorcedor = {};
+    for (let k = 0; k < n; k++) {
+      const qual = k % frases.length;
+      const s = { i: candidatos[k], malha: frases[qual], slot: usados[qual]++, cabo: k,
+        atraso: reduzMovimento ? 0 : ((baseTorcida[candidatos[k]].x + 21) / 42) * 0.45 };
+      seguradores.push(s);
+      porTorcedor[s.i] = s;
+    }
+    frases.forEach(function(m, q) { m.count = usados[q]; m.visible = usados[q] > 0; });
+    cabosPlaca.count = n;
+    cabosPlaca.visible = n > 0;
+    placas = { tipo: tipo, inicio: t, dur: DURACAO_PLACAS[tipo], seguradores: seguradores, porTorcedor: porTorcedor };
+    torcidaSuja = true;
+    desenharPlacas(t); // posicao certa ja no proximo quadro desenhado
+  }
+
+  function esconderPlacas() {
+    Object.keys(malhasPlaca).forEach(function(tipo) {
+      malhasPlaca[tipo].forEach(function(m) { m.visible = false; m.count = 0; });
+    });
+    cabosPlaca.visible = false;
+    cabosPlaca.count = 0;
+    placas = null;
+  }
+
+  // Altura da placa (0 = abaixada, 1 = la no alto) do segurador agora.
+  function alturaPlaca(s, t) {
+    if (!placas) return 0;
+    const lt = t - placas.inicio - s.atraso;
+    if (lt < 0 || lt > placas.dur) return 0;
+    if (reduzMovimento) return 1;
+    const subida = Math.min(1, lt / 0.3);
+    const c1 = 1.70158, c3 = c1 + 1, u = subida - 1;
+    const sobe = 1 + c3 * u * u * u + c1 * u * u;          // easeOutBack: passa um pouco e volta
+    const desce = 1 - Math.max(0, Math.min(1, (lt - (placas.dur - 0.4)) / 0.4));
+    return Math.max(0, sobe * desce);
+  }
+
+  // Chamado de desenharTorcida (mesma cadencia da arquibancada).
+  function desenharPlacas(t) {
+    if (!placas) return;
+    if (t - placas.inicio > placas.dur + 0.6) { esconderPlacas(); return; }
+    placas.seguradores.forEach(function(s) {
+      const b = baseTorcida[s.i];
+      const p = alturaPlaca(s, t);
+      const visivel = p > 0.02;
+      const balanca = reduzMovimento ? 0 : Math.sin(t * 7 + b.fase) * 0.08 * p;
+      const pulinho = reduzMovimento ? 0 : Math.abs(Math.sin(t * 8 + b.fase)) * 0.06 * p;
+      // Sobe de tras da cabeca ate logo acima dela (na altura da fileira de
+      // tras, que e o que a camera do jogo enxerga).
+      const y = b.y + 0.05 + 0.6 * p + pulinho;
+      dummy.position.set(b.x, y, b.z + 0.32);
+      dummy.rotation.set(-0.12, 0, balanca);
+      dummy.scale.setScalar(visivel ? 0.75 + 0.25 * Math.min(1, p) : 0.0001);
+      dummy.updateMatrix();
+      s.malha.setMatrixAt(s.slot, dummy.matrix);
+      s.malha.instanceMatrix.needsUpdate = true;
+      dummy.position.set(b.x + Math.sin(balanca) * 0.45, y - 0.75, b.z + 0.3);
+      dummy.rotation.set(-0.12, 0, balanca);
+      dummy.scale.setScalar(visivel ? 1 : 0.0001);
+      dummy.updateMatrix();
+      cabosPlaca.setMatrixAt(s.cabo, dummy.matrix);
+    });
+    cabosPlaca.instanceMatrix.needsUpdate = true;
   }
 
   // Unica porta de entrada para as reacoes da arquibancada. O jogo e o
@@ -1359,9 +1525,10 @@ function criarJogoPenalti(containerId, selecaoId) {
 
   // Porta unica usada pelo main.js para as duas etapas da jogada.
   function reagir(tipo) {
-    if (tipo === 'acerto')    { reagirTorcida('acerto'); poseBatedor('confiante'); return; }
-    if (tipo === 'gol')       { reagirTorcida('gol');    poseBatedor('comemora');  return; }
-    if (tipo === 'erro')      { reagirTorcida('erro');   poseBatedor('frustrado'); return; }
+    if (tipo === 'acerto')    { reagirTorcida('acerto'); poseBatedor('confiante'); levantarPlacas('acerto'); return; }
+    if (tipo === 'gol')       { reagirTorcida('gol');    poseBatedor('comemora');  levantarPlacas('gol'); return; }
+    if (tipo === 'erro')      { reagirTorcida('erro');   poseBatedor('frustrado'); levantarPlacas('erro'); return; }
+    if (tipo === 'inicio')    { levantarPlacas('inicio'); return; }
     if (tipo === 'neutro')    { poseBatedor('neutro'); }
   }
 
@@ -1381,30 +1548,47 @@ function criarJogoPenalti(containerId, selecaoId) {
   }
 
   // ---------- Qualidade adaptativa ----------
-  // Se a maquina nao segura ~40 fps nos primeiros 120 quadros, desliga a
-  // sombra projetada (a mancha de contato continua) e volta a resolucao
-  // para 1x. Pensado no Chromebook do laboratorio: o boneco perde a sombra,
-  // mas o goleiro e a bola continuam fluidos.
-  const AMOSTRAS_DESEMPENHO = 120, QUADRO_LENTO_MS = 25;
-  let amostrasQuadro = 0, somaQuadro = 0, ultimoQuadro = 0, qualidadeReduzida = false;
+  // Se a maquina nao segura ~40 fps logo no comeco, desliga a sombra
+  // projetada (a mancha de contato continua) e volta a resolucao para 1x.
+  // Pensado no Chromebook do laboratorio: o boneco perde a sombra, mas o
+  // goleiro e a bola continuam fluidos.
+  // v2.0: decide em 15 quadros (antes 120 — numa maquina lenta eram mais de
+  // 15 s de jogo pesado) pela MEDIANA, ignorando os 3 primeiros: os quadros
+  // iniciais sao lentos em qualquer maquina (compilacao dos shaders) e uma
+  // media deles desligaria a sombra ate num computador rapido.
+  const AQUECIMENTO_QUADROS = 3, AMOSTRAS_DESEMPENHO = 15, QUADRO_LENTO_MS = 25;
+  const temposQuadro = [];
+  let quadrosVistos = 0, ultimoQuadro = 0, qualidadeReduzida = false, desempenhoDecidido = false;
   function vigiarDesempenho(agora) {
-    if (qualidadeReduzida || amostrasQuadro >= AMOSTRAS_DESEMPENHO) return;
+    if (qualidadeReduzida || desempenhoDecidido) return;
     const dt = ultimoQuadro ? agora - ultimoQuadro : 0;
     ultimoQuadro = agora;
-    if (dt <= 0 || dt > 250) return; // aba escondida / pausa: nao conta
-    somaQuadro += dt;
-    amostrasQuadro++;
-    if (amostrasQuadro === AMOSTRAS_DESEMPENHO && somaQuadro / AMOSTRAS_DESEMPENHO > QUADRO_LENTO_MS) reduzirQualidade();
+    if (dt <= 0 || dt > 500) return; // aba escondida / pausa: nao conta
+    if (++quadrosVistos <= AQUECIMENTO_QUADROS) return;
+    temposQuadro.push(dt);
+    const ordenados = temposQuadro.slice().sort(function(a, b) { return a - b; });
+    const mediana = ordenados[Math.floor(ordenados.length / 2)];
+    // Lentidao obvia (menos de ~16 fps em 5 quadros): nao espera os 15.
+    if (temposQuadro.length >= 5 && mediana > 60) { desempenhoDecidido = true; reduzirQualidade(); return; }
+    if (temposQuadro.length < AMOSTRAS_DESEMPENHO) return;
+    desempenhoDecidido = true;
+    if (mediana > QUADRO_LENTO_MS) reduzirQualidade();
   }
+  // v2.0: reduz SEM recompilar shaders. Desligar a sombra (shadowMap.enabled
+  // = false + needsUpdate) recompila todos os materiais: numa maquina lenta
+  // isso trava um quadro inteiro, e se cair no meio do mergulho o goleiro
+  // "pula". Agora a sombra continua igual para o shader, so que num mapa
+  // menor e atualizada 1 quadro em cada 3 — o que custa quase nada.
   function reduzirQualidade() {
     qualidadeReduzida = true;
-    renderer.shadowMap.enabled = false;
     renderer.setPixelRatio(1);
     ajustarTamanho();
-    cena.traverse(function(o) {
-      if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(function(m) { m.needsUpdate = true; });
-    });
+    sol.shadow.mapSize.set(512, 512);
+    if (sol.shadow.map) { sol.shadow.map.dispose(); sol.shadow.map = null; }
+    renderer.shadowMap.autoUpdate = false;
+    renderer.shadowMap.needsUpdate = true;
   }
+  let quadroSombra = 0;
 
   // ---------- Loop de render ----------
   function quadro(agora) {
@@ -1418,7 +1602,7 @@ function criarJogoPenalti(containerId, selecaoId) {
     // Cadencia adaptativa. Reescrever as 144 pessoas a 60 fps rouba quadro
     // do goleiro e da bola, que SAO medidos (os testes de animacao amostram
     // quadro a quadro). Repouso a ~15 fps, reacao a ~30 fps.
-    const cadencia = (intensidade > REPOUSO + 0.001 || intensidade < -0.001) ? 33 : 66;
+    const cadencia = (intensidade > REPOUSO + 0.001 || intensidade < -0.001 || placas) ? 33 : 66;
     if (agora - ultimoDesenho > cadencia) { ultimoDesenho = agora; desenharTorcida(t); }
     if (goleiroLivre) {
       if (!reduzMovimento) goleiro.position.x = GOLEIRO_BASE.x + Math.sin(t * 1.6) * 0.18;
@@ -1430,6 +1614,7 @@ function criarJogoPenalti(containerId, selecaoId) {
     sombraBola.scale.setScalar(Math.max(0.5, 1 - (bola.position.y - ALTURA_BOLA) * 0.25));
     sombraBatedor.position.set(batedor.position.x, 0.02, batedor.position.z);
     sombraGoleiro.position.set(goleiro.position.x, 0.02, goleiro.position.z);
+    if (qualidadeReduzida && ++quadroSombra % 3 === 0) renderer.shadowMap.needsUpdate = true;
     renderer.render(cena, camera);
   }
   rafId = requestAnimationFrame(quadro);
@@ -1804,7 +1989,8 @@ function criarJogoPenalti(containerId, selecaoId) {
         if (base[c] < 0.98) clareamento = Math.max(clareamento, (atual[c] - base[c]) / (1 - base[c]));
       });
     }
-    batedor.updateMatrixWorld(true);
+    // So a cadeia ate o pe (os testes chamam depurar() a cada quadro).
+    rigBatedor.marcadorChute.updateWorldMatrix(true, false);
     const pe = new THREE.Vector3().setFromMatrixPosition(rigBatedor.marcadorChute.matrixWorld);
     return {
       torcidaClareamento: clareamento,
@@ -1814,6 +2000,8 @@ function criarJogoPenalti(containerId, selecaoId) {
       // Peito do pe do chute e distancia dele ate o centro da bola (HU-18).
       peChute: { x: pe.x, y: pe.y, z: pe.z, distanciaBola: pe.distanceTo(bola.position) },
       qualidade: qualidadeReduzida ? 'reduzida' : 'alta',
+      // v2.0: lance das placas no ar ('inicio'|'acerto'|'gol'|'erro') e quantas.
+      placas: placas ? { tipo: placas.tipo, quantidade: placas.seguradores.length } : null,
       emAnimacao: emAnimacao,
       gol: [pontoParaTela({ x: -GOL_MEIA_LARGURA, y: 0 }), pontoParaTela({ x: GOL_MEIA_LARGURA, y: GOL_ALTURA })]
     };

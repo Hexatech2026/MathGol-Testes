@@ -17,7 +17,8 @@ var Loja = (function() {
     selecao: 'a seleção',
     clube: 'o time',
     avatar: 'o avatar',
-    nome: 'o nome'
+    nome: 'o nome',
+    borda: 'a borda'
   };
 
   function el(id) { return document.getElementById(id); }
@@ -74,6 +75,10 @@ var Loja = (function() {
       img.onerror = function() { this.onerror = null; this.src = gerarAvatarFallbackLocal(item.seed); };
       moldura.appendChild(img);
       return moldura;
+    }
+    if (item.tipo === 'borda' && typeof criarAvatarComBorda === 'function') {
+      // Previa com o avatar da PROPRIA crianca: ela ve como vai ficar.
+      return criarAvatarComBorda(estado.avatarSeed, item.borda, grande ? 'g' : 'm');
     }
     var etiqueta = document.createElement('span');
     etiqueta.className = 'loja-etiqueta-nome';
@@ -192,9 +197,11 @@ var Loja = (function() {
     Modal.fechar();
     if (resultado.ok) {
       SFX.faseLiberada();
-      var dica = item.tipo === 'avatar' || item.tipo === 'nome'
-        ? ' Escolha na tela "Monte seu craque".'
-        : ' Escolha na tela "Escolha seu time".';
+      if (typeof Conquistas !== 'undefined') Conquistas.registrar('compra');
+      var dica = item.tipo === 'borda' ? ' Escolha em "Meu craque".'
+        : (item.tipo === 'avatar' || item.tipo === 'nome'
+          ? ' Escolha na tela "Monte seu craque".'
+          : ' Escolha na tela "Escolha seu time".');
       mostrarStatus('🎉 Agora ' + item.nome + ' é seu!' + dica);
       if (typeof Narracao !== 'undefined') Narracao.falar('Agora ' + item.nome + ' é seu!', { tom: 'premio' });
     } else if (resultado.motivo === 'saldo') {

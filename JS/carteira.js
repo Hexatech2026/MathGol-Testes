@@ -73,7 +73,7 @@ var Carteira = (function() {
   // Compra um item. Devolve { ok: true } ou { ok: false, motivo }.
   //   motivo: 'ja-possui' | 'saldo' | 'invalido'
   function comprar(idItem, preco) {
-    if (typeof idItem !== 'string' || !/^(selecao|clube|avatar|nome):.{1,32}$/.test(idItem)) {
+    if (typeof idItem !== 'string' || !/^(selecao|clube|avatar|nome|borda):.{1,32}$/.test(idItem)) {
       return { ok: false, motivo: 'invalido' };
     }
     var p = Math.floor(Number(preco));
@@ -106,6 +106,8 @@ var Carteira = (function() {
     comprar: comprar,
     aoMudar: aoMudar,
     formatar: formatar,
-    recarregar: function() { carregar(); avisar(); }
+    // Copia dos dados (estado da nuvem / codigo do craque).
+    exportar: function() { return { saldo: dados.saldo, totalGanho: dados.totalGanho, itens: dados.itens.slice() }; },
+    recarregar: function() { dados = { saldo: 0, totalGanho: 0, itens: [] }; carregar(); avisar(); }
   };
 })();

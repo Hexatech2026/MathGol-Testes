@@ -76,10 +76,29 @@ test('usuario autenticado acessa apenas os proprios documentos', async () => {
   await assertSucceeds(getDocs(collection(db, 'jogadores', 'alice', 'resultados')));
   await assertSucceeds(setDoc(doc(db, 'apelidos', 'alice'), { apelido: 'Fera Tigre', avatarSeed: 'Bola1', atualizadoEm: serverTimestamp() }));
   await assertSucceeds(setDoc(doc(db, 'jogadores', 'alice'), { ultimoAcessoEm: serverTimestamp(), ultimoResultado: resumo() }, { merge: true }));
-  // Politica: nenhum cliente apaga, nem os proprios dados.
-  await assertFails(deleteDoc(doc(db, 'jogadores', 'alice', 'resultados', 'abc')));
-  await assertFails(deleteDoc(doc(db, 'jogadores', 'alice')));
-  await assertFails(deleteDoc(doc(db, 'apelidos', 'alice')));
+  // v2.0 (LGPD art. 18): o dono apaga os PROPRIOS dados ("Apagar meus dados").
+  await assertSucceeds(deleteDoc(doc(db, 'jogadores', 'alice', 'resultados', 'abc')));
+  await assertSucceeds(deleteDoc(doc(db, 'jogadores', 'alice')));
+  await assertSucceeds(deleteDoc(doc(db, 'apelidos', 'alice')));
+});
+
+const estado = (extra = {}) => Object.assign({
+  versao: 1, atualizadoEm: 1761000000000,
+  carteira: { saldo: 50, totalGanho: 120, itens: ['borda:ouro', 'avatar:Leao'] },
+  progressao: { fasesDesbloqueadas: ['penaltis', 'falta'], melhorPontuacao: { penaltis: 180 }, melhorGols: { penaltis: 2 } },
+  conquistas: { feitas: { 'primeiro-gol': '2026-10-20T10:00:00.000Z' }, contadores: { gols: 3, contasCertas: 5, partidas: 2, compras: 1, dias: 1, ultimoDia: '2026-10-20' } },
+  perfil: { personagem: 'Fera', animal: 'Tigre', avatarSeed: 'Leao', borda: 'ouro' }
+}, extra);
+
+test('v2.0: estado do craque (codigo do craque) so com formato valido', async () => {
+  const db = alice();
+  const ref = doc(db, 'jogadores', 'alice');
+  await assertSucceeds(setDoc(ref, { estado: estado() }, { merge: true }));
+  await assertFails(setDoc(ref, { estado: estado({ email: 'x@y.com' }) }, { merge: true }));                 // campo extra (dado pessoal)
+  await assertFails(setDoc(ref, { estado: estado({ carteira: { saldo: 9999999, totalGanho: 9999999, itens: [] } }) }, { merge: true }));
+  await assertFails(setDoc(ref, { estado: estado({ carteira: { saldo: 10, totalGanho: 5, itens: [] } }) }, { merge: true })); // saldo > ganho
+  await assertFails(setDoc(ref, { estado: estado({ perfil: { nomeReal: 'Ana' } }) }, { merge: true }));
+  await assertFails(setDoc(doc(bob(), 'jogadores', 'alice'), { estado: estado() }, { merge: true }));     // nunca no doc de outro
 });
 
 test('usuario A nao le nem altera dados de B', async () => {

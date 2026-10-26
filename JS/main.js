@@ -373,6 +373,9 @@ function mostrarTela(idTela, opcoes) {
   if (botaoOuvir) botaoOuvir.hidden = (idTela !== 'tela-fase1');
   // Durante a partida o fundo animado (e o "GOL!" decorativo) some.
   document.body.classList.toggle('em-partida', idTela === 'tela-fase1');
+  // v2.0: avisos de conquista guardados durante a partida saem agora.
+  if (typeof Toasts !== 'undefined') Toasts.liberar();
+  if (idTela === 'tela-menu' && typeof TelasV2 !== 'undefined') TelasV2.atualizarResumos();
   atualizarSaldoTopo();
 
   // Leva o foco (e o leitor de tela) para o titulo da nova tela.
@@ -414,10 +417,13 @@ function encerrarJogoEmAndamento() {
 // Telas que podem ser abertas de varios lugares (Loja e Tutorial) guardam
 // de onde vieram; o "voltar" leva de volta pra la (e redesenha a tela,
 // pra ja mostrar o que foi comprado).
-var origemTela = { 'tela-loja': 'tela-menu', 'tela-tutorial': 'tela-menu' };
+var origemTela = { 'tela-loja': 'tela-menu', 'tela-tutorial': 'tela-menu',
+  'tela-conquistas': 'tela-menu', 'tela-perfil': 'tela-menu' };
 
 function reabrirTela(idTela) {
   if (idTela === 'tela-apelido') { irParaApelido(); return; }
+  if (idTela === 'tela-perfil' && typeof TelasV2 !== 'undefined') { TelasV2.abrirPerfil(origemTela['tela-perfil']); return; }
+  if (idTela === 'tela-conquistas' && typeof TelasV2 !== 'undefined') { TelasV2.abrirConquistas(origemTela['tela-conquistas']); return; }
   if (idTela === 'tela-selecao') { irParaSelecao(); return; }
   if (idTela === 'tela-fases') { irParaFases(); return; }
   if (idTela === 'tela-resultado') { atualizarGanhoCarteira(); }
@@ -562,7 +568,10 @@ function initTelaCheia() {
 
 // ---------- Apelido: crianca ESCOLHE personagem + animal ----------
 
-function irParaApelido() {
+var apelidoVoltaParaPerfil = false;
+
+function irParaApelido(opcoes) {
+  apelidoVoltaParaPerfil = !!(opcoes && opcoes.voltarParaPerfil);
   // Se um item escolhido deixou de existir (ex.: backup restaurado), limpa.
   if (estado.personagemEscolhido && personagensDisponiveis().indexOf(estado.personagemEscolhido) === -1) estado.personagemEscolhido = null;
   if (estado.animalEscolhido && animaisDisponiveis().indexOf(estado.animalEscolhido) === -1) estado.animalEscolhido = null;
@@ -676,10 +685,28 @@ function renderizarGradeAvatares() {
   });
 }
 
+// v2.0: o craque escolhido fica salvo (conta.js). Ao abrir o jogo, ja vem
+// preenchido — a crianca nao precisa montar tudo de novo a cada visita.
+function restaurarCraqueSalvo() {
+  if (typeof Conta === 'undefined') return;
+  var p = Conta.perfil();
+  if (p.personagem) estado.personagemEscolhido = p.personagem;
+  if (p.animal) estado.animalEscolhido = p.animal;
+  if (p.avatarSeed) estado.avatarSeed = p.avatarSeed;
+  estado.apelido = Conta.apelido();
+}
+
 function initApelido() {
   document.getElementById('botao-confirmar-apelido').addEventListener('click', function() {
     if (!estado.apelido) return;
     SFX.selecionar();
+    if (typeof Conta !== 'undefined') {
+      Conta.salvarPerfil({
+        personagem: estado.personagemEscolhido,
+        animal: estado.animalEscolhido,
+        avatarSeed: estado.avatarSeed
+      });
+    }
     // Nao bloqueia o jogo: o firebase-config.js aguarda a autenticacao
     // anonima ficar pronta (com tempo limite) antes de gravar.
     if (window.FirebaseMathGol) {
@@ -687,6 +714,12 @@ function initApelido() {
         apelido: estado.apelido,
         avatarSeed: estado.avatarSeed
       });
+    }
+    // Veio do "Meu craque" so para trocar nome/avatar: volta para la.
+    if (apelidoVoltaParaPerfil && typeof TelasV2 !== 'undefined') {
+      apelidoVoltaParaPerfil = false;
+      TelasV2.abrirPerfil(origemTela['tela-perfil']);
+      return;
     }
     irParaSelecao();
   });
@@ -996,6 +1029,7 @@ function iniciarPartida() {
   estado.pontuacao = 0;
   estado.resultadosCobrancas = [];
   estado.perguntaAtual = null;
+  saldoNoInicioDaPartida = typeof Carteira !== 'undefined' ? Carteira.saldo() : null;
 
   BancoQuestoes.resetarSessao();
 
@@ -1024,6 +1058,8 @@ function iniciarPartida() {
   aviso.textContent = estado.jogoPenalti.modo === '2d' ? 'Modo simplificado ativo (sem 3D).' : '';
 
   SFX.apito();
+  // v2.0: a torcida levanta as placas de "VAMOS!" no apito inicial.
+  reagirNaCena('inicio');
   carregarProximaPergunta();
 }
 
@@ -1179,6 +1215,7 @@ function responderAlternativa(botaoClicado) {
   if (acertou) {
     estado.etapa = ETAPA.TRANSICAO;
     SFX.selecionar();
+    if (typeof Conquistas !== 'undefined') Conquistas.registrar('conta-certa', { tempoMs: tempoUsadoMs });
     document.getElementById('mensagem-feedback').textContent = '✓ Resposta correta!';
     // ETAPA 1: grito curto da torcida + batedor em pose confiante,
     // enquanto a faixa confirma a conta. A pausa antes da mira subiu de
@@ -1474,6 +1511,7 @@ function finalizarCobranca(detalhes) {
     reagirNaCena('gol');
     if (typeof Festa !== 'undefined') Festa.iniciar('gol');
     mostrarFaixa('gol', sortear(FRASES_GOL), 2600);
+    if (typeof Conquistas !== 'undefined') Conquistas.registrar('gol', { tipo: detalhes.tipoChute || null });
   } else if (resultado === 'fora') {
     // Reaproveita o som existente de "sem gol" — nao criar SFX novo.
     SFX.defesa();
@@ -1642,6 +1680,25 @@ function irParaResultado() {
   ultimoGanho = estado.pontuacao;
   if (typeof Carteira !== 'undefined') Carteira.adicionar(estado.pontuacao);
 
+  // v2.0: conquistas da partida. Os premios em Cruzeiros entram ANTES de
+  // mostrar o saldo, e aparecem separados na frase ("+50 de conquistas").
+  ultimoGanhoConquistas = 0;
+  if (typeof Conquistas !== 'undefined' && typeof Carteira !== 'undefined') {
+    // Conta tambem as medalhas que sairam DURANTE a partida (gol, conta
+    // rapida): elas ja estao no saldo e precisam aparecer na frase.
+    var saldoAntes = typeof saldoNoInicioDaPartida === 'number'
+      ? saldoNoInicioDaPartida + estado.pontuacao
+      : Carteira.saldo();
+    if (resultadoProgressao.desbloqueou && resultadoProgressao.proximaFase) {
+      Conquistas.registrar('fase-desbloqueada', { faseId: resultadoProgressao.proximaFase });
+    }
+    Conquistas.registrar('partida-fim', {
+      faseId: fase.id, gols: estado.gols, total: fase.cobrancas, resumo: resumo.resumoCobrancas
+    });
+    ultimoGanhoConquistas = Math.max(0, Carteira.saldo() - saldoAntes);
+    saldoNoInicioDaPartida = null;
+  }
+
   // HU-14: manda o resultado pro painel do professor, se estiver numa sala.
   if (Sala.estaNaSala()) {
     Sala.reportarResultado({
@@ -1684,19 +1741,39 @@ function irParaResultado() {
   } catch (e) {}
 
   if (window.FirebaseMathGol) {
-    window.FirebaseMathGol.salvarProgresso(resumo);
+    window.FirebaseMathGol.salvarProgresso(resumoParaNuvem(resumo));
   }
+
+  // v2.0: estrelas e sincronizacao do estado do craque.
+  if (typeof TelasV2 !== 'undefined') TelasV2.mostrarEstrelas(estado.gols, fase.cobrancas);
+  if (typeof Conta !== 'undefined') Conta.marcarMudanca();
 
   Narracao.falar(mensagem, { tom: 'resultado' });
   mostrarTela('tela-resultado');
 }
 
+// O historico na nuvem (regras do Firestore + backup-validacao.js) usa o
+// esquema 2, sem o nivel exato. O resumo local passou a sair no esquema 3
+// (com nivelId) e, por isso, NENHUM resultado chegava a nuvem: a validacao
+// recusava em silencio ("versao do esquema incompativel"). A sala do
+// professor continua recebendo o nivel pelo caminho dela.
+function resumoParaNuvem(resumo) {
+  var copia = {};
+  ['faseId', 'dificuldadeId', 'selecaoId', 'gols', 'totalCobrancas', 'pontuacao',
+   'tempoTotalSegundos', 'resumoCobrancas', 'data'].forEach(function(k) { copia[k] = resumo[k]; });
+  copia.versaoEsquema = 2;
+  return copia;
+}
+
 var ultimoGanho = 0;
+var ultimoGanhoConquistas = 0;
+var saldoNoInicioDaPartida = null;
 
 function atualizarGanhoCarteira() {
   var el = document.getElementById('ganho-carteira');
   if (!el || typeof Carteira === 'undefined') return;
   el.textContent = (ultimoGanho > 0 ? '+' + Carteira.formatar(ultimoGanho) + ' na sua carteira! ' : '') +
+    (ultimoGanhoConquistas > 0 ? '+' + ultimoGanhoConquistas + ' de conquistas! ' : '') +
     'Saldo: ' + Carteira.formatar(Carteira.saldo()) + '.';
 }
 
@@ -2419,6 +2496,15 @@ document.addEventListener('DOMContentLoaded', function() {
   try { localStorage.removeItem('mathgol_token'); } catch (e) {}
 
   initAcessibilidade();
+  // v2.0: perfil salvo, conquistas, telas novas e fundo animado.
+  if (typeof Conta !== 'undefined') {
+    Conta.init();
+    // Entrou com um codigo ou a nuvem trouxe algo mais novo: o craque muda.
+    Conta.aoMudar(restaurarCraqueSalvo);
+  }
+  restaurarCraqueSalvo();
+  if (typeof TelasV2 !== 'undefined') TelasV2.init();
+  if (typeof FundoVivo !== 'undefined') FundoVivo.init();
   initNavegacaoTopo();
   initTelaCheia();
   initMenu();
