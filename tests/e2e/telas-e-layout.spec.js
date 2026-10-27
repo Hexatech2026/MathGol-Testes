@@ -49,7 +49,9 @@ for (const caso of [
       await A.responder(page, false);
       await page.waitForFunction(n => estado.resultadosCobrancas.length === n || document.querySelector('#tela-resultado.tela-ativa'), i + 1);
     }
-    await expect(page.locator('#tela-resultado')).toHaveClass(/tela-ativa/);
+    // v2.1: depois da ultima cobranca o resultado espera o locutor terminar
+    // a frase gravada (no maximo +6 s), mesmo com a pausa encurtada.
+    await expect(page.locator('#tela-resultado')).toHaveClass(/tela-ativa/, { timeout: 15000 });
     await expect(page.locator('#titulo-resultado')).toHaveText(caso.titulo);
     await expect(page.locator('#placar-final')).toHaveText('0 / ' + caso.total);
     await expect(page.locator('#lista-cobrancas li')).toHaveCount(caso.total);

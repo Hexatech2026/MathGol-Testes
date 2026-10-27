@@ -37,15 +37,25 @@ for (const zona of ['topo-direita', 'baixo-esquerda', 'topo-esquerda']) {
     expect(menorY).toBeGreaterThan(-0.03);                       // nunca abaixo do gramado
     // Deitado e parado = queda terminada (rotacao exatamente na final).
     const deitado = a.filter(x => Math.abs(Math.abs(x.goleiroRotZ) - Math.PI / 2) < 0.0005);
-    expect(deitado.length).toBeGreaterThan(3);                   // fica deitado um tempo
+    // Fica deitado um tempo. Medido em TEMPO, nao em quadros: o WebGL por
+    // software roda a 5-7 fps e a janela ate o reset (~0,6 s) da 2 a 4
+    // quadros — contar "mais de 3" falhava ao acaso, na versao antiga tambem.
+    const tempoDeitado = deitado.length ? deitado[deitado.length - 1].t - deitado[0].t : 0;
+    expect(deitado.length).toBeGreaterThanOrEqual(2);
+    expect(tempoDeitado).toBeGreaterThanOrEqual(150);
     // Apoiado no chao (a pequena acomodada/quique sobe no maximo ~5 cm).
     for (const x of deitado) expect(Math.abs(x.goleiroMinY)).toBeLessThan(0.12);
     expect(Math.min(...deitado.map(x => Math.abs(x.goleiroMinY)))).toBeLessThan(0.03); // encosta no chao
     // Queda continua: sem saltos grandes de rotacao entre quadros.
     // (a amostragem depende da taxa de quadros: WebGL por software e lento,
     // entao so compara quadros proximos no tempo)
-    for (let i = 1; i < a.length; i++) {
-      if (a[i].t - a[i - 1].t < 40) expect(Math.abs(a[i].goleiroRotZ - a[i - 1].goleiroRotZ)).toBeLessThan(0.35);
+    // O ultimo quadro e o RESET da cena (deitado → em pe de uma vez, de
+    // proposito): fica fora da conta. Antes ele so entrava quando o WebGL
+    // por software deixava dois quadros a menos de 40 ms um do outro.
+    const ultimo = a[a.length - 1];
+    const daQueda = ultimo.goleiroRotZ === 0 ? a.slice(0, -1) : a;
+    for (let i = 1; i < daQueda.length; i++) {
+      if (daQueda[i].t - daQueda[i - 1].t < 40) expect(Math.abs(daQueda[i].goleiroRotZ - daQueda[i - 1].goleiroRotZ)).toBeLessThan(0.35);
     }
   });
 }

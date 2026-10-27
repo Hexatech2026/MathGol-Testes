@@ -1,0 +1,110 @@
+MATHGOL — ROTEIRO DE NARRAÇÃO, EM TAKES DE ATÉ 4000 CARACTERES
+Equipe HexaTech · gere um take por vez e baixe o áudio de cada um
+========================================================================
+
+########################################################################
+# TAKE 1 — COMEMORAÇÃO — 9 frases, 1080 caracteres
+# Copie daqui para baixo, até a próxima linha de #
+########################################################################
+
+Narração em português do Brasil para um jogo de futebol e matemática para crianças de 6 a 11 anos.
+
+VOZ: locutor esportivo brasileiro, masculino, adulto, com energia de rádio de jogo — mas falando COM uma criança, nunca gritando com ela. Timbre quente e próximo, dicção muito clara, sem sotaque regional marcado. Vibra no gol e acolhe no erro. Nunca irônico nem de repreensão.
+
+ENTREGA: leia as frases na ordem, uma por vez, com pausa de 2 segundos em silêncio entre uma e outra. Não leia os códigos entre colchetes. Não acrescente nenhuma palavra que não esteja escrita. Pronuncie "Cruzeiros" como a moeda do jogo, não como o nome do time.
+
+DIREÇÃO DESTE TAKE: Energia máxima, festa de estádio. Puxe o ar e abra o som.
+
+[gol-01] Gol!
+[gol-02] GOLAÇO! Você é um craque da matemática!
+[gol-03] INCRÍVEL! Resposta e chute perfeitos!
+[gol-04] QUE GOL! A conta certa virou gol!
+[gol-05] ESPETACULAR! Matemática e futebol juntos!
+[gol-06] SHOW DE BOLA! Você acertou tudo!
+[acerto-01] Conta certa! Agora é o chute!
+[acerto-02] Isso! Resposta correta!
+[acerto-03] Acertou! Prepara o pé!
+
+########################################################################
+# TAKE 2 — ERRO E CONSOLO — 12 frases, 1535 caracteres
+# Copie daqui para baixo, até a próxima linha de #
+########################################################################
+
+Narração em português do Brasil para um jogo de futebol e matemática para crianças de 6 a 11 anos.
+
+VOZ: locutor esportivo brasileiro, masculino, adulto, com energia de rádio de jogo — mas falando COM uma criança, nunca gritando com ela. Timbre quente e próximo, dicção muito clara, sem sotaque regional marcado. Vibra no gol e acolhe no erro. Nunca irônico nem de repreensão.
+
+ENTREGA: leia as frases na ordem, uma por vez, com pausa de 2 segundos em silêncio entre uma e outra. Não leia os códigos entre colchetes. Não acrescente nenhuma palavra que não esteja escrita. Pronuncie "Cruzeiros" como a moeda do jogo, não como o nome do time.
+
+DIREÇÃO DESTE TAKE: Baixe o volume e desacelere. Fale como quem põe a mão no ombro da criança. As quatro primeiras elogiam a matemática de verdade: ela acertou a conta e só perdeu o chute.
+
+[quase-01] Quase lá! Sua conta estava certinha, você é muito inteligente. Tente o chute de novo, você consegue!
+[quase-02] A conta você matou! Faltou só o chute. Na próxima a bola entra!
+[quase-03] Isso! A matemática estava perfeita. Agora é só caprichar na pontaria!
+[quase-04] Você acertou o mais difícil, que era a conta. O gol vem na próxima!
+[fora-01] Chute fraco! A bola não chegou.
+[fora-02] Forte demais! Por cima do gol.
+[fora-03] Pra fora!
+[defesa-01] O goleiro defendeu!
+[defesa-02] Tempo esgotado! O goleiro defendeu.
+[conta-01] Não foi dessa vez! Vamos tentar a próxima conta juntos?
+[conta-02] Ops! Essa escapou. A próxima é sua!
+[conta-03] Errar faz parte do treino. Bora para a próxima!
+
+########################################################################
+# TAKE 3 — FIM DA FASE — 23 frases, 2384 caracteres
+# Copie daqui para baixo, até a próxima linha de #
+########################################################################
+
+Narração em português do Brasil para um jogo de futebol e matemática para crianças de 6 a 11 anos.
+
+VOZ: locutor esportivo brasileiro, masculino, adulto, com energia de rádio de jogo — mas falando COM uma criança, nunca gritando com ela. Timbre quente e próximo, dicção muito clara, sem sotaque regional marcado. Vibra no gol e acolhe no erro. Nunca irônico nem de repreensão.
+
+ENTREGA: leia as frases na ordem, uma por vez, com pausa de 2 segundos em silêncio entre uma e outra. Não leia os códigos entre colchetes. Não acrescente nenhuma palavra que não esteja escrita. Pronuncie "Cruzeiros" como a moeda do jogo, não como o nome do time.
+
+DIREÇÃO DESTE TAKE: Resumo do placar, na ordem do pior para o melhor resultado. A energia SOBE ao longo do take: as quatro primeiras consolam quem não fez gol nenhum e as do meio comemoram um começo bom; da "FASE PERFEITA" em diante é energia de título conquistado.
+
+[fim-00-01] Valeu por jogar! Bora treinar mais e voltar pra fazer gol!
+[fim-00-02] Hoje o goleiro tava inspirado! Tenta de novo, você consegue!
+[fim-00-03] Não desiste! Cada tentativa te deixa mais craque!
+[fim-00-04] O importante é tentar! Vamos de novo?
+[fim-01-01] Bom começo! Você já fez um gol, bora buscar mais!
+[fim-01-02] Um gol é só o aquecimento! Tenta de novo pra fazer mais!
+[fim-01-03] Já tá no caminho certo! Mais uma rodada e você arrebenta!
+[fim-01-04] Boa! Um gol já é vitória! Quer tentar fazer dois agora?
+[fim-02-01] Quase perfeito! Faltou só um golzinho! Tenta de novo!
+[fim-02-02] Dois gols! Tá quase lá, falta só um pra fase perfeita!
+[fim-02-03] Impressionante! Mais uma tentativa e você fecha com 3!
+[fim-02-04] Show! Dois de três! Bora buscar a fase perfeita?
+[fim-03-01] FASE PERFEITA! Você é o Craque das Contas!
+[fim-03-02] Três de três! Ninguém segura você! Bora pro próximo desafio!
+[fim-03-03] Perfeito! Acho que esse nível tá fácil demais pra você!
+[fim-03-04] Goleada! Manda bem assim no próximo nível também!
+[fim-03-05] Hat-trick de contas certas! Você é fera demais!
+[fim-ger-01] Bom começo! Você já balançou a rede, bora buscar mais!
+[fim-ger-02] Já tá no caminho certo! Mais uma rodada e você arrebenta!
+[fim-ger-03] Muito bem! Mais da metade das cobranças viraram gol!
+[fim-ger-04] Show! Falta pouco pra fase perfeita!
+[fim-ger-05] FASE PERFEITA! Você é o Craque das Contas!
+[fim-ger-06] Nenhuma cobrança perdida! Ninguém segura você!
+
+########################################################################
+# TAKE 4 — TUTORIAL — 6 frases, 1861 caracteres
+# Copie daqui para baixo, até a próxima linha de #
+########################################################################
+
+Narração em português do Brasil para um jogo de futebol e matemática para crianças de 6 a 11 anos.
+
+VOZ: locutor esportivo brasileiro, masculino, adulto, com energia de rádio de jogo — mas falando COM uma criança, nunca gritando com ela. Timbre quente e próximo, dicção muito clara, sem sotaque regional marcado. Vibra no gol e acolhe no erro. Nunca irônico nem de repreensão.
+
+ENTREGA: leia as frases na ordem, uma por vez, com pausa de 2 segundos em silêncio entre uma e outra. Não leia os códigos entre colchetes. Não acrescente nenhuma palavra que não esteja escrita. Pronuncie "Cruzeiros" como a moeda do jogo, não como o nome do time.
+
+DIREÇÃO DESTE TAKE: A fala mais devagar e mais clara de todas: tem criança em processo de alfabetização ouvindo. Tom de professor animado, não de locutor.
+
+[tutorial-01] Responda a conta. Leia a conta e toque na resposta certa antes do tempo acabar. Quanto mais rápido você responder, mais Cruzeiros ganha no gol!
+[tutorial-02] Errou? O goleiro defende. Se a resposta estiver errada ou o tempo acabar, o goleiro pega a bola. Sem problema: na próxima cobrança você tenta de novo!
+[tutorial-03] Acertou? Mire no gol! Com a conta certa, você escolhe onde chutar. Mova a mira com o dedo, o mouse ou as setas e toque para travar. Se a mira ficar vermelha, ela está fora do gol!
+[tutorial-04] Escolha o tipo de chute. A barra vai e volta sozinha. Toque para escolher: Rasteiro, bola baixinha; Meia-altura, vai onde você mirou; ou Cavadinha, bola por cima, com toque leve.
+[tutorial-05] Acerte a força. Agora a barra de força enche e esvazia. Toque quando ela estiver na faixa verde ideal. Fraco demais, a bola não chega. Forte demais, passa por cima do gol!
+[tutorial-06] Gol! Ganhe Cruzeiros. Cada gol vale Cruzeiros. Junte seus Cruzeiros e compre seleções, times do Brasileirão, avatares e nomes novos na Loja. Bora jogar!
+

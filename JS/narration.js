@@ -32,12 +32,26 @@
 // pitch = altura. 1 é o normal. Acima de 1,4 fica estridente no alto-falante
 //         de Chromebook; abaixo de 0,9 fica pesado demais para criança.
 // volume= 0 a 1.
+//
+// ───────────────────────────────────────────────────────────────────────
+// v2.1 — FALAS GRAVADAS (locutor de verdade)
+// ───────────────────────────────────────────────────────────────────────
+// Quando a frase pedida existe em JS/falas.js (pelo id em opcoes.fala ou
+// pelo próprio texto), toca o MP3 de Audio/falas/. Se o arquivo não
+// carregar ou o navegador bloquear o som, cai na voz sintetizada com o
+// mesmo texto — a criança nunca fica sem a fala.
+//
+// opcoes.esperar: em vez de cortar o locutor, espera a fala atual acabar
+// (ex.: "Gol!" e logo depois "GOLAÇO! Você é um craque da matemática!").
+// tempoRestante(): quanto ainda falta de fala gravada (com a da fila). O
+// main.js usa para a próxima pergunta não cortar o locutor no meio.
 
 const Narracao = (() => {
   let ativa = true;
   let vozPt = null;
   let ultimoTexto = '';
   let ultimoTom = 'padrao';
+  let ultimaFala = null;
   let vozForcada = null; // nome exato de voz, se a equipe fixar uma
 
   // ── TABELA 1: que voz usar ────────────────────────────────────────────
@@ -48,7 +62,10 @@ const Narracao = (() => {
   // A ordem foi montada das vozes mais naturais para as mais sintéticas:
   // as "Natural"/"Online" da Microsoft e as do Google soam bem melhor que
   // as locais antigas (Daniel/Maria), que são as que vinham sendo pegas.
+  // v2.1: o locutor gravado é homem; a conta (que continua sintetizada)
+  // soa mais coerente com uma voz masculina natural, então Antonio subiu.
   const VOZES_PREFERIDAS = [
+    'antonio',            // Windows · pt-BR natural (voz masculina)
     'francisca',          // Windows 11 · pt-BR natural, muito clara
     'thalita',            // Windows 11 · pt-BR natural
     'brenda',             // Windows · pt-BR natural
@@ -56,7 +73,6 @@ const Narracao = (() => {
     'google português do brasil',
     'luciana',            // macOS / iOS · pt-BR
     'joana',              // macOS · pt-PT, serve de reserva
-    'antonio',            // Windows · pt-BR natural (voz masculina)
     'daniel',             // Windows local antiga — penúltimo recurso
     'maria'               // Windows local antiga
   ];
@@ -118,24 +134,71 @@ const Narracao = (() => {
   // Cancela qualquer fala em andamento/enfileirada. Chamado antes de toda
   // nova fala e também ao trocar de tela ou desligar a narração, para nunca
   // deixar fala antiga "vazando" para o contexto seguinte.
-  function cancelar() {
-    if ('speechSynthesis' in window) {
-      try { window.speechSynthesis.cancel(); } catch (e) {}
+  // ── Falas gravadas ────────────────────────────────────────────────────
+  const audios = {};        // id -> <audio>, criado uma vez e reaproveitado
+  let audioAtual = null;    // { id, el, fimEm } da fala gravada tocando
+  let fila = null;          // { texto, opcoes } esperando a fala atual acabar
+
+  function temGravacoes() { return typeof Falas !== 'undefined' && typeof Audio !== 'undefined'; }
+
+  function audioDa(id) {
+    if (!audios[id]) {
+      const el = new Audio();
+      el.preload = 'auto';
+      el.src = Falas.PASTA + id + '.mp3';
+      audios[id] = el;
+    }
+    return audios[id];
+  }
+
+  // Baixa antes as falas que vão ser usadas (ex.: as da partida).
+  function preCarregar(ids) {
+    if (!temGravacoes()) return;
+    (ids || []).forEach(function(id) { if (Falas.existe(id)) audioDa(id); });
+  }
+
+  function falaDoPedido(texto, opcoes) {
+    if (!temGravacoes()) return null;
+    if (opcoes && opcoes.fala && Falas.existe(opcoes.fala)) return opcoes.fala;
+    return Falas.idDoTexto(texto);
+  }
+
+  function pararGravada() {
+    if (!audioAtual) return;
+    const el = audioAtual.el;
+    audioAtual = null;
+    try { el.pause(); el.currentTime = 0; } catch (e) {}
+  }
+
+  function terminouGravada(el) {
+    if (!audioAtual || audioAtual.el !== el) return;
+    audioAtual = null;
+    if (fila) { const proxima = fila; fila = null; falar(proxima.texto, proxima.opcoes); }
+  }
+
+  function tocarGravada(id, texto, ajuste) {
+    const el = audioDa(id);
+    const duracao = isFinite(el.duration) && el.duration > 0 ? el.duration * 1000 : Falas.duracao(id);
+    audioAtual = { id: id, el: el, fimEm: Date.now() + duracao };
+    el.volume = ajuste.volume;
+    el.onended = function() { terminouGravada(el); };
+    try { el.currentTime = 0; } catch (e) {}
+    let promessa;
+    try { promessa = el.play(); } catch (e) { promessa = Promise.reject(e); }
+    if (promessa && typeof promessa.catch === 'function') {
+      promessa.catch(function() {
+        // Sem arquivo, sem rede ou som bloqueado pelo navegador: a mesma
+        // frase sai na voz sintetizada.
+        if (!audioAtual || audioAtual.el !== el) return;
+        audioAtual = null;
+        falarSintetizado(texto, ajuste);
+        if (fila) { const proxima = fila; fila = null; falar(proxima.texto, proxima.opcoes); }
+      });
     }
   }
 
-  // opcoes.forcar: fala mesmo com a narração automática desligada — usado
-  //   quando a criança PEDE para ouvir (botão "Ouvir novamente", tutorial).
-  // opcoes.tom: chave da tabela TONS. Tom desconhecido cai em 'padrao'.
-  function falar(texto, opcoes) {
-    if (!texto) return;
-    var forcar = !!(opcoes && opcoes.forcar);
-    var tom = (opcoes && opcoes.tom && TONS[opcoes.tom]) ? opcoes.tom : 'padrao';
-    ultimoTexto = texto;
-    ultimoTom = tom;
-    if ((!ativa && !forcar) || !('speechSynthesis' in window)) return;
-    cancelar();
-    const ajuste = TONS[tom];
+  function falarSintetizado(texto, ajuste) {
+    if (!('speechSynthesis' in window)) return;
     const utterance = new SpeechSynthesisUtterance(texto);
     utterance.lang = 'pt-BR';
     if (vozPt) utterance.voice = vozPt;
@@ -145,13 +208,55 @@ const Narracao = (() => {
     window.speechSynthesis.speak(utterance);
   }
 
+  // Quanto falta (ms) de fala gravada, contando a que está na fila.
+  function tempoRestante() {
+    let ms = audioAtual ? Math.max(0, audioAtual.fimEm - Date.now()) : 0;
+    if (audioAtual && fila) {
+      const idFila = falaDoPedido(fila.texto, fila.opcoes);
+      if (idFila) ms += Falas.duracao(idFila);
+    }
+    return ms;
+  }
+
+  function cancelar() {
+    fila = null;
+    pararGravada();
+    if ('speechSynthesis' in window) {
+      try { window.speechSynthesis.cancel(); } catch (e) {}
+    }
+  }
+
+  // opcoes.forcar: fala mesmo com a narração automática desligada — usado
+  //   quando a criança PEDE para ouvir (botão "Ouvir novamente", tutorial).
+  // opcoes.tom: chave da tabela TONS. Tom desconhecido cai em 'padrao'.
+  // opcoes.fala: id da gravação (JS/falas.js); sem ele, procura pelo texto.
+  // opcoes.esperar: deixa a fala gravada atual terminar antes desta.
+  function falar(texto, opcoes) {
+    if (!texto) return;
+    var forcar = !!(opcoes && opcoes.forcar);
+    var tom = (opcoes && opcoes.tom && TONS[opcoes.tom]) ? opcoes.tom : 'padrao';
+    ultimoTexto = texto;
+    ultimoTom = tom;
+    ultimaFala = opcoes && opcoes.fala ? opcoes.fala : null;
+    if (!ativa && !forcar) return;
+    if (opcoes && opcoes.esperar && audioAtual) {
+      fila = { texto: texto, opcoes: Object.assign({}, opcoes, { esperar: false }) };
+      return;
+    }
+    cancelar();
+    const ajuste = TONS[tom];
+    const id = falaDoPedido(texto, opcoes);
+    if (id) { tocarGravada(id, texto, ajuste); return; }
+    falarSintetizado(texto, ajuste);
+  }
+
   // Repete o último texto falado (ex.: botão "Ouvir novamente"), sem alterar
   // nenhum estado do jogo (cronômetro, pontuação etc.) — é responsabilidade
   // de quem chama decidir *o que* deve ser repetido, guardando o texto certo
   // antes de chamar falar(). Repete no MESMO tom em que foi dito.
   function repetir() {
     if (!ultimoTexto) return;
-    falar(ultimoTexto, { tom: ultimoTom });
+    falar(ultimoTexto, { tom: ultimoTom, fala: ultimaFala || undefined });
   }
 
   function alternar(valor) {
@@ -195,8 +300,12 @@ const Narracao = (() => {
     return Object.assign({}, TONS[nome]);
   }
 
+  // Para diagnóstico e testes: id da gravação tocando agora (ou null).
+  function falaGravadaAtual() { return audioAtual ? audioAtual.id : null; }
+
   return {
     falar, repetir, cancelar, alternar, estaAtiva,
-    vozesDisponiveis, vozEmUso, fixarVoz, tom
+    vozesDisponiveis, vozEmUso, fixarVoz, tom,
+    preCarregar, tempoRestante, falaGravadaAtual
   };
 })();

@@ -1,11 +1,62 @@
-PATCH v2.0 — Conquistas, bordas, avatares novos, interface nova,
-fundo vivo, CÓDIGO DO CRAQUE e placas da torcida
-(inclui tudo dos patches de 19/10 e 21/10)
-MathGol · HexaTech · 23/10/2026
+PATCH v2.1 — LOCUTOR GRAVADO + tudo da v2.0 (conquistas, bordas,
+avatares novos, interface nova, fundo vivo, CÓDIGO DO CRAQUE e placas
+da torcida) — inclui também os patches de 19/10 e 21/10
+MathGol · HexaTech · 27/10/2026
 
 Este patch é CUMULATIVO sobre o repositório MathGol-REPO-NOVO (07/10):
-traz os arquivos de 19/10, de 21/10 e os de 23/10. Não aplique os
+traz os arquivos de 19/10, 21/10, 23/10 e 27/10. Não aplique os
 patches antigos por cima.
+
+===================================================================
+NOVO NESTA VERSÃO (27/10) — FALAS GRAVADAS DO LOCUTOR
+===================================================================
+
+As 50 falas gravadas a partir do roteiro (Docs/Dreamina-Takes-MathGol
+.txt) estão em Audio/falas/<id>.mp3 (3,9 MB). O id é o código entre
+colchetes do roteiro (gol-01, quase-03, fim-02-04, tutorial-05...).
+Os arquivos vieram como "nome.mp3.mp3"; foram renomeados para .mp3.
+
+COMO FUNCIONA (JS/falas.js + JS/narration.js)
+  · falas.js é o catálogo: id → texto exato gravado + duração.
+  · Narracao.falar(texto) agora procura a gravação daquele texto
+    (sem ligar para acento, maiúscula, pontuação ou emoji) ou pelo id
+    em opcoes.fala. Achou: toca o MP3. Não achou (a conta da vez, "Agora
+    X é seu!" da Loja): voz sintetizada, como antes.
+  · Se o MP3 não carregar ou o navegador bloquear o som, a MESMA frase
+    sai na voz sintetizada. A criança nunca fica sem a fala.
+  · O botão "Narração em áudio" (acessibilidade) liga/desliga as duas.
+  · As falas da partida são baixadas quando a partida começa (~1,3 MB);
+    as do fim e do tutorial só quando são usadas.
+  · A voz sintetizada preferida agora é a masculina natural (Antonio),
+    para a conta soar parecida com o locutor gravado.
+
+ONDE O LOCUTOR FALA
+  conta certa      a frase da faixa (acerto-01..03)
+  gol              "Gol!" e emenda a frase da faixa (gol-02..06)
+  bola fora        o motivo (fora-01..03) e o elogio da conta (quase-*)
+  defesa c/ conta  "O goleiro defendeu!" + elogio da conta (quase-*)
+    certa
+  conta errada     "O goleiro defendeu!" + incentivo (conta-01..03)
+  tempo esgotado   "Tempo esgotado! O goleiro defendeu." (defesa-02)
+  fim da fase      a mensagem do placar (fim-00..03, fim-ger-*)
+  tutorial         um áudio por passo (tutorial-01..06)
+  A frase falada é SEMPRE a mesma escrita na faixa — antes o jogo dizia
+  só "Gol!" e a faixa mostrava outra coisa em silêncio.
+
+RITMO DA PARTIDA
+  A próxima conta espera o locutor terminar (pausa mínima de 1,5 s, no
+  máximo 6 s a mais), senão a leitura da conta cortava a frase no meio.
+  A faixa fica na tela enquanto o locutor fala. Com o som bloqueado, a
+  pausa volta a ser só 1,5 s.
+
+DEFEITO ANTIGO CORRIGIDO DE CARONA
+  A mensagem do fim da fase NUNCA era ouvida: o jogo mandava falar e
+  logo em seguida trocava de tela, e a troca de tela cancela a fala.
+
+PARA TROCAR UMA FALA
+  Grave de novo com o MESMO id, substitua Audio/falas/<id>.mp3 e, se o
+  texto mudou, atualize JS/falas.js (o teste tests/unit/falas.test.js
+  avisa se alguma frase do jogo ficou sem gravação).
 
 ===================================================================
 ANTES DE SUBIR — 3 PASSOS NO FIREBASE (sem eles, só o código falha)
@@ -471,21 +522,32 @@ repositório resolve isso E o ponto SEC-05 de LGPD da Sprint 3 (o
 aparelho da criança hoje manda IP e User-Agent para a api.dicebear.com).
 
 ===================================================================
-RESULTADO DOS TESTES (24/10/2026, nesta máquina)
+RESULTADO DOS TESTES (27/10/2026, nesta máquina — v2.1)
 ===================================================================
 
-  npm run test:unit   47/48 passando
-    · 13 testes novos (conquistas, código do craque, estado da nuvem).
+  npm run test:unit   53/54 passando
+    · 6 testes novos das falas (tests/unit/falas.test.js): todo id tem
+      o seu MP3 e toda frase que o jogo fala tem gravação.
+    · 13 testes da v2.0 (conquistas, código do craque, estado da nuvem).
     · A falha é ANTERIOR a este patch: DEF-23 (banco de questões). O
       teste não carregava niveis.js e nunca chegava a verificar nada;
       corrigido o carregamento, ele mostra o problema real: no nível
       fácil o resultado "8" saiu 8 vezes em 20 contas (limite: 3).
-  npm run test:e2e    79/79 passando
+  npm run test:e2e    83/83 passando
+    · 4 testes novos das falas (tests/e2e/v2-falas.spec.js), com áudio
+      tocando de verdade: "Gol!" + a frase da faixa, a próxima conta
+      esperando o locutor, a voz sintetizada quando o som é bloqueado,
+      o tutorial e a mensagem do fim da fase.
     · Os 7 que já falhavam desde 19/10 foram consertados: os testes
       clicavam em Backup e Créditos direto no menu, mas esses botões
       foram para "Mais opções" (helper novo A.abrirMaisOpcoes).
     · 9 testes novos das telas da v2.0.
-    · Os testes de animação do goleiro contam quadros no WebGL por
-      software e falham às vezes com a máquina carregada (a versão
-      anterior também: 5 em 21 execuções repetidas; esta: 3 em 21).
+    · Ajustes de teste em 27/10:
+      - teste 15 (fases Falta/Final): o resultado agora espera o
+        locutor terminar a última frase; o teste dá até 15 s.
+      - goleiro deitado: medido em TEMPO (2+ quadros, 150 ms+), não em
+        "mais de 3 quadros" — no WebGL por software (5-7 fps) a contagem
+        falhava ao acaso, inclusive na versão antiga. E o quadro do
+        reset da cena (deitado → em pé de propósito) saiu da conta de
+        continuidade da queda.
   npm run test:rules  NÃO rodado aqui (precisa do Firebase Emulator).

@@ -1058,6 +1058,8 @@ function iniciarPartida() {
   aviso.textContent = estado.jogoPenalti.modo === '2d' ? 'Modo simplificado ativo (sem 3D).' : '';
 
   SFX.apito();
+  // v2.1: baixa ja as falas do locutor desta partida (gol, quase, defesa...).
+  if (typeof Falas !== 'undefined' && Narracao.preCarregar) Narracao.preCarregar(Falas.daPartida());
   // v2.0: a torcida levanta as placas de "VAMOS!" no apito inicial.
   reagirNaCena('inicio');
   carregarProximaPergunta();
@@ -1221,7 +1223,10 @@ function responderAlternativa(botaoClicado) {
     // enquanto a faixa confirma a conta. A pausa antes da mira subiu de
     // 300 para 900 ms: com 300 a crianca nem via que tinha acertado.
     reagirNaCena('acerto');
-    mostrarFaixa('acerto', sortear(FRASES_ACERTO_CONTA), PAUSA_ANTES_DA_MIRA - 120);
+    // v2.1: o locutor tambem comemora a conta certa (a mesma frase da faixa).
+    var fraseAcerto = sortear(FRASES_ACERTO_CONTA);
+    Narracao.falar(fraseAcerto, { tom: 'premio' });
+    mostrarFaixa('acerto', fraseAcerto, PAUSA_ANTES_DA_MIRA - 120);
     agendarNaSessao(function() { avancarParaMira(tempoUsadoMs); }, PAUSA_ANTES_DA_MIRA);
     return;
   }
@@ -1505,23 +1510,29 @@ function finalizarCobranca(detalhes) {
     feedback.textContent = 'GOOOL! +' + pontosGanhos + ' ';
     feedback.appendChild(criarIconeCruzeiro(''));
     feedback.appendChild(document.createTextNode('Cruzeiros!'));
+    // v2.1: o locutor grita "Gol!" e emenda a MESMA frase da faixa.
+    var fraseGol = sortear(FRASES_GOL);
     Narracao.falar('Gol!', { tom: 'gol' });
+    Narracao.falar(fraseGol, { tom: 'gol', esperar: true });
     // ETAPA 2 — gol: torcida a loucura, batedor pula e soca o ar,
     // fogos e confete na tela, faixa verde por cima de tudo.
     reagirNaCena('gol');
     if (typeof Festa !== 'undefined') Festa.iniciar('gol');
-    mostrarFaixa('gol', sortear(FRASES_GOL), 2600);
+    mostrarFaixa('gol', fraseGol, duracaoFaixa(2600));
     if (typeof Conquistas !== 'undefined') Conquistas.registrar('gol', { tipo: detalhes.tipoChute || null });
   } else if (resultado === 'fora') {
     // Reaproveita o som existente de "sem gol" — nao criar SFX novo.
     SFX.defesa();
     var motivo = MENSAGEM_FORA[detalhes.motivo] ? detalhes.motivo : 'lado';
     feedback.textContent = MENSAGEM_FORA[motivo];
-    Narracao.falar(NARRACAO_FORA[motivo], { tom: 'quase' });
     // ETAPA 2 — a conta estava certa e o chute saiu: lamento leve, e a
-    // faixa diz em primeiro lugar que a MATEMATICA estava certa.
+    // faixa diz em primeiro lugar que a MATEMATICA estava certa. O
+    // locutor fala o que houve e emenda o elogio da conta (a frase da faixa).
+    var fraseQuase = sortear(FRASES_QUASE);
+    Narracao.falar(NARRACAO_FORA[motivo], { tom: 'quase' });
+    Narracao.falar(fraseQuase, { tom: 'quase', esperar: true });
     reagirNaCena('erro');
-    mostrarFaixa('quase', sortear(FRASES_QUASE), 3200);
+    mostrarFaixa('quase', fraseQuase, duracaoFaixa(3200));
   } else {
     SFX.defesa();
     var frase = FRASES_INCENTIVO[Math.floor(Math.random() * FRASES_INCENTIVO.length)];
@@ -1538,12 +1549,19 @@ function finalizarCobranca(detalhes) {
     // e o goleiro pegou, ou ela errou a conta (e ai o chute nem era dela).
     // A frase tem que distinguir — dizer "sua conta estava certinha" para
     // quem errou a conta seria mentira, e a crianca percebe.
+    // v2.1: o locutor emenda a frase da faixa. No tempo esgotado, nao: a
+    // gravacao "Tempo esgotado! O goleiro defendeu." ja diz o que houve.
+    var fraseDefesa;
     if (detalhes.respostaCorreta) {
-      mostrarFaixa('quase', sortear(FRASES_QUASE), 3200);
+      fraseDefesa = sortear(FRASES_QUASE);
+      Narracao.falar(fraseDefesa, { tom: 'quase', esperar: true });
+      mostrarFaixa('quase', fraseDefesa, duracaoFaixa(3200));
+    } else if (detalhes.estourouTempo) {
+      mostrarFaixa('conta', 'O tempo acabou dessa vez. Na próxima você responde antes!', duracaoFaixa(3000));
     } else {
-      mostrarFaixa('conta', detalhes.estourouTempo
-        ? 'O tempo acabou dessa vez. Na próxima você responde antes!'
-        : sortear(FRASES_CONTA), 3000);
+      fraseDefesa = sortear(FRASES_CONTA);
+      Narracao.falar(fraseDefesa, { tom: 'defesa', esperar: true });
+      mostrarFaixa('conta', fraseDefesa, duracaoFaixa(3000));
     }
   }
 
@@ -1562,10 +1580,40 @@ function finalizarCobranca(detalhes) {
   atualizarBolinhasProgresso();
   atualizarDisplayPontuacao();
 
-  agendarNaSessao(function() {
+  // v2.1: a proxima conta espera o locutor terminar (no maximo 5 s a mais),
+  // senao a leitura da pergunta cortaria a frase no meio.
+  depoisDoLocutor(function() {
     if (estado.cobrancaAtual >= TOTAL_COBRANCAS) irParaResultado();
     else carregarProximaPergunta();
   }, PAUSA_ENTRE_COBRANCAS);
+}
+
+var FOLGA_LOCUTOR_MS = 250;
+var ESPERA_MAXIMA_LOCUTOR_MS = 6000;
+
+// Espera a pausa minima e, se o locutor ainda estiver falando, espera ele
+// terminar (no maximo ESPERA_MAXIMA_LOCUTOR_MS a mais). Confere de novo no
+// fim da pausa, e nao no comeco: se o navegador bloquear o audio, a fala
+// gravada cai na hora e a partida nao espera nada a mais.
+function depoisDoLocutor(fn, pausaMinima) {
+  var inicio = Date.now();
+  var limite = pausaMinima + ESPERA_MAXIMA_LOCUTOR_MS;
+  function conferir() {
+    var falta = Narracao.tempoRestante ? Narracao.tempoRestante() : 0;
+    var esperou = Date.now() - inicio;
+    if (falta > 0 && esperou < limite) {
+      agendarNaSessao(conferir, Math.min(falta + FOLGA_LOCUTOR_MS, limite - esperou));
+      return;
+    }
+    fn();
+  }
+  agendarNaSessao(conferir, pausaMinima);
+}
+
+// A faixa fica na tela pelo menos enquanto o locutor fala a frase dela.
+function duracaoFaixa(minimo) {
+  var falta = Narracao.tempoRestante ? Narracao.tempoRestante() : 0;
+  return Math.max(minimo, falta + 400);
 }
 
 function atualizarDisplayPontuacao() {
@@ -1748,8 +1796,10 @@ function irParaResultado() {
   if (typeof TelasV2 !== 'undefined') TelasV2.mostrarEstrelas(estado.gols, fase.cobrancas);
   if (typeof Conta !== 'undefined') Conta.marcarMudanca();
 
-  Narracao.falar(mensagem, { tom: 'resultado' });
+  // A tela antes da fala: mostrarTela() cancela a narracao em andamento, e
+  // na ordem antiga a mensagem do resultado era cortada antes de comecar.
   mostrarTela('tela-resultado');
+  Narracao.falar(mensagem, { tom: 'resultado' });
 }
 
 // O historico na nuvem (regras do Firestore + backup-validacao.js) usa o

@@ -149,7 +149,11 @@ var Tutorial = (function() {
     proximo.textContent = ultimo ? (aoTerminar ? 'Bora jogar! ⚽' : 'Entendi! ✅') : 'Próximo →';
     el('botao-tutorial-pular').hidden = ultimo;
 
-    if (typeof Narracao !== 'undefined') Narracao.falar(p.titulo + '. ' + p.texto, { tom: 'instrucao' });
+    // v2.1: cada passo tem a sua gravacao do locutor (tutorial-01 a 06,
+    // ver JS/falas.js); sem ela, o mesmo texto sai na voz sintetizada.
+    if (typeof Narracao !== 'undefined') {
+      Narracao.falar(p.titulo + '. ' + p.texto, { tom: 'instrucao', fala: 'tutorial-0' + (passo + 1) });
+    }
   }
 
   function irPara(novo) {
