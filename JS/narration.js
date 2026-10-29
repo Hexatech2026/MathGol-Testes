@@ -138,6 +138,14 @@ const Narracao = (() => {
   const audios = {};        // id -> <audio>, criado uma vez e reaproveitado
   let audioAtual = null;    // { id, el, fimEm } da fala gravada tocando
   let fila = null;          // { texto, opcoes } esperando a fala atual acabar
+  // v2.2 — UMA voz por vez. Relato da equipe: com a criança rápida, saíam
+  // duas vozes juntas. Causa: speechSynthesis.cancel() não cala na hora
+  // as vozes "Online"/naturais do Chrome (o áudio já veio da rede), e a
+  // gravação seguinte começava por cima. Agora toda fala tem uma GERAÇÃO:
+  // qualquer coisa de uma geração antiga que tente começar é descartada, e
+  // a gravação só começa depois de a síntese calar de verdade.
+  let geracao = 0;
+  const ESPERA_SILENCIO_MS = 400;
 
   function temGravacoes() { return typeof Falas !== 'undefined' && typeof Audio !== 'undefined'; }
 
@@ -176,8 +184,43 @@ const Narracao = (() => {
     if (fila) { const proxima = fila; fila = null; falar(proxima.texto, proxima.opcoes); }
   }
 
+  // Nenhuma outra gravação tocando (nem uma que escapou do audioAtual).
+  function calarTodasAsGravacoes(excetoEl) {
+    Object.keys(audios).forEach(function(k) {
+      const el = audios[k];
+      if (el !== excetoEl && !el.paused) { try { el.pause(); el.currentTime = 0; } catch (e) {} }
+    });
+  }
+
+  function sinteseFalando() {
+    return 'speechSynthesis' in window && (window.speechSynthesis.speaking || window.speechSynthesis.pending);
+  }
+
+  function calarSintese() {
+    if (!('speechSynthesis' in window)) return;
+    try { window.speechSynthesis.pause(); } catch (e) {}
+    try { window.speechSynthesis.cancel(); } catch (e) {}
+  }
+
+  // Espera a síntese calar (no máximo ESPERA_SILENCIO_MS) e só então
+  // começa — se ainda for a fala da vez.
+  function quandoEmSilencio(minhaGeracao, fn) {
+    const inicio = Date.now();
+    (function conferir() {
+      if (minhaGeracao !== geracao) return;
+      if (!sinteseFalando() || Date.now() - inicio >= ESPERA_SILENCIO_MS) {
+        if (sinteseFalando()) calarSintese();
+        try { window.speechSynthesis && window.speechSynthesis.resume(); } catch (e) {}
+        fn();
+        return;
+      }
+      setTimeout(conferir, 40);
+    })();
+  }
+
   function tocarGravada(id, texto, ajuste) {
     const el = audioDa(id);
+    calarTodasAsGravacoes(el);
     const duracao = isFinite(el.duration) && el.duration > 0 ? el.duration * 1000 : Falas.duracao(id);
     audioAtual = { id: id, el: el, fimEm: Date.now() + duracao };
     el.volume = ajuste.volume;
@@ -205,6 +248,9 @@ const Narracao = (() => {
     utterance.rate = ajuste.rate;
     utterance.pitch = ajuste.pitch;
     utterance.volume = ajuste.volume;
+    // O Chrome guarda o pause() de calarSintese() mesmo depois do cancel():
+    // sem o resume() a fala nova ficaria presa na fila, muda.
+    try { window.speechSynthesis.resume(); } catch (e) {}
     window.speechSynthesis.speak(utterance);
   }
 
@@ -219,11 +265,11 @@ const Narracao = (() => {
   }
 
   function cancelar() {
+    geracao++;
     fila = null;
     pararGravada();
-    if ('speechSynthesis' in window) {
-      try { window.speechSynthesis.cancel(); } catch (e) {}
-    }
+    calarTodasAsGravacoes(null);
+    calarSintese();
   }
 
   // opcoes.forcar: fala mesmo com a narração automática desligada — usado
@@ -243,11 +289,17 @@ const Narracao = (() => {
       fila = { texto: texto, opcoes: Object.assign({}, opcoes, { esperar: false }) };
       return;
     }
+    const aindaFalando = sinteseFalando();
     cancelar();
+    const minha = geracao;
     const ajuste = TONS[tom];
     const id = falaDoPedido(texto, opcoes);
-    if (id) { tocarGravada(id, texto, ajuste); return; }
-    falarSintetizado(texto, ajuste);
+    const comecar = function() {
+      if (minha !== geracao) return;
+      if (id) tocarGravada(id, texto, ajuste); else falarSintetizado(texto, ajuste);
+    };
+    // A síntese anterior ainda soando: espera ela calar antes de começar.
+    if (aindaFalando) quandoEmSilencio(minha, comecar); else comecar();
   }
 
   // Repete o último texto falado (ex.: botão "Ouvir novamente"), sem alterar

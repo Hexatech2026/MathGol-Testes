@@ -7,10 +7,11 @@ const carteira = (saldo, itens = []) => ({ versao: 1, dados: { saldo, totalGanho
 test('menu: cartao do jogador e atalhos abrem Conquistas e voltam', async ({ page }) => {
   const erros = await A.abrirJogo(page);
   await expect(page.locator('#cartao-jogador-nome')).toHaveText('Novo craque');
-  await expect(page.locator('#selo-conquistas')).toHaveText('0/18');
+  const total = await page.evaluate(() => Conquistas.total());
+  await expect(page.locator('#selo-conquistas')).toHaveText('0/' + total);
   await page.click('#botao-conquistas');
   await expect(page.locator('#tela-conquistas')).toHaveClass(/tela-ativa/);
-  await expect(page.locator('#lista-conquistas .conquista')).toHaveCount(18);
+  await expect(page.locator('#lista-conquistas .conquista')).toHaveCount(total);
   await page.click('#botao-voltar-conquistas');
   await expect(page.locator('#tela-menu')).toHaveClass(/tela-ativa/);
   expect(erros).toEqual([]);
@@ -40,7 +41,7 @@ test('perfil: borda bloqueada da Loja leva para a aba Bordas; comprar libera no 
   await expect(page.locator('[data-aba="borda"]')).toHaveAttribute('aria-pressed', 'true');
   await page.locator('[data-item="borda:ouro"] .botao-comprar').click();
   await page.click('#botao-confirmar-compra');
-  await expect(page.locator('#saldo-loja-valor')).toHaveText('40');
+  await expect(page.locator('#saldo-loja-valor')).toHaveText('20'); // Ouro custa 80 (v2.2)
   await page.click('#botao-sair-loja');
   await expect(page.locator('#tela-perfil')).toHaveClass(/tela-ativa/);
   const ouro = page.locator('#grade-bordas .item-borda', { hasText: 'Ouro' });

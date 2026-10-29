@@ -933,7 +933,280 @@ function criarIconeCruzeiro(alt) {
   return img;
 }
 
+// ======================================================================
+// v2.2 — Copa do Mundo 2026 (JS/copa.js)
+// ======================================================================
+// A tela "fases" virou a jornada da Copa: proximo jogo, campanha, tabela do
+// grupo e os 12 grupos. O treino livre (as 3 fases antigas) fica embaixo.
+
+// Bandeira pequena de um time da Copa (ou o escudo/bandeira do time da
+// crianca, quando ela joga com clube).
+function visualTimeCopa(t) {
+  if (t.voce) {
+    var meu = SELECOES.find(function(s) { return s.id === Copa.estado().selecaoId; });
+    var v = meu ? criarVisualTime(meu, 'copa-bandeira') : null;
+    if (v) return v;
+  }
+  if (t.bandeira && codigoBandeiraValido(t.bandeira)) return criarBandeira(t.bandeira, 'copa-bandeira');
+  return criarSpan('copa-bandeira copa-bandeira-vazia', '⚽');
+}
+
+function linhaTimeCopa(t) {
+  var s = document.createElement('span');
+  s.className = 'copa-time' + (t.voce ? ' copa-time-voce' : '');
+  s.appendChild(visualTimeCopa(t));
+  s.appendChild(criarSpan('copa-time-nome', t.voce ? t.nome + ' (você)' : t.nome));
+  return s;
+}
+
+function tabelaGrupoCopa(letra, linhas, destaque) {
+  var tab = document.createElement('table');
+  tab.className = 'copa-tabela' + (destaque ? ' copa-tabela-destaque' : '');
+  var cap = document.createElement('caption');
+  cap.textContent = 'Grupo ' + letra;
+  tab.appendChild(cap);
+  var cab = document.createElement('tr');
+  ['', 'Time', 'P', 'J', 'V', 'E', 'D', 'SG'].forEach(function(h, i) {
+    var th = document.createElement('th');
+    th.scope = 'col';
+    th.textContent = h;
+    if (i === 2) th.title = 'Pontos';
+    cab.appendChild(th);
+  });
+  tab.appendChild(cab);
+  linhas.forEach(function(l, i) {
+    var tr = document.createElement('tr');
+    if (l.time.voce) tr.className = 'copa-linha-voce';
+    else if (i < 2) tr.className = 'copa-linha-classifica';
+    var pos = document.createElement('td'); pos.textContent = (i + 1) + 'º'; tr.appendChild(pos);
+    var nome = document.createElement('td'); nome.appendChild(linhaTimeCopa(l.time)); tr.appendChild(nome);
+    [l.pts, l.j, l.v, l.e, l.d, l.gp - l.gc].forEach(function(v) {
+      var td = document.createElement('td'); td.textContent = String(v); tr.appendChild(td);
+    });
+    tab.appendChild(tr);
+  });
+  return tab;
+}
+
+function renderizarCopa() {
+  var painel = document.getElementById('copa-painel');
+  var botao = document.getElementById('botao-jogar-copa');
+  var nova = document.getElementById('botao-nova-copa');
+  if (!painel || typeof Copa === 'undefined') return;
+  painel.textContent = '';
+
+  // Sem Copa ainda (ou terminou): oferece comecar com o time escolhido.
+  var r = Copa.ativa() ? Copa.resumo() : null;
+  var time = SELECOES.find(function(s) { return s.id === estado.selecaoId; });
+  if (!r) {
+    var intro = document.createElement('div');
+    intro.className = 'copa-cartao copa-intro';
+    if (time) {
+      var vt = criarVisualTime(time, 'copa-bandeira copa-bandeira-grande');
+      if (vt) intro.appendChild(vt);
+    }
+    intro.appendChild(criarSpan('copa-titulo-cartao', 'Leve ' + (time ? time.nome : 'seu time') + ' até a taça!'));
+    intro.appendChild(criarSpan('copa-texto', 'Fase de grupos (3 jogos), depois mata-mata até a grande final. ' +
+      'Cada jogo é uma disputa de pênaltis: acerte a conta, mire e chute!'));
+    painel.appendChild(intro);
+    botao.textContent = 'Começar a Copa! 🏟️';
+    botao.disabled = false;
+    nova.hidden = true;
+    renderizarTodosOsGrupos(null);
+    return;
+  }
+
+  var outro = time && time.id !== r.selecaoId && r.status === 'andando';
+  if (r.proximo) {
+    var j = r.proximo;
+    var cartao = document.createElement('div');
+    cartao.className = 'copa-cartao copa-proximo' + (j.etapa.id === 'final' ? ' copa-proximo-final' : '');
+    cartao.appendChild(criarSpan('copa-etapa', j.etapa.nome));
+    var confronto = document.createElement('span');
+    confronto.className = 'copa-confronto';
+    confronto.appendChild(linhaTimeCopa(j.voce));
+    confronto.appendChild(criarSpan('copa-x', 'x'));
+    confronto.appendChild(linhaTimeCopa(j.adversario));
+    cartao.appendChild(confronto);
+    var fase = Progressao.obterFase(j.faseId);
+    cartao.appendChild(criarSpan('copa-texto', fase.cobrancas + ' cobranças · ' + fase.timerMax + ' s por conta' +
+      (j.mataMata ? ' · empate vai para a morte súbita' : '')));
+    painel.appendChild(cartao);
+    botao.textContent = j.etapa.id === 'final' ? 'Jogar a FINAL! 🏆' : 'Jogar! 🏟️';
+    botao.disabled = false;
+    if (outro) {
+      painel.appendChild(criarSpan('copa-aviso', 'Sua Copa está com ' + (SELECOES.find(function(s) { return s.id === r.selecaoId; }) || { nome: 'outro time' }).nome +
+        '. Para jogar com ' + time.nome + ', comece uma nova Copa.'));
+    }
+  } else {
+    var fim = document.createElement('div');
+    fim.className = 'copa-cartao ' + (r.status === 'campeao' ? 'copa-campea' : 'copa-eliminada');
+    fim.appendChild(criarSpan('copa-titulo-cartao', r.status === 'campeao' ? '🏆 CAMPEÃO DO MUNDO! 🏆' : 'Fim da Copa para você'));
+    fim.appendChild(criarSpan('copa-texto', r.status === 'campeao'
+      ? 'Você levantou a taça da Copa 2026! Que tal jogar outra Copa num nível mais difícil?'
+      : 'Valeu a campanha! Cada conta te deixa mais craque. Bora pra próxima Copa?'));
+    painel.appendChild(fim);
+    botao.textContent = 'Nova Copa! 🏟️';
+    botao.disabled = false;
+  }
+  nova.hidden = r.status !== 'andando' || !r.campanha.length;
+
+  // Campanha: cada jogo ja feito.
+  if (r.campanha.length) {
+    var ol = document.createElement('ol');
+    ol.className = 'copa-campanha';
+    ol.setAttribute('aria-label', 'Sua campanha');
+    r.campanha.forEach(function(c) {
+      var li = document.createElement('li');
+      li.className = 'copa-jogo copa-jogo-' + (c.gp > c.gc ? 'v' : (c.gp === c.gc ? 'e' : 'd'));
+      li.appendChild(criarSpan('copa-jogo-etapa', c.etapa.curto));
+      li.appendChild(criarSpan('copa-jogo-placar', c.gp + ' x ' + c.gc + (c.morteSubita ? ' (m.s.)' : '')));
+      li.appendChild(linhaTimeCopa(c.adversario));
+      ol.appendChild(li);
+    });
+    painel.appendChild(ol);
+  }
+  painel.appendChild(tabelaGrupoCopa(r.grupo, r.tabelas[r.grupo], true));
+  renderizarTodosOsGrupos(r);
+}
+
+function renderizarTodosOsGrupos(r) {
+  var caixa = document.getElementById('copa-grupos');
+  if (!caixa) return;
+  caixa.textContent = '';
+  if (r) {
+    Object.keys(r.tabelas).forEach(function(g) { caixa.appendChild(tabelaGrupoCopa(g, r.tabelas[g], g === r.grupo)); });
+    return;
+  }
+  // Antes de comecar: os grupos do sorteio, sem pontos.
+  Object.keys(CopaDados.GRUPOS).forEach(function(g) {
+    caixa.appendChild(tabelaGrupoCopa(g, CopaDados.GRUPOS[g].map(function(t) {
+      return { time: { nome: t[1], bandeira: t[0], voce: false }, pts: 0, j: 0, v: 0, e: 0, d: 0, gp: 0, gc: 0 };
+    }), false));
+  });
+}
+
+function jogarCopa() {
+  var r = Copa.ativa() ? Copa.resumo() : null;
+  if (!r || r.status !== 'andando') Copa.iniciar(estado.selecaoId || 'brasil');
+  var jogo = Copa.proximoJogo();
+  if (!jogo) { renderizarCopa(); return; }
+  estado.copaJogo = jogo;
+  // A camisa e a do time da Copa (pode ser outro que o escolhido agora).
+  estado.selecaoId = Copa.estado().selecaoId;
+  estado.faseAtual = jogo.faseId;
+  iniciarPartida();
+}
+
+// Titulo da barra da partida: etapa e placar ao vivo contra o adversario.
+function tituloCopa() {
+  var j = estado.copaJogo;
+  return '🌎 ' + j.etapa.curto + (j.morteSubita ? ' · MORTE SÚBITA' : '') + ' · ' +
+    estado.gols + ' x ' + j.golsAdv + ' ' + j.adversario.nome;
+}
+
+// ======================================================================
+// v2.2 — Duelo de pênaltis (2 jogadores no mesmo aparelho)
+// ======================================================================
+// Cada um bate DUELO_COBRANCAS, alternando (jogador 1, jogador 2, ...).
+// Empate: morte súbita em pares, até 3 pares. O jogador 2 escolhe o nome
+// numa lista (nada de texto livre). Os Cruzeiros e as conquistas são só do
+// dono do aparelho (jogador 1), pelas cobranças dele. O duelo não vai para
+// o histórico da nuvem nem para a sala (não é uma fase do jogo).
+var DUELO_COBRANCAS = 5;
+var DUELO_PARES_EXTRAS = 3;
+
+function vezDoDuelo() { return estado.duelo ? estado.cobrancaAtual % 2 : 0; }
+// Conquistas e contas certas contam so para o dono do aparelho.
+function vezDoDono() { return !estado.duelo || vezDoDuelo() === 0; }
+
+function tituloDuelo() {
+  var d = estado.duelo;
+  return '🤝 ' + d.nomes[0] + ' ' + d.gols[0] + ' x ' + d.gols[1] + ' ' + d.nomes[1] +
+    (d.extras ? ' · MORTE SÚBITA' : '') + ' · vez de ' + d.nomes[vezDoDuelo()];
+}
+
+function abrirDuelo(origem) {
+  var n1 = (typeof Conta !== 'undefined' && Conta.apelido()) || estado.apelido || 'Jogador 1';
+  document.getElementById('duelo-jogador1').textContent = n1;
+  var lista = document.getElementById('duelo-jogadores2');
+  var comecar = document.getElementById('botao-comecar-duelo');
+  lista.textContent = '';
+  comecar.disabled = true;
+  var escolhido = null;
+  PERSONAGENS.concat(['Convidado', 'Convidada']).forEach(function(nome) {
+    if (nome === n1 || nome === n1.split(' ')[0]) return; // dois "Capitão" confundem
+    var chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'chip-escolha';
+    chip.textContent = nome;
+    chip.setAttribute('aria-pressed', 'false');
+    chip.addEventListener('click', function() {
+      SFX.clique();
+      escolhido = nome;
+      marcarSelecionado(lista, '.chip-escolha', 'chip-ativo', chip);
+      comecar.disabled = false;
+    });
+    lista.appendChild(chip);
+  });
+  comecar.onclick = function() {
+    if (!escolhido) return;
+    SFX.selecionar();
+    Modal.fechar();
+    estado.copaJogo = null;
+    estado.duelo = { nomes: [n1, escolhido], gols: [0, 0], extras: 0 };
+    estado.faseAtual = 'penaltis'; // relogio de 15 s e contas no nivel escolhido
+    iniciarPartida();
+  };
+  Modal.abrir(document.getElementById('sobreposicao-duelo'), origem);
+}
+
+// Placar de cada jogador a partir das cobrancas (par = 1, impar = 2).
+function golsDoDuelo() {
+  var g = [0, 0];
+  estado.resultadosCobrancas.forEach(function(c, i) { if (c.resultado === 'gol') g[i % 2]++; });
+  return g;
+}
+
+function irParaResultadoDuelo() {
+  var d = estado.duelo;
+  encerrarJogoEmAndamento();
+  var g = golsDoDuelo();
+  // Cruzeiros: so as cobrancas do dono do aparelho.
+  var pontosDono = estado.resultadosCobrancas.reduce(function(s, c, i) { return s + (i % 2 === 0 ? (c.pontos || 0) : 0); }, 0);
+  var vencedor = g[0] > g[1] ? 0 : (g[1] > g[0] ? 1 : -1);
+  document.getElementById('titulo-resultado').textContent = vencedor < 0
+    ? '🤝 Empate no duelo!' : '🏆 ' + d.nomes[vencedor] + ' venceu o duelo!';
+  document.getElementById('placar-final').textContent = g[0] + ' x ' + g[1];
+  var pontuacaoFinal = document.getElementById('pontuacao-final');
+  pontuacaoFinal.textContent = pontosDono + ' ';
+  pontuacaoFinal.appendChild(criarIconeCruzeiro(''));
+  pontuacaoFinal.appendChild(document.createTextNode('Cruzeiros de ' + d.nomes[0]));
+  ultimoGanho = pontosDono;
+  ultimoGanhoConquistas = 0;
+  if (typeof Carteira !== 'undefined') {
+    var antes = Carteira.saldo();
+    Carteira.adicionar(pontosDono);
+    if (typeof Conquistas !== 'undefined') Conquistas.registrar('duelo-fim');
+    ultimoGanhoConquistas = Math.max(0, Carteira.saldo() - antes - pontosDono);
+  }
+  atualizarGanhoCarteira();
+  var mensagem = vencedor < 0
+    ? 'Empatou até na morte súbita! Revanche?'
+    : 'Parabéns, ' + d.nomes[vencedor] + '! E ' + d.nomes[1 - vencedor] + ' jogou demais também. Revanche?';
+  document.getElementById('resumo-resultado').textContent = mensagem;
+  renderizarListaCobrancas();
+  var el = document.getElementById('mensagem-desbloqueio');
+  if (el) { el.textContent = ''; el.classList.remove('visivel'); }
+  if (typeof TelasV2 !== 'undefined') TelasV2.mostrarEstrelas(g[0], DUELO_COBRANCAS);
+  SFX.faseCompleta();
+  estado.duelo = null;
+  mostrarTela('tela-resultado');
+  Narracao.falar(mensagem, { tom: 'resultado' });
+}
+
 function irParaFases() {
+  renderizarCopa();
   var grade = document.getElementById('grade-fases');
   grade.textContent = '';
 
@@ -988,7 +1261,36 @@ function irParaFases() {
 function initFases() {
   document.getElementById('botao-confirmar-fase').addEventListener('click', function() {
     SFX.selecionar();
+    estado.copaJogo = null; // treino livre: sem adversario, sem Copa
+    estado.duelo = null;
     iniciarPartida();
+  });
+  var jogar = document.getElementById('botao-jogar-copa');
+  if (jogar) jogar.addEventListener('click', function() { SFX.selecionar(); estado.duelo = null; jogarCopa(); });
+  var duelo = document.getElementById('botao-modo-duelo');
+  if (duelo) duelo.addEventListener('click', function() { SFX.clique(); abrirDuelo(duelo); });
+  document.getElementById('botao-cancelar-duelo').addEventListener('click', function() { SFX.clique(); Modal.fechar(); });
+  Modal.ligarFundo(document.getElementById('sobreposicao-duelo'));
+  var botao = document.getElementById('botao-modo-botao');
+  if (botao) botao.addEventListener('click', function() {
+    SFX.clique();
+    if (typeof FutebolBotao !== 'undefined') FutebolBotao.abrir('tela-fases');
+  });
+  var nova = document.getElementById('botao-nova-copa');
+  // Recomecar apaga a campanha: pede um segundo toque para confirmar.
+  var confirmarNova = null;
+  if (nova) nova.addEventListener('click', function() {
+    SFX.clique();
+    if (!confirmarNova) {
+      nova.textContent = '⚠️ Toque de novo para apagar esta Copa e começar outra';
+      confirmarNova = setTimeout(function() { confirmarNova = null; nova.textContent = '🔄 Começar uma nova Copa'; }, 4000);
+      return;
+    }
+    clearTimeout(confirmarNova); confirmarNova = null;
+    nova.textContent = '🔄 Começar uma nova Copa';
+    Copa.apagar();
+    if (typeof Conta !== 'undefined') Conta.marcarMudanca();
+    renderizarCopa();
   });
 }
 
@@ -998,12 +1300,20 @@ function initFases() {
 
 // Cria a cena: 3D quando possivel; senao, modo simplificado 2D com a
 // mesma regra. Se nem o 2D abrir, devolve null e a partida NAO comeca.
+// v2.2: nome e numero nas costas da camisa e a comemoracao escolhida.
+// No duelo (2 jogadores), estado.opcoesCena troca pelo jogador da vez.
+function opcoesDaCena() {
+  if (estado.opcoesCena) return estado.opcoesCena;
+  if (typeof Conta === 'undefined') return {};
+  return { nome: Conta.nomeCamisa(), numero: Conta.numeroCamisa(), comemoracao: Conta.comemoracaoAtual() };
+}
+
 function criarCenaDaPartida() {
   var container = document.getElementById('jogo-penalti');
   container.textContent = '';
   try {
     if (typeof THREE === 'undefined') throw new Error('Three.js nao carregou');
-    return criarJogoPenalti('jogo-penalti', estado.selecaoId);
+    return criarJogoPenalti('jogo-penalti', estado.selecaoId, opcoesDaCena());
   } catch (erro3d) {
     console.warn('Cena 3D indisponivel, usando o modo simplificado:', erro3d);
     container.textContent = '';
@@ -1033,8 +1343,23 @@ function iniciarPartida() {
 
   BancoQuestoes.resetarSessao();
 
+  // v2.2: jogo da Copa comeca do zero contra o mesmo adversario (sair no
+  // meio e voltar repete o jogo, sem placar velho).
+  if (estado.copaJogo) {
+    estado.copaJogo.golsAdv = 0;
+    estado.copaJogo.chutesAdv = [];
+    estado.copaJogo.morteSubita = false;
+  }
+  if (estado.duelo) {
+    TOTAL_COBRANCAS = DUELO_COBRANCAS * 2;
+    estado.duelo.gols = [0, 0];
+    estado.duelo.extras = 0;
+  }
   var tituloFase = document.getElementById('titulo-fase');
-  if (tituloFase) tituloFase.textContent = fase.icone + ' ' + fase.nome;
+  if (tituloFase) {
+    tituloFase.textContent = estado.duelo ? tituloDuelo()
+      : (estado.copaJogo ? tituloCopa() : fase.icone + ' ' + fase.nome);
+  }
 
   mostrarTela('tela-fase1');
   atualizarBolinhasProgresso();
@@ -1217,12 +1542,15 @@ function responderAlternativa(botaoClicado) {
   if (acertou) {
     estado.etapa = ETAPA.TRANSICAO;
     SFX.selecionar();
-    if (typeof Conquistas !== 'undefined') Conquistas.registrar('conta-certa', { tempoMs: tempoUsadoMs });
+    if (typeof Conquistas !== 'undefined' && vezDoDono()) Conquistas.registrar('conta-certa', { tempoMs: tempoUsadoMs });
+    // v2.2: a cada 10 contas certas seguidas a torcida levanta as placas da AURA.
+    estado.sequenciaAcertos = (estado.sequenciaAcertos || 0) + 1;
     document.getElementById('mensagem-feedback').textContent = '✓ Resposta correta!';
     // ETAPA 1: grito curto da torcida + batedor em pose confiante,
     // enquanto a faixa confirma a conta. A pausa antes da mira subiu de
     // 300 para 900 ms: com 300 a crianca nem via que tinha acertado.
     reagirNaCena('acerto');
+    if (estado.sequenciaAcertos % 10 === 0) reagirNaCena('aura');
     // v2.1: o locutor tambem comemora a conta certa (a mesma frase da faixa).
     var fraseAcerto = sortear(FRASES_ACERTO_CONTA);
     Narracao.falar(fraseAcerto, { tom: 'premio' });
@@ -1232,6 +1560,8 @@ function responderAlternativa(botaoClicado) {
   }
 
   estado.etapa = ETAPA.CHUTE;
+  estado.sequenciaAcertos = 0;
+  if (typeof Conquistas !== 'undefined' && vezDoDono()) Conquistas.registrar('conta-errada');
   document.getElementById('mensagem-feedback').textContent = '✗ Resposta errada!';
   chutarParaDefesa(zonaId, { respostaCorreta: false, zonaEscolhida: zonaId, estourouTempo: false, tempoUsadoMs: tempoUsadoMs });
 }
@@ -1242,6 +1572,8 @@ function tempoEsgotado() {
   estado.etapa = ETAPA.CHUTE;
 
   SFX.tempoEsgotado();
+  estado.sequenciaAcertos = 0;
+  if (typeof Conquistas !== 'undefined' && vezDoDono()) Conquistas.registrar('conta-errada');
   document.querySelectorAll('.botao-resposta').forEach(function(b) { b.disabled = true; });
   document.getElementById('mensagem-feedback').textContent = 'Tempo esgotado!';
   chutarParaDefesa('meio', { respostaCorreta: false, zonaEscolhida: null, estourouTempo: true, tempoUsadoMs: TIMER_MAX * 1000 });
@@ -1519,7 +1851,13 @@ function finalizarCobranca(detalhes) {
     reagirNaCena('gol');
     if (typeof Festa !== 'undefined') Festa.iniciar('gol');
     mostrarFaixa('gol', fraseGol, duracaoFaixa(2600));
-    if (typeof Conquistas !== 'undefined') Conquistas.registrar('gol', { tipo: detalhes.tipoChute || null });
+    if (typeof Conquistas !== 'undefined' && vezDoDono()) Conquistas.registrar('gol', { tipo: detalhes.tipoChute || null, pontos: pontosGanhos });
+    // v2.2: easter egg do 6-7 — a cobranca valeu exatamente 67 Cruzeiros
+    // (a crianca respondeu em 5 s no relogio de 15 s, ou 4 s no de 12 s).
+    if (pontosGanhos === 67) {
+      reagirNaCena('seis-sete');
+      Narracao.falar('Seis... sete! Sessenta e sete Cruzeiros!', { tom: 'gol', esperar: true });
+    }
   } else if (resultado === 'fora') {
     // Reaproveita o som existente de "sem gol" — nao criar SFX novo.
     SFX.defesa();
@@ -1573,19 +1911,72 @@ function finalizarCobranca(detalhes) {
     tipoChute: detalhes.tipoChute || null,
     estourouTempo: !!detalhes.estourouTempo,
     pontos: pontosGanhos,
-    tempoUsado: tempoUsadoSegundos
+    tempoUsado: tempoUsadoSegundos,
+    // v2.2: para o relatorio do professor (conta certa mesmo sem gol).
+    respostaCorreta: !!detalhes.respostaCorreta,
+    tempoUsadoMs: Math.max(0, Math.min(TIMER_MAX * 1000, Math.round(detalhes.tempoUsadoMs || 0)))
   });
 
   estado.cobrancaAtual++;
   atualizarBolinhasProgresso();
   atualizarDisplayPontuacao();
 
+  // v2.2 (Copa): o adversario bate a cobranca dele logo depois.
+  if (estado.copaJogo) {
+    var golAdv = Copa.chuteAdversario(estado.copaJogo);
+    var nomeAdv = estado.copaJogo.adversario.nome;
+    feedback.appendChild(document.createTextNode(' · ' + nomeAdv + (golAdv ? ': gol ⚽' : ': errou ❌')));
+    document.getElementById('titulo-fase').textContent = tituloCopa();
+  }
+
+  // v2.2 (duelo): placar de cada jogador.
+  if (estado.duelo) {
+    estado.duelo.gols = golsDoDuelo();
+    document.getElementById('titulo-fase').textContent = tituloDuelo();
+  }
+
   // v2.1: a proxima conta espera o locutor terminar (no maximo 5 s a mais),
   // senao a leitura da pergunta cortaria a frase no meio.
   depoisDoLocutor(function() {
-    if (estado.cobrancaAtual >= TOTAL_COBRANCAS) irParaResultado();
-    else carregarProximaPergunta();
+    if (estado.duelo) { seguirDuelo(); return; }
+    if (estado.cobrancaAtual < TOTAL_COBRANCAS) { carregarProximaPergunta(); return; }
+    // v2.2: mata-mata empatado = MORTE SUBITA, uma cobranca de cada lado.
+    if (estado.copaJogo && Copa.precisaMorteSubita(estado.copaJogo, estado.gols)) {
+      estado.copaJogo.morteSubita = true;
+      TOTAL_COBRANCAS++;
+      atualizarBolinhasProgresso();
+      document.getElementById('titulo-fase').textContent = tituloCopa();
+      Narracao.falar('Empate! Morte súbita: quem errar primeiro perde!', { tom: 'resultado' });
+      mostrarFaixa('quase', '⚡ Empate! MORTE SÚBITA: uma cobrança de cada lado!', duracaoFaixa(2200));
+      agendarNaSessao(carregarProximaPergunta, 1800);
+      return;
+    }
+    irParaResultado();
   }, PAUSA_ENTRE_COBRANCAS);
+}
+
+// v2.2 (duelo): passa a vez com aviso grande; no fim, morte subita em pares.
+function seguirDuelo() {
+  var d = estado.duelo;
+  var morte = false;
+  if (estado.cobrancaAtual >= TOTAL_COBRANCAS) {
+    var g = golsDoDuelo();
+    if (g[0] !== g[1] || d.extras >= DUELO_PARES_EXTRAS) { irParaResultadoDuelo(); return; }
+    d.extras++;
+    TOTAL_COBRANCAS += 2;
+    atualizarBolinhasProgresso();
+    morte = true;
+    Narracao.falar('Empate! Morte súbita!', { tom: 'resultado' });
+  }
+  var vez = vezDoDuelo();
+  document.getElementById('titulo-fase').textContent = tituloDuelo();
+  // O jogador 2 comemora com a dancinha (a comemoracao escolhida e do dono).
+  if (estado.jogoPenalti && estado.jogoPenalti.definirComemoracao) {
+    estado.jogoPenalti.definirComemoracao(vez === 0 && typeof Conta !== 'undefined' ? Conta.comemoracaoAtual() : 'dancinha');
+  }
+  mostrarFaixa(morte ? 'quase' : 'acerto', (morte ? '⚡ Empate! Morte súbita! ' : '') + '🔄 Vez de ' + d.nomes[vez] + '!', morte ? 2000 : 1300);
+  Narracao.falar('Vez de ' + d.nomes[vez] + '!', { tom: 'instrucao', esperar: true });
+  agendarNaSessao(carregarProximaPergunta, morte ? 2000 : 1300);
 }
 
 var FOLGA_LOCUTOR_MS = 250;
@@ -1684,8 +2075,35 @@ function dificuldadeDoNivel(nivel) {
   return 'dificil';
 }
 
+// v2.2: numeros da partida para os totais da sala (relatorio do professor).
+function estatisticasDaPartida() {
+  var c = estado.resultadosCobrancas;
+  var certas = c.filter(function(x) { return x.respostaCorreta || x.resultado === 'gol'; }).length;
+  return {
+    cobrancas: c.length,
+    contasCertas: certas,
+    contasErradas: c.length - certas,
+    gols: estado.gols,
+    pontos: estado.pontuacao,
+    tempoRespostaMs: c.reduce(function(s, x) {
+      return s + (typeof x.tempoUsadoMs === 'number' ? x.tempoUsadoMs : (x.tempoUsado || 0) * 1000);
+    }, 0)
+  };
+}
+
+// v2.2: as cobrancas da MORTE SUBITA (Copa) ficam fora do resumo salvo — o
+// esquema 2 (regras do Firestore, backup) exige 3, 5 ou 7 cobrancas por fase.
+// Elas contam no placar da Copa e nos Cruzeiros, nao no historico.
+function cobrancasRegulares() {
+  var n = Progressao.obterFase(estado.faseAtual).cobrancas;
+  return estado.resultadosCobrancas.slice(0, n);
+}
+
 function montarResumoPartida() {
-  var tempoTotal = estado.resultadosCobrancas.reduce(function(s, c) { return s + (c.tempoUsado || 0); }, 0);
+  var regulares = cobrancasRegulares();
+  var golsReg = regulares.filter(function(c) { return c.resultado === 'gol'; }).length;
+  var pontosReg = regulares.reduce(function(s, c) { return s + (c.pontos || 0); }, 0);
+  var tempoTotal = regulares.reduce(function(s, c) { return s + (c.tempoUsado || 0); }, 0);
   // Nivel efetivo da fase (nivel de partida + um degrau por fase), que e o
   // que a crianca realmente jogou — nao o que ela escolheu no menu.
   var nivelJogado = obterNivel(
@@ -1701,11 +2119,11 @@ function montarResumoPartida() {
     nivelId: nivelJogado,
     dificuldadeId: dificuldadeDoNivel(nivelJogado),
     selecaoId: estado.selecaoId,
-    gols: estado.gols,
-    totalCobrancas: TOTAL_COBRANCAS,
-    pontuacao: estado.pontuacao,
+    gols: estado.resultadosCobrancas.length > regulares.length ? golsReg : estado.gols,
+    totalCobrancas: Math.min(TOTAL_COBRANCAS, Progressao.obterFase(estado.faseAtual).cobrancas),
+    pontuacao: estado.resultadosCobrancas.length > regulares.length ? pontosReg : estado.pontuacao,
     tempoTotalSegundos: tempoTotal,
-    resumoCobrancas: estado.resultadosCobrancas.map(codigoCobranca).join(''),
+    resumoCobrancas: regulares.map(codigoCobranca).join(''),
     data: new Date().toISOString()
   };
 }
@@ -1715,18 +2133,31 @@ function irParaResultado() {
   var resumo = montarResumoPartida();
   encerrarJogoEmAndamento(); // invalida a sessao: nada mais da partida roda
 
-  var resultadoProgressao = Progressao.registrarResultado(fase.id, estado.gols, estado.pontuacao);
+  // Recordes da fase so com as cobrancas normais (sem a morte subita).
+  var resultadoProgressao = Progressao.registrarResultado(fase.id, resumo.gols, resumo.pontuacao);
 
-  document.getElementById('titulo-resultado').textContent = fase.tituloResultado;
-  document.getElementById('placar-final').textContent = estado.gols + ' / ' + fase.cobrancas;
+  // v2.2: jogo da Copa — placar contra o adversario e a Copa anda.
+  var jogoCopa = estado.copaJogo;
+  var copaR = null;
+  if (jogoCopa) {
+    copaR = Copa.registrarJogo(jogoCopa, estado.gols);
+    estado.copaJogo = null;
+  }
+
+  document.getElementById('titulo-resultado').textContent = copaR ? tituloResultadoCopa(copaR) : fase.tituloResultado;
+  document.getElementById('placar-final').textContent = copaR
+    ? copaR.gp + ' x ' + copaR.gc
+    : estado.gols + ' / ' + fase.cobrancas;
   var pontuacaoFinal = document.getElementById('pontuacao-final');
   pontuacaoFinal.textContent = estado.pontuacao + ' ';
   pontuacaoFinal.appendChild(criarIconeCruzeiro(''));
   pontuacaoFinal.appendChild(document.createTextNode(estado.pontuacao === 1 ? 'Cruzeiro' : 'Cruzeiros'));
 
-  // Os Cruzeiros da partida vao para a carteira (gastos na Loja).
-  ultimoGanho = estado.pontuacao;
-  if (typeof Carteira !== 'undefined') Carteira.adicionar(estado.pontuacao);
+  // Os Cruzeiros da partida vao para a carteira (gastos na Loja). O bonus
+  // da Copa (vitoria, classificacao, taca) entra junto.
+  var bonusCopa = copaR ? copaR.bonus : 0;
+  ultimoGanho = estado.pontuacao + bonusCopa;
+  if (typeof Carteira !== 'undefined') Carteira.adicionar(estado.pontuacao + bonusCopa);
 
   // v2.0: conquistas da partida. Os premios em Cruzeiros entram ANTES de
   // mostrar o saldo, e aparecem separados na frase ("+50 de conquistas").
@@ -1735,13 +2166,21 @@ function irParaResultado() {
     // Conta tambem as medalhas que sairam DURANTE a partida (gol, conta
     // rapida): elas ja estao no saldo e precisam aparecer na frase.
     var saldoAntes = typeof saldoNoInicioDaPartida === 'number'
-      ? saldoNoInicioDaPartida + estado.pontuacao
+      ? saldoNoInicioDaPartida + estado.pontuacao + bonusCopa
       : Carteira.saldo();
     if (resultadoProgressao.desbloqueou && resultadoProgressao.proximaFase) {
       Conquistas.registrar('fase-desbloqueada', { faseId: resultadoProgressao.proximaFase });
     }
+    if (copaR) {
+      Conquistas.registrar('copa-jogo', { venceu: copaR.resultado === 'vitoria', morteSubita: copaR.morteSubita });
+      if (copaR.proxima && (copaR.classificou || copaR.etapa.mataMata)) {
+        Conquistas.registrar('copa-avancou', { etapa: copaR.proxima.id });
+      }
+      if (copaR.campeao) Conquistas.registrar('copa-campeao');
+    }
     Conquistas.registrar('partida-fim', {
-      faseId: fase.id, gols: estado.gols, total: fase.cobrancas, resumo: resumo.resumoCobrancas
+      faseId: fase.id, gols: resumo.gols, total: fase.cobrancas, resumo: resumo.resumoCobrancas,
+      pontuacao: estado.pontuacao
     });
     ultimoGanhoConquistas = Math.max(0, Carteira.saldo() - saldoAntes);
     saldoNoInicioDaPartida = null;
@@ -1755,18 +2194,25 @@ function irParaResultado() {
       gols: estado.gols,
       pontuacao: estado.pontuacao,
       fase: fase.id,
-      nivelId: resumo.nivelId
+      nivelId: resumo.nivelId,
+      partida: estatisticasDaPartida()
     });
   }
   atualizarGanhoCarteira();
 
-  var mensagem = sortearMensagemResultado(estado.gols, fase.cobrancas);
+  var mensagem = copaR ? mensagemResultadoCopa(copaR) : sortearMensagemResultado(estado.gols, fase.cobrancas);
   document.getElementById('resumo-resultado').textContent = mensagem;
 
   renderizarListaCobrancas();
 
   var elDesbloqueio = document.getElementById('mensagem-desbloqueio');
-  if (elDesbloqueio) {
+  if (elDesbloqueio && copaR) {
+    // Na Copa, o recado e o que acontece com a campanha.
+    elDesbloqueio.textContent = avisoCampanhaCopa(copaR);
+    elDesbloqueio.classList.toggle('visivel', !!elDesbloqueio.textContent);
+    if (copaR.campeao && typeof Festa !== 'undefined') Festa.iniciar('gol');
+    if (copaR.resultado === 'vitoria') SFX.faseLiberada(); else SFX.faseCompleta();
+  } else if (elDesbloqueio) {
     if (resultadoProgressao.desbloqueou && resultadoProgressao.proximaFase) {
       var faseNova = Progressao.obterFase(resultadoProgressao.proximaFase);
       elDesbloqueio.textContent = '🔓 Fase "' + faseNova.nome + '" desbloqueada!';
@@ -1800,6 +2246,32 @@ function irParaResultado() {
   // na ordem antiga a mensagem do resultado era cortada antes de comecar.
   mostrarTela('tela-resultado');
   Narracao.falar(mensagem, { tom: 'resultado' });
+}
+
+// ---------- v2.2: textos do resultado de um jogo da Copa ----------
+function tituloResultadoCopa(r) {
+  if (r.campeao) return '🏆 CAMPEÃO DO MUNDO! 🏆';
+  var adv = r.adversario.nome;
+  if (r.resultado === 'vitoria') return 'Vitória sobre ' + adv + '!' + (r.morteSubita ? ' (morte súbita)' : '');
+  if (r.resultado === 'empate') return 'Empate com ' + adv + '!';
+  return adv + ' venceu dessa vez';
+}
+
+function mensagemResultadoCopa(r) {
+  if (r.campeao) return 'Você é campeão da Copa do Mundo 2026! A matemática levou a taça!';
+  if (r.eliminado && r.etapa.mataMata) return 'Fim da Copa nas ' + r.etapa.nome.toLowerCase() + '. Que campanha! Bora tentar outra Copa?';
+  if (r.eliminado) return 'Não deu para passar do grupo desta vez. Na próxima Copa você chega mais longe!';
+  if (r.resultado === 'vitoria') return 'Vitória! ' + (r.proxima ? 'Próximo jogo: ' + r.proxima.nome + '.' : '');
+  if (r.resultado === 'empate') return 'Um ponto na tabela! ' + (r.proxima ? 'Próximo jogo: ' + r.proxima.nome + '.' : '');
+  return 'Ainda dá! ' + (r.proxima ? 'Próximo jogo: ' + r.proxima.nome + '.' : '');
+}
+
+function avisoCampanhaCopa(r) {
+  if (r.campeao) return '🏆 Você ganhou a borda Taça do Mundo e o título "Campeão do Mundo"!';
+  if (r.classificou) return '✅ Classificado em ' + r.posicao + 'º lugar no grupo! Agora é mata-mata.';
+  if (r.eliminado && !r.etapa.mataMata) return 'Você terminou em ' + r.posicao + 'º lugar no grupo.';
+  if (r.proxima && r.etapa.mataMata) return '➡️ Classificado para: ' + r.proxima.nome + '!';
+  return '';
 }
 
 // O historico na nuvem (regras do Firestore + backup-validacao.js) usa o
@@ -2384,12 +2856,27 @@ function tiposMarcados() {
   return marcados;
 }
 
+// v2.2: sala aberta no painel e a ultima lista recebida (para exportar e
+// para redesenhar sem perder o que o professor esta digitando).
+var painelSala = { sala: null, alunos: [], pendente: false };
+
+function digitandoNomeDeAluno() {
+  var ativo = document.activeElement;
+  return !!(ativo && ativo.classList && ativo.classList.contains('campo-nome-aluno'));
+}
+
 function renderizarAlunos(lista) {
   var ul = document.getElementById('lista-alunos');
   var contagem = document.getElementById('prof-contagem');
   if (!ul) return;
+  painelSala.alunos = lista.slice();
+  // A lista chega ao vivo: redesenhar no meio da digitacao apagaria o nome.
+  if (digitandoNomeDeAluno()) { painelSala.pendente = true; return; }
+  painelSala.pendente = false;
+  lista = lista.slice();
   contagem.textContent = '(' + lista.length + ')';
   ul.textContent = '';
+  var codigoSala = painelSala.sala ? painelSala.sala.codigo : '';
 
   if (!lista.length) {
     var vazio = document.createElement('li');
@@ -2419,16 +2906,50 @@ function renderizarAlunos(lista) {
     // crianca esta, nao so quantos gols fez.
     var info = document.createElement('span');
     info.className = 'aluno-info';
-    info.appendChild(criarSpan('aluno-nome', al.apelido || 'Craque'));
+    var nomeReal = al.verificado && codigoSala ? NomesDaTurma.nome(codigoSala, al.uid) : '';
+    var linhaNome = criarSpan('aluno-nome', nomeReal || al.apelido || 'Craque');
+    if (al.verificado) {
+      var selo = criarSpan('selo-verificado', '✔');
+      selo.title = 'Verificado: tem o código do craque';
+      selo.setAttribute('aria-label', 'verificado');
+      linhaNome.appendChild(selo);
+    }
+    info.appendChild(linhaNome);
 
     var faseObj = al.fase ? Progressao.obterFase(al.fase) : null;
     var partes = [];
+    if (nomeReal) partes.push(al.apelido || 'Craque');
     if (faseObj) partes.push(faseObj.icone + ' ' + faseObj.nome);
     if (al.nivelId) {
       var nv = obterNivel(al.nivelId);
       partes.push('Nível ' + nv.id + ' · ' + nv.nome);
     }
+    var t = al.totais || {};
+    var totalContas = (t.contasCertas || 0) + (t.contasErradas || 0);
+    if (totalContas) partes.push(Math.round(100 * (t.contasCertas || 0) / totalContas) + '% de acerto em ' + (t.partidas || 0) + ' partida(s)');
     info.appendChild(criarSpan('aluno-contexto', partes.length ? partes.join(' · ') : 'ainda não jogou'));
+
+    // Nome de verdade: so para verificados, so neste navegador.
+    if (al.verificado && codigoSala) {
+      var campo = document.createElement('input');
+      campo.type = 'text';
+      campo.className = 'campo-nome-aluno';
+      campo.maxLength = 60;
+      campo.autocomplete = 'off';
+      campo.placeholder = 'Nome do aluno (só você vê)';
+      campo.value = nomeReal;
+      campo.setAttribute('aria-label', 'Nome de verdade de ' + (al.apelido || 'Craque') + ', guardado só neste aparelho');
+      var salvarNome = function() {
+        NomesDaTurma.definir(codigoSala, al.uid, campo.value);
+        setTimeout(function() { if (!digitandoNomeDeAluno()) renderizarAlunos(painelSala.alunos); }, 0);
+      };
+      campo.addEventListener('change', salvarNome);
+      campo.addEventListener('blur', function() { if (painelSala.pendente) setTimeout(function() { renderizarAlunos(painelSala.alunos); }, 0); });
+      campo.addEventListener('keydown', function(ev) { if (ev.key === 'Enter') { ev.preventDefault(); campo.blur(); } });
+      info.appendChild(campo);
+    } else if (!al.verificado) {
+      info.appendChild(criarSpan('aluno-dica', 'Sem código do craque: para anotar o nome, peça para criar o código.'));
+    }
     li.appendChild(info);
 
     li.appendChild(criarSpan('aluno-placar', (al.gols || 0) + ' ⚽'));
@@ -2437,7 +2958,46 @@ function renderizarAlunos(lista) {
   });
 }
 
+// v2.2: salas que este professor criou neste aparelho (reabrir sem anotar
+// o codigo). Montada com createElement/textContent.
+function renderizarMinhasSalas(aoAbrir) {
+  var caixa = document.getElementById('prof-minhas-salas');
+  var ul = document.getElementById('lista-minhas-salas');
+  if (!caixa || !ul) return;
+  var salas = SalasDoProfessor.listar();
+  caixa.hidden = !salas.length;
+  ul.textContent = '';
+  salas.forEach(function(s) {
+    var li = document.createElement('li');
+    li.className = 'item-minha-sala';
+    var abrir = document.createElement('button');
+    abrir.type = 'button';
+    abrir.className = 'botao-minha-sala';
+    abrir.appendChild(criarSpan('minha-sala-nome', s.nome));
+    abrir.appendChild(criarSpan('minha-sala-codigo', s.codigo));
+    abrir.setAttribute('aria-label', 'Abrir a sala ' + s.nome + ', código ' + s.codigo);
+    abrir.addEventListener('click', function() { SFX.clique(); aoAbrir(s); });
+    var esquecer = document.createElement('button');
+    esquecer.type = 'button';
+    esquecer.className = 'botao-icone botao-esquecer-sala';
+    esquecer.textContent = '✕';
+    esquecer.setAttribute('aria-label', 'Tirar a sala ' + s.nome + ' desta lista e apagar os nomes anotados dela');
+    esquecer.addEventListener('click', function() {
+      SFX.clique();
+      SalasDoProfessor.esquecer(s.codigo);
+      renderizarMinhasSalas(aoAbrir);
+    });
+    li.appendChild(abrir);
+    li.appendChild(esquecer);
+    ul.appendChild(li);
+  });
+}
+
 function mostrarPainelDaSala(sala) {
+  painelSala.sala = sala;
+  painelSala.alunos = [];
+  SalasDoProfessor.lembrar(sala);
+  document.getElementById('aviso-exportar').textContent = '';
   document.getElementById('prof-sem-sala').hidden = true;
   document.getElementById('prof-com-sala').hidden = false;
   document.getElementById('codigo-sala').textContent = sala.codigo;
@@ -2489,13 +3049,55 @@ function initProfessor() {
     });
   }
 
-  abrir.addEventListener('click', function() {
-    SFX.clique();
+  function reabrirSala(s) {
+    if (!window.FirebaseMathGol) { avisar(motivoNuvemFora(), 'erro'); return; }
+    avisar('Abrindo a sala ' + s.codigo + '...');
+    window.FirebaseMathGol.buscarSala(s.codigo).then(function(sala) {
+      if (!sala) { avisar('A sala ' + s.codigo + ' não existe mais no servidor.', 'erro'); return; }
+      avisar('');
+      mostrarPainelDaSala({ codigo: sala.codigo, nome: sala.nome || s.nome, nivel: sala.nivel || 1, tipos: sala.tipos || [] });
+    });
+  }
+
+  function abrirTelaProfessor() {
     avisar('');
     preencherSelectNiveis(document.getElementById('select-nivel-sala'), 1);
     document.getElementById('prof-sem-sala').hidden = false;
     document.getElementById('prof-com-sala').hidden = true;
+    renderizarMinhasSalas(reabrirSala);
+  }
+
+  abrir.addEventListener('click', function() {
+    SFX.clique();
+    abrirTelaProfessor();
     mostrarTela('tela-professor');
+  });
+  // #professor (endereco direto) tambem mostra a lista de salas.
+  renderizarMinhasSalas(reabrirSala);
+
+  var avisoExportar = document.getElementById('aviso-exportar');
+  function exportar(tipo) {
+    if (!painelSala.sala) return;
+    SFX.clique();
+    if (!painelSala.alunos.length) { avisoExportar.textContent = 'Ainda não há alunos nesta sala.'; return; }
+    avisoExportar.textContent = 'Preparando o arquivo...';
+    var fn = tipo === 'pdf' ? RelatorioTurma.exportarPdf : RelatorioTurma.exportarExcel;
+    fn(painelSala.sala, painelSala.alunos).then(function(r) {
+      avisoExportar.textContent = r === 'csv' ? '✅ Sem internet para o Excel: baixei em CSV (o Excel abre igual).'
+        : (r === 'impressao' ? '✅ Abri a tabela para imprimir: escolha "Salvar como PDF".' : '✅ Arquivo baixado!');
+    });
+  }
+  var bExcel = document.getElementById('botao-exportar-excel');
+  var bPdf = document.getElementById('botao-exportar-pdf');
+  if (bExcel) bExcel.addEventListener('click', function() { exportar('excel'); });
+  if (bPdf) bPdf.addEventListener('click', function() { exportar('pdf'); });
+  var bApagar = document.getElementById('botao-apagar-nomes');
+  if (bApagar) bApagar.addEventListener('click', function() {
+    if (!painelSala.sala) return;
+    SFX.clique();
+    NomesDaTurma.apagarSala(painelSala.sala.codigo);
+    renderizarAlunos(painelSala.alunos);
+    avisoExportar.textContent = 'Nomes desta sala apagados deste aparelho.';
   });
 
   criar.addEventListener('click', function() {
@@ -2517,6 +3119,7 @@ function initProfessor() {
   if (fechar) fechar.addEventListener('click', function() {
     SFX.clique();
     Sala.pararDeObservar(); // listener do Firestore nao pode ficar aberto
+    painelSala.sala = null;
     mostrarTela('tela-menu');
   });
 }

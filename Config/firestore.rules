@@ -89,21 +89,36 @@ service cloud.firestore {
 
     function conquistasValidas(c) {
       return c is map && c.keys().hasOnly(['feitas', 'contadores'])
-        && c.feitas is map && c.feitas.size() <= 50
-        && c.contadores is map && c.contadores.size() <= 6;
+        && c.feitas is map && c.feitas.size() <= 60
+        && c.contadores is map && c.contadores.size() <= 12;
     }
 
+    // v2.2: + titulo, comemoracao e numero da camisa (1 a 99, como texto).
     function perfilLocalValido(p) {
-      return p is map && p.keys().hasOnly(['personagem', 'animal', 'avatarSeed', 'borda'])
+      return p is map && p.keys().hasOnly(['personagem', 'animal', 'avatarSeed', 'borda', 'titulo', 'comemoracao', 'numero'])
         && (!('personagem' in p) || textoAte(p.personagem, 40))
         && (!('animal' in p) || textoAte(p.animal, 40))
         && (!('avatarSeed' in p) || textoAte(p.avatarSeed, 40))
-        && (!('borda' in p) || textoAte(p.borda, 40));
+        && (!('borda' in p) || textoAte(p.borda, 40))
+        && (!('titulo' in p) || idValido(p.titulo))
+        && (!('comemoracao' in p) || idValido(p.comemoracao))
+        && (!('numero' in p) || (p.numero is string && p.numero.matches('^[1-9][0-9]?$')));
+    }
+
+    // v2.2 — Copa do Mundo 2026 (JS/copa.js): ate 8 jogos.
+    function copaValida(c) {
+      return c is map && c.keys().hasOnly(['selecaoId', 'grupo', 'semente', 'jogos', 'status'])
+        && idValido(c.selecaoId)
+        && c.grupo is string && c.grupo.matches('^[A-L]$')
+        && c.semente is int && c.semente >= 0
+        && c.status in ['andando', 'eliminado', 'campeao']
+        && c.jogos is list && c.jogos.size() <= 8;
     }
 
     function estadoValido(e) {
       return e is map
-        && e.keys().hasOnly(['versao', 'atualizadoEm', 'carteira', 'progressao', 'conquistas', 'perfil'])
+        && e.keys().hasOnly(['versao', 'atualizadoEm', 'carteira', 'progressao', 'conquistas', 'perfil', 'copa'])
+        && (!('copa' in e) || copaValida(e.copa))
         && e.versao == 1
         && e.atualizadoEm is int
         && (!('carteira' in e) || carteiraValida(e.carteira))
@@ -203,8 +218,18 @@ service cloud.firestore {
       allow create, update: if true;
       allow delete: if false;
 
+      // v2.2: cada crianca so escreve (e apaga) o PROPRIO lugar na sala —
+      // antes qualquer um com o codigo podia mudar a nota de outro aluno,
+      // e agora isso vira nota no PDF/Excel do professor. A leitura continua
+      // aberta a quem tem o codigo (o painel do professor). Nome de verdade
+      // NUNCA vem para ca: o professor guarda so no navegador dele.
       match /alunos/{uid} {
-        allow read, write: if true;
+        allow read: if true;
+        allow delete: if ehDono(uid);
+        allow create, update: if ehDono(uid)
+          && request.resource.data.keys().hasOnly(
+               ['apelido', 'avatarSeed', 'gols', 'pontuacao', 'fase', 'nivelId', 'verificado',
+                'totais', 'atualizadoEm', 'ultimaPartidaEm']);
       }
     }
 

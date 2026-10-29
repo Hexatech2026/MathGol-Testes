@@ -18,7 +18,8 @@ var Loja = (function() {
     clube: 'o time',
     avatar: 'o avatar',
     nome: 'o nome',
-    borda: 'a borda'
+    borda: 'a borda',
+    comemoracao: 'a comemoração'
   };
 
   function el(id) { return document.getElementById(id); }
@@ -82,6 +83,12 @@ var Loja = (function() {
     }
     var etiqueta = document.createElement('span');
     etiqueta.className = 'loja-etiqueta-nome';
+    if (item.tipo === 'comemoracao') {
+      etiqueta.className += ' loja-etiqueta-comemoracao' + (grande ? ' loja-avatar-grande' : '');
+      etiqueta.textContent = item.comemoracao.icone;
+      etiqueta.title = item.comemoracao.descricao;
+      return etiqueta;
+    }
     etiqueta.textContent = item.subtipo === 'animal' ? '🐾' : '⭐';
     return etiqueta;
   }
@@ -117,6 +124,12 @@ var Loja = (function() {
       aviso.className = 'loja-aviso-grupo';
       aviso.textContent = 'Os 20 times da Série A 2026. Escudos ilustrativos com as cores de cada time.';
       grade.appendChild(aviso);
+    }
+    if (abaAtiva === 'comemoracao') {
+      var avisoC = document.createElement('p');
+      avisoC.className = 'loja-aviso-grupo';
+      avisoC.textContent = 'O seu craque faz a comemoração depois de cada gol. Algumas você ganha nas conquistas!';
+      grade.appendChild(avisoC);
     }
     var lista = document.createElement('div');
     lista.className = 'loja-lista';
@@ -198,7 +211,7 @@ var Loja = (function() {
     if (resultado.ok) {
       SFX.faseLiberada();
       if (typeof Conquistas !== 'undefined') Conquistas.registrar('compra');
-      var dica = item.tipo === 'borda' ? ' Escolha em "Meu craque".'
+      var dica = (item.tipo === 'borda' || item.tipo === 'comemoracao') ? ' Escolha em "Meu craque".'
         : (item.tipo === 'avatar' || item.tipo === 'nome'
           ? ' Escolha na tela "Monte seu craque".'
           : ' Escolha na tela "Escolha seu time".');

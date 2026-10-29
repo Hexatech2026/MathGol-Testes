@@ -116,9 +116,13 @@ const EASE = {
   sineInOut: function(u) { return 0.5 - 0.5 * Math.cos(u * Math.PI); }
 };
 
-function criarJogoPenalti(containerId, selecaoId) {
+// opcoes (v2.2, todas opcionais): { nome: 'CAPITÃO', numero: '7',
+//   comemoracao: 'aviaozinho' } — nome e numero nas costas da camisa e a
+//   comemoracao de gol escolhida no perfil (ids em comemoracoes.js).
+function criarJogoPenalti(containerId, selecaoId, opcoes) {
   const container = document.getElementById(containerId);
   if (!container) throw new Error('Container do jogo nao encontrado: ' + containerId);
+  const opcoesJogo = opcoes || {};
 
   const reduzMovimento = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   function d(duracaoNormal) { return reduzMovimento ? 1 : duracaoNormal; }
@@ -493,7 +497,9 @@ function criarJogoPenalti(containerId, selecaoId) {
   // Pinta a camisa do clube (padrao de data.js) e o numero 10 nas costas.
   // u da textura da a volta no torso (0 = peito, 0.5 = costas) e v sobe
   // da cintura ao ombro. 512 x 336 deixa o pixel quadrado no torso.
-  function texturaCamisa(padrao, p, s, t, numero) {
+  // v2.2: o nome do craque vai em cima do numero, nas costas (como camisa
+  // de jogo de verdade) e o numero e o que a crianca escolheu no perfil.
+  function texturaCamisa(padrao, p, s, t, numero, nome) {
     const W = 512, H = 336;
     const cv = document.createElement('canvas');
     cv.width = W; cv.height = H;
@@ -544,6 +550,20 @@ function criarJogoPenalti(containerId, selecaoId) {
       g.strokeText(numero, 0, 0);
       g.fillStyle = S;
       g.fillText(numero, 0, 0);
+      g.restore();
+    }
+    if (nome) {
+      // As costas ocupam ~meia volta da textura; o nome cabe em ~190 px.
+      g.save();
+      let tam = 46;
+      g.font = '900 ' + tam + 'px "Arial Black", Arial, sans-serif';
+      while (g.measureText(nome).width > 190 && tam > 18) { tam -= 2; g.font = '900 ' + tam + 'px "Arial Black", Arial, sans-serif'; }
+      g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.lineJoin = 'round'; g.lineWidth = 7;
+      g.strokeStyle = luminancia(s) > 0.55 ? '#1a1a1a' : '#ffffff';
+      g.strokeText(nome, W / 2, H * 0.16);
+      g.fillStyle = S;
+      g.fillText(nome, W / 2, H * 0.16);
       g.restore();
     }
     const tex = new THREE.CanvasTexture(cv);
@@ -651,6 +671,13 @@ function criarJogoPenalti(containerId, selecaoId) {
         pe.add(s);
         solas.push(s);
       });
+      // v2.2: a parte de baixo do joelho tambem conta como apoio — e o que
+      // segura o boneco no gramado na comemoracao de joelhos. Em pe ela fica
+      // sempre acima da sola, entao nao muda nenhuma outra pose.
+      const apoioJoelho = new THREE.Object3D();
+      apoioJoelho.position.set(0, -COXA - 0.05, 0);
+      coxa.add(apoioJoelho);
+      solas.push(apoioJoelho);
       if (l === 'D') {
         marcadorChute = new THREE.Object3D();
         marcadorChute.position.set(0, -0.02, 0.08); // peito do pe
@@ -792,7 +819,9 @@ function criarJogoPenalti(containerId, selecaoId) {
   }
 
   // ---------- Batedor ----------
-  const mapaCamisa = texturaCamisa(padraoCamisa, corPrimaria, corSecundaria, corTerciaria, '10');
+  const mapaCamisa = texturaCamisa(padraoCamisa, corPrimaria, corSecundaria, corTerciaria,
+    /^(?:[1-9]|[1-9][0-9])$/.test(opcoesJogo.numero || '') ? opcoesJogo.numero : '10',
+    typeof opcoesJogo.nome === 'string' ? opcoesJogo.nome.slice(0, 12) : '');
   const rigBatedor = criarRig({
     pele: 0xc98d5e, cabelo: 0x2b1d14,
     camisa: corPrimaria, mapaCamisa: mapaCamisa, detalhe: corSecundaria,
@@ -1101,11 +1130,17 @@ function criarJogoPenalti(containerId, selecaoId) {
   const FRASES_PLACAS = {
     inicio: [['VAMOS!', '#FFC63B', '#21303B'], ['VAI!', '#2E9E5B', '#FFFDF6'], ['MATHGOL', '#3A5FCD', '#FFFDF6']],
     acerto: [['BOA!', '#2E9E5B', '#FFFDF6'], ['ISSO!', '#FFC63B', '#21303B'], ['CERTO!', '#FFFDF6', '#17683A']],
-    gol: [['GOL!', '#FFC63B', '#B4232A'], ['GOLAÇO', '#2E9E5B', '#FFFDF6'], ['CRAQUE!', '#3A5FCD', '#FFFDF6'], ['10', '#FFFDF6', '#21303B']],
-    erro: [['QUASE!', '#3A5FCD', '#FFFDF6'], ['VAI DAR!', '#FFFDF6', '#0F5C8C'], ['FORÇA!', '#FFC63B', '#21303B']]
+    // v2.2: + girias da moda entre as criancas (sempre de elogio).
+    gol: [['GOL!', '#FFC63B', '#B4232A'], ['GOLAÇO', '#2E9E5B', '#FFFDF6'], ['CRAQUE!', '#3A5FCD', '#FFFDF6'], ['10', '#FFFDF6', '#21303B'],
+          ['+1000 AURA', '#7B2FF7', '#FFE76A'], ['BRABO!', '#21303B', '#FFC63B']],
+    erro: [['QUASE!', '#3A5FCD', '#FFFDF6'], ['VAI DAR!', '#FFFDF6', '#0F5C8C'], ['FORÇA!', '#FFC63B', '#21303B']],
+    // Easter egg: a cobranca valeu exatamente 67 Cruzeiros.
+    'seis-sete': [['6-7!', '#FFC63B', '#21303B'], ['67', '#E0343B', '#FFFDF6'], ['SIX SEVEN', '#3A5FCD', '#FFFDF6']],
+    // Sequencia grande de acertos ("aura" la em cima).
+    aura: [['AURA', '#7B2FF7', '#FFE76A'], ['+1000', '#FFC63B', '#4B1B9E'], ['EGO 100%', '#21303B', '#FFC63B']]
   };
-  const DURACAO_PLACAS = { inicio: 2.6, acerto: 1.6, gol: 2.8, erro: 2.2 };
-  const SEGURADORES = { inicio: 22, acerto: 14, gol: 30, erro: 16 };
+  const DURACAO_PLACAS = { inicio: 2.6, acerto: 1.6, gol: 2.8, erro: 2.2, 'seis-sete': 3.0, aura: 2.6 };
+  const SEGURADORES = { inicio: 22, acerto: 14, gol: 30, erro: 16, 'seis-sete': 30, aura: 24 };
   const CAPACIDADE_PLACA = 12;
   // Grandes o bastante para ler a 30 m (sobrepoem um pouco os vizinhos,
   // como placa de verdade na arquibancada).
@@ -1399,6 +1434,230 @@ function criarJogoPenalti(containerId, selecaoId) {
   // crianca), entao da pra ver o rosto dele comemorando.
   const GIRO_COMEMORA = 0.6;
 
+  // ===================== COMEMORACOES (v2.2) =====================
+  //
+  // A crianca escolhe a comemoracao no perfil (catalogo em comemoracoes.js,
+  // mesmo id). Cada uma tem:
+  //   clipe  — poses do corpo (mesmo motor de Hermite do chute)
+  //   trilha — opcional: [dx, dz, giro] no gramado, relativo a onde o
+  //            batedor parou depois do chute
+  //   giro   — sem trilha: para onde o corpo vira (0 = de frente pra camera)
+  //   efeito — opcional, chamado a cada quadro com (envelope 0..1, t)
+  //   placas — tipo de placa que a torcida levanta (padrao 'gol')
+  // Enquanto o batedor comemora a camera fecha nele (zoomK) e o reset da
+  // cena espera a festa acabar (ver terminar() em chutarLivre).
+  B.aviaoE = pose({ tronco: [0.28, 0, 0.3], pescoco: [-0.25, 0, -0.1],
+    ombroD: [0.15, 0, -1.45], cotoveloD: [-0.08, 0, 0], ombroE: [0.15, 0, 1.6], cotoveloE: [-0.08, 0, 0],
+    coxaD: [-0.55, 0, -0.03], joelhoD: [0.5, 0, 0], coxaE: [0.4, 0, 0.03], joelhoE: [0.7, 0, 0] });
+  B.aviaoD = espelhar(B.aviaoE);
+  B.aviaoFim = pose({ tronco: [-0.05, 0, 0], pescoco: [-0.3, 0, 0],
+    ombroD: [0, 0, -1.55], cotoveloD: [-0.05, 0, 0], ombroE: [0, 0, 1.55], cotoveloE: [-0.05, 0, 0],
+    coxaD: [0, 0, -0.12], joelhoD: [0.08, 0, 0], coxaE: [0, 0, 0.12], joelhoE: [0.08, 0, 0] });
+  // De joelhos: coxa quase vertical, canela deitada pra tras, peito do pe
+  // no chao (pe x = 1.0 deixa o pe alinhado com a canela).
+  B.ajoelhado = pose({ tronco: [-0.35, 0, 0], pescoco: [-0.45, 0, 0],
+    ombroD: [-0.3, 0, -2.5], cotoveloD: [-0.2, 0, 0], ombroE: [-0.3, 0, 2.5], cotoveloE: [-0.2, 0, 0],
+    coxaD: [0.1, 0, -0.15], joelhoD: [1.55, 0, 0], peD: [1.0, 0, 0],
+    coxaE: [0.1, 0, 0.15], joelhoE: [1.55, 0, 0], peE: [1.0, 0, 0] });
+  B.ajoelhadoGrito = pose({ tronco: [-0.55, 0, 0], pescoco: [-0.65, 0, 0],
+    ombroD: [-0.1, 0, -2.2], cotoveloD: [-0.4, 0, 0], ombroE: [-0.1, 0, 2.2], cotoveloE: [-0.4, 0, 0],
+    coxaD: [0.15, 0, -0.15], joelhoD: [1.55, 0, 0], peD: [1.0, 0, 0],
+    coxaE: [0.15, 0, 0.15], joelhoE: [1.55, 0, 0], peE: [1.0, 0, 0] });
+  // Giro no ar: pula girando meia volta e cai de costas pra camera (nome
+  // e numero da camisa aparecem), pernas abertas e bracos para tras.
+  B.giroPulo = pose({ voo: 0.5, tronco: [-0.1, 0, 0], pescoco: [-0.2, 0, 0],
+    ombroD: [0, 0, -1.0], cotoveloD: [-0.3, 0, 0], ombroE: [0, 0, 1.0], cotoveloE: [-0.3, 0, 0],
+    coxaD: [-0.4, 0, -0.05], joelhoD: [0.8, 0, 0], coxaE: [-0.4, 0, 0.05], joelhoE: [0.8, 0, 0] });
+  B.giroAterra = pose({ tronco: [0.2, 0, 0], pescoco: [-0.1, 0, 0],
+    ombroD: [0.3, 0, -0.6], cotoveloD: [-0.2, 0, 0], ombroE: [0.3, 0, 0.6], cotoveloE: [-0.2, 0, 0],
+    coxaD: [-0.55, 0, -0.38], joelhoD: [0.95, 0, 0], coxaE: [-0.55, 0, 0.38], joelhoE: [0.95, 0, 0] });
+  B.giroPose = pose({ tronco: [-0.12, 0, 0], pescoco: [-0.35, 0, 0],
+    ombroD: [0.45, 0, -0.55], cotoveloD: [-0.05, 0, 0], maoD: [0, 0, 0.3],
+    ombroE: [0.45, 0, 0.55], cotoveloE: [-0.05, 0, 0], maoE: [0, 0, -0.3],
+    coxaD: [-0.2, 0, -0.38], joelhoD: [0.45, 0, 0], coxaE: [-0.2, 0, 0.38], joelhoE: [0.45, 0, 0] });
+  // Coracao grande em cima da cabeca.
+  B.coracao = pose({ tronco: [-0.08, 0, 0], pescoco: [-0.15, 0, 0],
+    ombroD: [-0.25, 0, -2.45], cotoveloD: [0, 0, -1.5], ombroE: [-0.25, 0, 2.45], cotoveloE: [0, 0, 1.5],
+    coxaD: [0, 0, -0.1], joelhoD: [0.1, 0, 0], coxaE: [0, 0, 0.1], joelhoE: [0.1, 0, 0] });
+  // Robo: quatro poses travadas, repetidas com pausa (chaves duplicadas
+  // param o movimento de uma vez, como robo mesmo).
+  const pernaRobo = { coxaD: [-0.12, 0, -0.12], joelhoD: [0.2, 0, 0], coxaE: [-0.12, 0, 0.12], joelhoE: [0.2, 0, 0] };
+  B.robo1 = pose(Object.assign({ pescoco: [0, 0.5, 0],
+    ombroD: [-1.5, 0, -0.15], cotoveloD: [-1.57, 0, 0], ombroE: [-1.5, 0, 0.15], cotoveloE: [-1.57, 0, 0] }, pernaRobo));
+  B.robo2 = pose(Object.assign({ pescoco: [0, -0.5, 0], quadril: [0, 0.2, 0],
+    ombroD: [0, 0, -1.57], cotoveloD: [0, 0, -1.57], ombroE: [0, 0, 1.57], cotoveloE: [0, 0, 1.57] }, pernaRobo));
+  B.robo3 = pose(Object.assign({ tronco: [0, 0.3, 0],
+    ombroD: [-1.5, 0, -0.15], ombroE: [0.2, 0, 0.1], cotoveloE: [-1.57, 0, 0] }, pernaRobo));
+  B.robo4 = espelhar(B.robo3);
+  // 6-7: maos na frente, palma pra cima, uma sobe e a outra desce.
+  B.seisSete = pose({ tronco: [0.05, 0, 0], pescoco: [0.05, 0, 0],
+    ombroD: [-0.35, 0, -0.25], cotoveloD: [-1.35, 0, 0], ombroE: [-0.35, 0, 0.25], cotoveloE: [-1.35, 0, 0],
+    coxaD: [-0.1, 0, -0.12], joelhoD: [0.15, 0, 0], coxaE: [-0.1, 0, 0.12], joelhoE: [0.15, 0, 0] });
+  B.danca = pose({ tronco: [0.05, 0, 0],
+    ombroD: [-0.3, 0, -0.9], cotoveloD: [-1.5, 0, 0], ombroE: [-0.3, 0, 0.9], cotoveloE: [-1.5, 0, 0],
+    coxaD: [-0.2, 0, -0.12], joelhoD: [0.35, 0, 0], coxaE: [-0.2, 0, 0.12], joelhoE: [0.35, 0, 0] });
+  // Aura: bracos cruzados, queixo pra cima.
+  B.aura = pose({ tronco: [-0.12, 0, 0], pescoco: [-0.3, 0, 0],
+    ombroD: [-0.35, 0, -0.12], cotoveloD: [-1.55, 1.15, 0], ombroE: [-0.38, 0, 0.12], cotoveloE: [-1.55, -1.15, 0],
+    coxaD: [0, 0, -0.14], joelhoD: [0.05, 0, 0], coxaE: [0, 0, 0.14], joelhoE: [0.05, 0, 0] });
+
+  // Rampa de entrada do movimento procedural (nao "liga" de uma vez).
+  function rampa(u, ate) { return Math.min(1, u / ate); }
+
+  const COMEMORACOES_3D = {
+    classica: { dur: TEMPO.COMEMORA_BATEDOR + 300, giro: GIRO_COMEMORA, clipe: clipeChaves([
+      [0, B.parado], [160, B.agacha], [330, B.pulo1], [500, B.aterra1], [680, B.pulo2],
+      [840, B.aterra2], [1000, B.punho], [1150, B.punho2], [1450, B.punho2]], 1450) },
+    aviaozinho: { dur: 2000, clipe: clipeChaves([
+      [0, B.parado], [160, B.aviaoE], [360, B.aviaoD], [560, B.aviaoE], [760, B.aviaoD], [960, B.aviaoE],
+      [1160, B.aviaoD], [1400, B.aviaoFim], [2000, B.aviaoFim]], 2000),
+      trilha: clipeChaves([[0, [0, 0, Math.PI]], [400, [0.9, 0.5, 1.7]], [800, [1.6, 1.6, 1.0]],
+        [1200, [1.2, 2.8, 0.2]], [1400, [0.9, 3.1, 0.05]], [2000, [0.9, 3.1, 0.1]]], 2000) },
+    dancinha: { dur: 2400, giro: 0.1, clipe: clipeChaves([[0, B.parado], [250, B.danca], [2400, B.danca]], 2400,
+      function(out, t, u) {
+        if (reduzMovimento) return;
+        const r = rampa(u, 0.12), s = Math.sin(t * 8.5), c = Math.abs(Math.cos(t * 8.5));
+        out[IDX.quadril + 2] += 0.14 * s * r; out[IDX.quadril + 1] += 0.25 * s * r;
+        out[IDX.tronco + 2] -= 0.18 * s * r; out[IDX.pescoco + 2] += 0.08 * s * r;
+        out[IDX.ombroD + 2] -= 0.7 * Math.max(0, s) * r; out[IDX.ombroE + 2] += 0.7 * Math.max(0, -s) * r;
+        out[IDX.joelhoD] += 0.18 * c * r; out[IDX.joelhoE] += 0.18 * c * r;
+        out[IDX.coxaD] -= 0.09 * c * r; out[IDX.coxaE] -= 0.09 * c * r;
+        achatarPe(out, 'D'); achatarPe(out, 'E');
+      }) },
+    coracao: { dur: 2300, giro: 0.15, clipe: clipeChaves([[0, B.parado], [350, B.coracao], [2300, B.coracao]], 2300,
+      function(out, t, u) {
+        if (reduzMovimento) return;
+        const r = rampa(u, 0.15), s = Math.sin(t * 4);
+        out[IDX.quadril + 2] += 0.06 * s * r; out[IDX.tronco + 2] -= 0.08 * s * r;
+        out[IDX.joelhoD] += 0.08 * (0.5 + 0.5 * Math.sin(t * 8)) * r; out[IDX.joelhoE] += 0.08 * (0.5 + 0.5 * Math.sin(t * 8)) * r;
+        achatarPe(out, 'D'); achatarPe(out, 'E');
+      }) },
+    robo: { dur: 2300, giro: 0, clipe: clipeChaves([
+      [0, B.parado], [200, B.robo1], [420, B.robo1], [520, B.robo2], [760, B.robo2], [860, B.robo3], [1100, B.robo3],
+      [1200, B.robo4], [1440, B.robo4], [1540, B.robo2], [1780, B.robo2], [1880, B.robo1], [2300, B.robo1]], 2300) },
+    joelhada: { dur: 2600, clipe: clipeChaves([
+      [0, B.parado], [150, B.passoE], [300, B.passoD], [450, B.passoE], [620, B.ajoelhado], [1700, B.ajoelhado],
+      [2100, B.ajoelhadoGrito], [2600, B.ajoelhadoGrito]], 2600),
+      trilha: clipeChaves([[0, [0, 0, Math.PI]], [250, [0.1, 0.3, 0.4]], [620, [0.15, 1.6, 0]],
+        [1500, [0.2, 3.6, 0]], [2600, [0.2, 3.8, 0]]], 2600) },
+    giro: { dur: 2500, clipe: clipeChaves([
+      [0, B.parado], [200, B.passoE], [400, B.passoD], [560, B.agacha], [800, B.giroPulo], [1050, B.giroPulo],
+      [1250, B.giroAterra], [1500, B.giroPose], [2500, B.giroPose]], 2500),
+      trilha: clipeChaves([[0, [0, 0, Math.PI]], [200, [0.05, 0.2, 0.5]], [560, [0.1, 1.0, 0]], [800, [0.1, 1.3, 0.3]],
+        [1250, [0.1, 1.6, Math.PI]], [2500, [0.1, 1.6, Math.PI]]], 2500) },
+    'seis-sete': { dur: 2400, giro: 0.05, placas: 'seis-sete', clipe: clipeChaves([[0, B.parado], [300, B.seisSete], [2400, B.seisSete]], 2400,
+      function(out, t, u) {
+        if (reduzMovimento) return;
+        const r = rampa(u, 0.12), s = Math.sin(t * 11);
+        out[IDX.ombroD] += 0.35 * s * r; out[IDX.ombroE] -= 0.35 * s * r;
+        out[IDX.cotoveloD] -= 0.25 * s * r; out[IDX.cotoveloE] += 0.25 * s * r;
+        out[IDX.tronco + 2] += 0.05 * s * r; out[IDX.pescoco + 1] += 0.15 * s * r;
+      }) },
+    aura: { dur: 2600, placas: 'aura', clipe: clipeChaves([[0, B.parado], [500, B.aura], [2600, B.aura]], 2600,
+      function(out, t, u) {
+        if (reduzMovimento) return;
+        out[IDX.tronco] -= 0.03 * Math.sin(t * 2.2) * rampa(u, 0.2);
+      }),
+      trilha: clipeChaves([[0, [0, 0, Math.PI]], [1400, [0, 0, 0.05]], [2600, [0, 0, 0.05]]], 2600),
+      efeito: function(env, t) { desenharAura(env, t); } }
+  };
+  let comemoracaoEscolhida = COMEMORACOES_3D[opcoesJogo.comemoracao] ? opcoesJogo.comemoracao : 'classica';
+  let comemoracaoAtual = null; // { id, dur } enquanto o batedor comemora
+  let zoomK = 0;               // 0 = camera do jogo, 1 = fechada no batedor
+  let cameraMexida = false;
+  const alvoCamera = new THREE.Vector3(), posZoom = new THREE.Vector3(), alvoZoom = new THREE.Vector3();
+
+  function restaurarCamera() {
+    camera.position.set(CAMERA.pos[0], CAMERA.pos[1], CAMERA.pos[2]);
+    camera.lookAt(CAMERA.alvo[0], CAMERA.alvo[1], CAMERA.alvo[2]);
+    cameraMexida = false;
+  }
+  // Camera fecha no batedor: um pouco de lado e na altura do peito.
+  function aplicarZoom() {
+    if (zoomK <= 0) { if (cameraMexida) restaurarCamera(); return; }
+    posZoom.set(batedor.position.x + 0.9, 1.6, batedor.position.z + 6.0);
+    alvoZoom.set(batedor.position.x, 1.0, batedor.position.z);
+    camera.position.set(CAMERA.pos[0], CAMERA.pos[1], CAMERA.pos[2]).lerp(posZoom, zoomK);
+    alvoCamera.set(CAMERA.alvo[0], CAMERA.alvo[1], CAMERA.alvo[2]).lerp(alvoZoom, zoomK);
+    camera.lookAt(alvoCamera);
+    cameraMexida = true;
+  }
+
+  // Brilho dourado da "aura": cilindro aditivo + anel que se espalha no chao.
+  // Criado so na primeira vez que alguem usa essa comemoracao.
+  let auraFx = null;
+  function desenharAura(env, t) {
+    if (!auraFx) {
+      const g = new THREE.Group();
+      const mCil = new THREE.MeshBasicMaterial({ color: 0xffd34d, transparent: true, opacity: 0,
+        blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+      const cil = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.62, 2.3, 24, 1, true), mCil);
+      cil.position.y = 1.15;
+      const mAnel = new THREE.MeshBasicMaterial({ color: 0xfff1a8, transparent: true, opacity: 0,
+        blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+      const anel = new THREE.Mesh(new THREE.RingGeometry(0.5, 0.68, 40), mAnel);
+      anel.rotation.x = -Math.PI / 2;
+      anel.position.y = 0.03;
+      g.add(cil, anel);
+      cena.add(g);
+      auraFx = { grupo: g, cil: cil, anel: anel };
+    }
+    auraFx.grupo.visible = env > 0.001;
+    auraFx.grupo.position.set(batedor.position.x, 0, batedor.position.z);
+    const onda = (t * 0.8) % 1;
+    auraFx.cil.material.opacity = 0.32 * env * (0.75 + 0.25 * Math.sin(t * 6));
+    auraFx.cil.rotation.y = t * 0.8;
+    auraFx.anel.scale.setScalar(1 + 2.2 * onda);
+    auraFx.anel.material.opacity = 0.6 * env * (1 - onda);
+  }
+
+  // Envelope de entrada/saida da camera e dos efeitos (0..1).
+  function envelope(u) {
+    if (u < 0.18) return EASE.sineInOut(u / 0.18);
+    if (u > 0.86) return 1 - EASE.sineInOut((u - 0.86) / 0.14);
+    return 1;
+  }
+
+  function tocarComemoracao(id) {
+    const c = COMEMORACOES_3D[id] || COMEMORACOES_3D.classica;
+    comemoracaoAtual = { id: COMEMORACOES_3D[id] ? id : 'classica', dur: c.dur };
+    const giro0 = batedor.rotation.y;
+    if (reduzMovimento) {
+      // Pose final, sem corrida, sem giro no ar e sem camera andando.
+      batedor.rotation.y = typeof c.giro === 'number' ? c.giro : GIRO_COMEMORA;
+      ctlBatedor.tocar(quadroDe(c.clipe, 1));
+      return;
+    }
+    ctlBatedor.tocar(c.clipe, { dur: c.dur, fade: 120, aoTerminar: voltarAoDescanso });
+    if (c.trilha) {
+      const x0 = batedor.position.x, z0 = batedor.position.z, p = new Float32Array(3);
+      animar(c.dur, function(e, u) {
+        c.trilha.amostrar(u, 0, p);
+        batedor.position.x = x0 + p[0];
+        batedor.position.z = z0 + p[1];
+        batedor.rotation.y = p[2];
+      }, null, { canal: 'giro' });
+    } else {
+      animar(c.dur * 0.3, function(e) {
+        batedor.rotation.y = giro0 + (c.giro - giro0) * e;
+      }, null, { ease: EASE.sineInOut, canal: 'giro' });
+    }
+    animar(c.dur, function(e, u) {
+      zoomK = envelope(u);
+      if (c.efeito) c.efeito(envelope(u), relogioCena / 1000);
+    }, function() {
+      zoomK = 0;
+      if (c.efeito) c.efeito(0, 0);
+    }, { canal: 'efeito' });
+  }
+
+  // Termina a festa na hora (proxima pergunta chegou antes do reset).
+  function encerrarComemoracao() {
+    if (!comemoracaoAtual) return;
+    if (resetPendente) resetPendente.cancelado = true;
+    resetar();
+  }
+
   // Pose "congelada" de um clipe (movimento reduzido: sem transicao).
   function quadroDe(clipe, u) {
     const p = new Float32Array(N_CANAIS);
@@ -1459,8 +1718,12 @@ function criarJogoPenalti(containerId, selecaoId) {
 
   function resetar() {
     resetPendente = null;
-    ['batedor', 'giro', 'goleiro', 'torcida'].forEach(cancelarCanal);
+    ['batedor', 'giro', 'goleiro', 'torcida', 'efeito'].forEach(cancelarCanal);
     reacaoTorcida = null;
+    comemoracaoAtual = null;
+    zoomK = 0;
+    restaurarCamera();
+    if (auraFx) auraFx.grupo.visible = false;
     bola.position.set(PONTO_BOLA.x, PONTO_BOLA.y, PONTO_BOLA.z);
     bola.visible = true;
     bolaMalha.rotation.set(0, 0, 0);
@@ -1496,19 +1759,14 @@ function criarJogoPenalti(containerId, selecaoId) {
   function voltarAoDescanso() { ctlBatedor.tocar(CLIPE_PARADO, { fade: d(450) }); }
 
   function poseBatedor(nome) {
+    // v2.2: qualquer outra pose enquanto comemora (a proxima pergunta chegou
+    // rapido) termina a festa e volta a cena ao normal primeiro.
+    if (comemoracaoAtual && (nome === 'confiante' || nome === 'frustrado')) encerrarComemoracao();
     poseAtual = (nome === 'confiante' || nome === 'comemora' || nome === 'frustrado') ? nome : 'neutro';
 
     if (poseAtual === 'comemora') {
-      const giro0 = batedor.rotation.y;
-      if (reduzMovimento) {
-        batedor.rotation.y = GIRO_COMEMORA;
-        ctlBatedor.tocar(quadroDe(CLIPE_COMEMORA, 1));
-        return;
-      }
-      animar(TEMPO.COMEMORA_BATEDOR * 0.45, function(e) {
-        batedor.rotation.y = giro0 + (GIRO_COMEMORA - giro0) * e;
-      }, null, { ease: EASE.sineInOut, canal: 'giro' });
-      ctlBatedor.tocar(CLIPE_COMEMORA, { dur: TEMPO.COMEMORA_BATEDOR, fade: 120, aoTerminar: voltarAoDescanso });
+      // v2.2: a comemoracao escolhida no perfil (antes era sempre a classica).
+      if (!comemoracaoAtual) tocarComemoracao(comemoracaoEscolhida);
       return;
     }
     if (poseAtual === 'frustrado') {
@@ -1526,9 +1784,14 @@ function criarJogoPenalti(containerId, selecaoId) {
   // Porta unica usada pelo main.js para as duas etapas da jogada.
   function reagir(tipo) {
     if (tipo === 'acerto')    { reagirTorcida('acerto'); poseBatedor('confiante'); levantarPlacas('acerto'); return; }
-    if (tipo === 'gol')       { reagirTorcida('gol');    poseBatedor('comemora');  levantarPlacas('gol'); return; }
+    if (tipo === 'gol') {
+      reagirTorcida('gol'); poseBatedor('comemora');
+      levantarPlacas((COMEMORACOES_3D[comemoracaoEscolhida] || {}).placas || 'gol');
+      return;
+    }
     if (tipo === 'erro')      { reagirTorcida('erro');   poseBatedor('frustrado'); levantarPlacas('erro'); return; }
     if (tipo === 'inicio')    { levantarPlacas('inicio'); return; }
+    if (tipo === 'seis-sete' || tipo === 'aura') { levantarPlacas(tipo); return; }
     if (tipo === 'neutro')    { poseBatedor('neutro'); }
   }
 
@@ -1609,6 +1872,7 @@ function criarJogoPenalti(containerId, selecaoId) {
       goleiroOcioso(t);
     }
     ctlBatedor.atualizar(agora);
+    aplicarZoom();
     sombraBola.visible = bola.visible;
     sombraBola.position.set(bola.position.x, 0.02, bola.position.z);
     sombraBola.scale.setScalar(Math.max(0.5, 1 - (bola.position.y - ALTURA_BOLA) * 0.25));
@@ -1900,6 +2164,7 @@ function criarJogoPenalti(containerId, selecaoId) {
   }
 
   function iniciarMira(aoAtualizar) {
+    encerrarComemoracao(); // a mira usa a camera do jogo, nunca a do zoom
     pontoMiraAtual = RegrasChute.limitarMira(RegrasChute.CENTRO_GOL);
     aoAtualizarMira = aoAtualizar || null;
     renderer.domElement.style.cursor = 'crosshair';
@@ -1967,7 +2232,11 @@ function criarJogoPenalti(containerId, selecaoId) {
         lamentarTorcida();
       }
       if (aoFinalizar) aoFinalizar({ gol: r.dentro, fora: !r.dentro, motivo: r.motivo, tipo: r.tipo });
-      resetPendente = animar(TEMPO.ANTES_DE_RESETAR, null, resetar); // R08: mesmo com movimento reduzido, o resultado fica visivel
+      // v2.2: se o main.js mandou comemorar (dentro do aoFinalizar), o reset
+      // espera a comemoracao inteira — antes ela era cortada no meio.
+      const espera = comemoracaoAtual && !reduzMovimento
+        ? Math.max(TEMPO.ANTES_DE_RESETAR, comemoracaoAtual.dur + 250) : TEMPO.ANTES_DE_RESETAR;
+      resetPendente = animar(espera, null, resetar); // R08: mesmo com movimento reduzido, o resultado fica visivel
     }
 
     animarChute(iniciarBolaEGoleiro);
@@ -1975,7 +2244,7 @@ function criarJogoPenalti(containerId, selecaoId) {
   }
 
   // Leitura para testes/diagnostico (sem efeito colateral).
-  function depurar() {
+  function depurar(opcoesDep) {
     goleiro.updateMatrixWorld(true);
     caixaTmp.setFromObject(goleiro);
     // Quanto a torcida esta "clareada" em relacao a cor-base (0 = base,
@@ -2003,6 +2272,12 @@ function criarJogoPenalti(containerId, selecaoId) {
       // v2.0: lance das placas no ar ('inicio'|'acerto'|'gol'|'erro') e quantas.
       placas: placas ? { tipo: placas.tipo, quantidade: placas.seguradores.length } : null,
       emAnimacao: emAnimacao,
+      // v2.2: comemoracao em andamento (id) e quanto a camera fechou (0..1).
+      comemoracao: comemoracaoAtual ? comemoracaoAtual.id : null,
+      zoom: zoomK,
+      // A caixa do batedor custa caro: so quando pedida (depurar({ batedor: true })).
+      batedor: opcoesDep && opcoesDep.batedor ? { x: batedor.position.x, z: batedor.position.z, giro: batedor.rotation.y,
+        minY: (batedor.updateMatrixWorld(true), new THREE.Box3().setFromObject(batedor).min.y) } : undefined,
       gol: [pontoParaTela({ x: -GOL_MEIA_LARGURA, y: 0 }), pontoParaTela({ x: GOL_MEIA_LARGURA, y: GOL_ALTURA })]
     };
   }
@@ -2023,6 +2298,12 @@ function criarJogoPenalti(containerId, selecaoId) {
     if (renderer.domElement.parentNode) renderer.domElement.parentNode.removeChild(renderer.domElement);
   }
 
+  // v2.2: troca a comemoracao sem recriar a cena (duelo de 2 jogadores).
+  function definirComemoracao(id) {
+    if (COMEMORACOES_3D[id]) comemoracaoEscolhida = id;
+    return comemoracaoEscolhida;
+  }
+
   return { modo: '3d', chutar, iniciarMira, moverMiraTela, moverMiraDelta, pararMira, chutarLivre,
-           reagir, poseBatedor, depurar, destruir };
+           reagir, poseBatedor, depurar, destruir, definirComemoracao };
 }

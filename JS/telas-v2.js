@@ -83,6 +83,8 @@ var TelasV2 = (function() {
         var b = bordaPorId(m.premio.borda);
         if (b) premio.push('borda ' + b.nome);
       }
+      // v2.2: titulos e comemoracoes que esta medalha libera.
+      desbloqueiosDa(m.id).forEach(function(t) { premio.push(t); });
       Toasts.mostrar({
         medalha: true,
         icone: m.icone,
@@ -92,6 +94,17 @@ var TelasV2 = (function() {
       if (typeof SFX !== 'undefined' && !document.body.classList.contains('em-partida')) SFX.faseLiberada();
     });
     atualizarResumos();
+  }
+
+  function desbloqueiosDa(idConquista) {
+    var r = [];
+    (typeof TITULOS !== 'undefined' ? TITULOS : []).forEach(function(t) {
+      if (t.conquista === idConquista) r.push('o título "' + t.texto + '"');
+    });
+    (typeof COMEMORACOES !== 'undefined' ? COMEMORACOES : []).forEach(function(c) {
+      if (c.conquista === idConquista) r.push('a comemoração ' + c.nome);
+    });
+    return r;
   }
 
   // ---------- Tela de conquistas ----------
@@ -158,6 +171,13 @@ var TelasV2 = (function() {
         mb.textContent = '+ borda';
         premio.appendChild(mb);
       }
+      if (desbloqueiosDa(c.id).length) {
+        var mt = document.createElement('span');
+        mt.className = 'conquista-premio-borda';
+        mt.textContent = '+ prêmio';
+        mt.title = desbloqueiosDa(c.id).join(', ');
+        premio.appendChild(mt);
+      }
       li.appendChild(premio);
       li.setAttribute('aria-label', c.nome + (feita ? ', conquistada. ' : ', ainda não conquistada. ') + c.descricao);
       lista.appendChild(li);
@@ -183,8 +203,111 @@ var TelasV2 = (function() {
     el('perfil-gols').textContent = String(Conquistas.contador('gols'));
     el('perfil-conquistas').textContent = Conquistas.quantasFeitas() + '/' + Conquistas.total();
     el('perfil-partidas').textContent = String(Conquistas.contador('partidas'));
+    var titulo = Conta.tituloAtual();
+    el('perfil-titulo').textContent = titulo ? titulo.texto : '';
+    var selo = el('perfil-selo');
+    selo.hidden = !Conta.verificado();
+    selo.setAttribute('aria-label', 'Craque verificado: tem o código do craque');
+    selo.title = 'Verificado: tem o código do craque';
+    renderizarCamisa();
+    renderizarTitulos();
+    renderizarComemoracoes();
     renderizarBordas(seed, borda);
     renderizarStatusCodigo();
+  }
+
+  // ---------- v2.2: camisa, titulos e comemoracoes ----------
+
+  function renderizarCamisa() {
+    el('previa-camisa-nome').textContent = Conta.nomeCamisa();
+    el('previa-camisa-numero').textContent = Conta.numeroCamisa();
+    var input = el('input-numero-camisa');
+    if (document.activeElement !== input) input.value = Conta.numeroCamisa();
+    // A previa usa as cores do time escolhido (o mesmo que vai pra cena 3D).
+    var time = typeof SELECOES !== 'undefined' && typeof estado !== 'undefined'
+      ? SELECOES.find(function(s) { return s.id === estado.selecaoId; }) : null;
+    var previa = el('previa-camisa');
+    previa.style.setProperty('--camisa-p', (time && time.corPrimaria) || '#3A5FCD');
+    previa.style.setProperty('--camisa-s', (time && time.corSecundaria) || '#FFFDF6');
+  }
+
+  function salvarNumero(n) {
+    n = Math.max(1, Math.min(99, Math.round(Number(n) || 10)));
+    if (String(n) === Conta.numeroCamisa() && Conta.perfil().numero) { renderizarCamisa(); return; }
+    Conta.salvarPerfil({ numero: String(n) });
+    Conquistas.registrar('numero-trocado');
+    renderizarCamisa();
+  }
+
+  function renderizarTitulos() {
+    var grade = el('grade-titulos');
+    grade.textContent = '';
+    var ativo = Conta.tituloAtual();
+    TITULOS.forEach(function(t) {
+      var livre = tituloDisponivel(t);
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'chip-escolha chip-titulo' + (livre ? '' : ' chip-bloqueado') + (ativo && ativo.id === t.id ? ' chip-ativo' : '');
+      b.setAttribute('aria-pressed', ativo && ativo.id === t.id ? 'true' : 'false');
+      b.textContent = (livre ? '' : '🔒 ') + t.texto;
+      b.setAttribute('aria-label', livre ? 'Usar o título ' + t.texto : 'Título ' + t.texto + ': bloqueado. ' + comoGanharTitulo(t));
+      if (!livre) b.title = comoGanharTitulo(t);
+      b.addEventListener('click', function() {
+        clique();
+        if (!livre) { abrirConquistas('tela-perfil'); return; }
+        if (ativo && ativo.id === t.id) return;
+        Conta.salvarPerfil({ titulo: t.id });
+        Conquistas.registrar('titulo-trocado');
+        renderizarPerfil();
+        atualizarCartaoJogador();
+      });
+      grade.appendChild(b);
+    });
+  }
+
+  function renderizarComemoracoes() {
+    var grade = el('grade-comemoracoes');
+    grade.textContent = '';
+    var ativa = Conta.comemoracaoAtual();
+    COMEMORACOES.forEach(function(c) {
+      var livre = comemoracaoDisponivel(c);
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'item-comemoracao' + (livre ? '' : ' item-borda-bloqueada') + (c.id === ativa ? ' item-borda-ativa' : '');
+      b.setAttribute('aria-pressed', c.id === ativa ? 'true' : 'false');
+      var ic = document.createElement('span');
+      ic.className = 'item-comemoracao-icone';
+      ic.setAttribute('aria-hidden', 'true');
+      ic.textContent = c.icone;
+      var nome = document.createElement('span');
+      nome.className = 'item-borda-nome';
+      nome.textContent = c.nome;
+      b.appendChild(ic);
+      b.appendChild(nome);
+      if (!livre) {
+        var como = document.createElement('span');
+        como.className = 'item-borda-como';
+        como.textContent = '🔒 ' + comoGanharComemoracao(c);
+        b.appendChild(como);
+        b.setAttribute('aria-label', 'Comemoração ' + c.nome + ': bloqueada. ' + comoGanharComemoracao(c));
+      } else {
+        b.setAttribute('aria-label', 'Usar a comemoração ' + c.nome + '. ' + c.descricao);
+      }
+      b.title = c.descricao;
+      b.addEventListener('click', function() {
+        clique();
+        if (!livre) {
+          if (c.origem === 'loja' && typeof Loja !== 'undefined') Loja.abrir('tela-perfil', 'comemoracao');
+          else abrirConquistas('tela-perfil');
+          return;
+        }
+        if (c.id === ativa) return;
+        Conta.salvarPerfil({ comemoracao: c.id });
+        Conquistas.registrar('comemoracao-trocada');
+        renderizarPerfil();
+      });
+      grade.appendChild(b);
+    });
   }
 
   function renderizarBordas(seed, ativa) {
@@ -259,9 +382,18 @@ var TelasV2 = (function() {
     var p = Conta.perfil();
     caixa.textContent = '';
     caixa.appendChild(criarAvatarComBorda(p.avatarSeed || AVATAR_PADRAO.seed, Conta.bordaAtual(), 'p'));
-    el('cartao-jogador-nome').textContent = Conta.apelido() || 'Novo craque';
-    el('cartao-jogador-detalhe').textContent = '🏅 ' + Conquistas.quantasFeitas() + '/' + Conquistas.total() +
-      (Conta.status().temCodigo ? '  ·  🔐 com código' : '');
+    var nome = el('cartao-jogador-nome');
+    nome.textContent = Conta.apelido() || 'Novo craque';
+    if (Conta.verificado()) {
+      var selo = document.createElement('span');
+      selo.className = 'selo-verificado selo-verificado-p';
+      selo.textContent = '✔';
+      selo.setAttribute('aria-hidden', 'true');
+      nome.appendChild(selo);
+    }
+    var titulo = Conta.tituloAtual();
+    el('cartao-jogador-detalhe').textContent = (titulo ? titulo.texto + '  ·  ' : '') +
+      '🏅 ' + Conquistas.quantasFeitas() + '/' + Conquistas.total();
     el('cartao-jogador').setAttribute('aria-label', 'Meu craque: ' + (Conta.apelido() || 'novo craque') + '. Ver perfil, bordas e código.');
   }
 
@@ -330,6 +462,13 @@ var TelasV2 = (function() {
     ligar('botao-voltar-perfil', function() { voltarTelaAnterior(); });
     ligar('botao-perfil-conquistas', function() { abrirConquistas('tela-perfil'); });
     ligar('botao-editar-craque', function() { irParaApelido({ voltarParaPerfil: true }); });
+    ligar('botao-numero-menos', function() { salvarNumero(Number(Conta.numeroCamisa()) <= 1 ? 99 : Number(Conta.numeroCamisa()) - 1); });
+    ligar('botao-numero-mais', function() { salvarNumero(Number(Conta.numeroCamisa()) >= 99 ? 1 : Number(Conta.numeroCamisa()) + 1); });
+    var inputNumero = el('input-numero-camisa');
+    if (inputNumero) {
+      inputNumero.addEventListener('change', function() { salvarNumero(inputNumero.value); });
+      inputNumero.addEventListener('keydown', function(ev) { if (ev.key === 'Enter') { ev.preventDefault(); salvarNumero(inputNumero.value); } });
+    }
 
     ligarToque();
     atualizarResumos();

@@ -56,10 +56,7 @@ var NIVEIS = [
     descricao: 'Somas com resultado até 20',
     tipos: ['soma'],
     digitos: 1,
-    // Resultado vai até 20 (e não 18) de propósito: com só 8 resultados
-    // possíveis, 20 perguntas numa fase repetiam demais e o teste DEF-23
-    // reprovava. Com 11..20 são 10 resultados, e o nome do nível fica honesto.
-    faixa: { min: 2, max: 10, resultadoMin: 11, resultadoMax: 20 }
+    faixa: { min: 2, max: 9, resultadoMin: 11, resultadoMax: 18 }
   },
   {
     id: 5,
@@ -149,6 +146,39 @@ function rotuloNivel(id) {
     ? nv.digitos + ' dígitos'
     : 'números até ' + ((nv.faixa && (nv.faixa.resultadoMax || nv.faixa.max)) || 10);
   return 'Nível ' + nv.id + ' · ' + tipos + ' · ' + tamanho;
+}
+
+// ---------- Subir de nivel SEM trocar o tipo de conta (v2.2) ----------
+//
+// Defeito encontrado: cada fase subia UM degrau da escada, mas o degrau
+// seguinte nem sempre e da mesma operacao. Quem escolhia o nivel 2 (so
+// subtracao) caia no 3 (soma e subtracao) na fase seguinte e no 4 (so
+// soma) depois — o tipo que a crianca escolheu treinar mudava sozinho.
+//
+// Agora a subida anda so pelos niveis com EXATAMENTE os mesmos tipos de
+// conta, do mais facil para o mais dificil:
+//   soma            1 → 4 → 6
+//   subtracao       2 → 5
+//   soma+subtracao  3 → 7
+//   multiplicacao   8 → 9
+//   divisao         10 → 11
+//   as quatro       12
+// Quando a cadeia acaba, fica no ultimo degrau dela.
+function mesmosTipos(a, b) {
+  if (a.length !== b.length) return false;
+  return a.every(function(t) { return b.indexOf(t) !== -1; });
+}
+
+function cadeiaDoNivel(id) {
+  var base = obterNivel(id);
+  return NIVEIS.filter(function(nv) { return nv.id >= base.id && mesmosTipos(nv.tipos, base.tipos); })
+    .map(function(nv) { return nv.id; });
+}
+
+// Nivel `passos` degraus acima de `id`, sem sair do mesmo tipo de conta.
+function nivelAcimaMesmoTipo(id, passos) {
+  var cadeia = cadeiaDoNivel(id);
+  return cadeia[Math.max(0, Math.min(cadeia.length - 1, passos || 0))];
 }
 
 // ---------- Compatibilidade com as 3 dificuldades antigas ----------

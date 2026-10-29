@@ -27,20 +27,20 @@ var AVATARES_GRATIS = [
   { seed: 'Azul',     nome: 'Azulão' }
 ];
 
-// Vendidos na Loja (aba "Avatares").
+// Vendidos na Loja (aba "Avatares"). v2.2: 80/100/120 -> 100/140/180.
 var AVATARES_LOJA = [
-  { seed: 'Ronaldinho', nome: 'Bruxo',       preco: 80 },
-  { seed: 'Kaka',       nome: 'Maestro',     preco: 80 },
-  { seed: 'Leao',       nome: 'Leão',        preco: 80 },
-  { seed: 'Panda',      nome: 'Panda',       preco: 80 },
-  { seed: 'Coruja',     nome: 'Coruja',      preco: 80 },
-  { seed: 'Raposa',     nome: 'Raposa',      preco: 80 },
-  { seed: 'Trovao',     nome: 'Trovão',      preco: 100 },
-  { seed: 'Fenix',      nome: 'Fênix',       preco: 100 },
-  { seed: 'Astronauta', nome: 'Astronauta',  preco: 100 },
-  { seed: 'Pirata',     nome: 'Pirata',      preco: 100 },
-  { seed: 'Dinossauro', nome: 'Dinossauro',  preco: 100 },
-  { seed: 'Dourado',    nome: 'Dourado',     preco: 120 }
+  { seed: 'Ronaldinho', nome: 'Bruxo',       preco: 100 },
+  { seed: 'Kaka',       nome: 'Maestro',     preco: 100 },
+  { seed: 'Leao',       nome: 'Leão',        preco: 100 },
+  { seed: 'Panda',      nome: 'Panda',       preco: 100 },
+  { seed: 'Coruja',     nome: 'Coruja',      preco: 100 },
+  { seed: 'Raposa',     nome: 'Raposa',      preco: 100 },
+  { seed: 'Trovao',     nome: 'Trovão',      preco: 140 },
+  { seed: 'Fenix',      nome: 'Fênix',       preco: 140 },
+  { seed: 'Astronauta', nome: 'Astronauta',  preco: 140 },
+  { seed: 'Pirata',     nome: 'Pirata',      preco: 140 },
+  { seed: 'Dinossauro', nome: 'Dinossauro',  preco: 140 },
+  { seed: 'Dourado',    nome: 'Dourado',     preco: 180 }
 ];
 
 var AVATAR_PADRAO = { seed: 'Pele' };

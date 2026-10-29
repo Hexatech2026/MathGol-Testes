@@ -21,7 +21,7 @@
 
   // Unicas chaves do localStorage que um backup local pode restaurar.
   var CHAVES_LOCAIS_PERMITIDAS = ['mathgol_acessibilidade', 'mathgol_progressao', 'mathgol_ultimo_resultado', 'mathgol_carteira',
-    'mathgol_conquistas', 'mathgol_perfil'];
+    'mathgol_conquistas', 'mathgol_perfil', 'mathgol_copa'];
   // Chaves de versoes antigas: aceitas no arquivo, mas IGNORADAS (o antigo
   // token nunca foi credencial e nao e mais usado para nada).
   var CHAVES_LEGADAS_IGNORADAS = ['mathgol_token'];
@@ -153,7 +153,7 @@
   // saldo nunca passa do total ja ganho; itens unicos e com formato conhecido.
   var SALDO_MAXIMO = 999999;
   var MAXIMO_ITENS = 200;
-  var ID_ITEM_LOJA = /^(selecao|clube|avatar|nome|borda):[^<>:\u0000-\u001f]{1,32}$/;
+  var ID_ITEM_LOJA = /^(selecao|clube|avatar|nome|borda|comemoracao):[^<>:\u0000-\u001f]{1,32}$/;
 
   function validarCarteira(obj) {
     if (!objetoSimples(obj) || !somenteChaves(obj, ['versao', 'dados']) || obj.versao !== 1) return false;
@@ -176,8 +176,10 @@
   // { versao: 1, dados: { feitas: { id: 'ISO' }, contadores: { contasCertas,
   //   gols, partidas, compras, dias, ultimoDia: 'AAAA-MM-DD' | '' } } }
   var ID_CONQUISTA = /^[a-z0-9-]{1,32}$/;
-  var CONTADORES_CONQUISTA = ['contasCertas', 'gols', 'partidas', 'compras', 'dias'];
-  var MAXIMO_CONQUISTAS = 50;
+  // v2.2: + perfeitas, copas, vars, duelos (conquistas novas).
+  var CONTADORES_CONQUISTA = ['contasCertas', 'gols', 'partidas', 'compras', 'dias',
+    'perfeitas', 'copas', 'vars', 'duelos'];
+  var MAXIMO_CONQUISTAS = 60;
 
   function validarConquistas(obj) {
     if (!objetoSimples(obj) || !somenteChaves(obj, ['versao', 'dados']) || obj.versao !== 1) return false;
@@ -197,13 +199,37 @@
   // ---------- Perfil local (v2.0): nome escolhido, avatar e borda ----------
   // { versao: 1, dados: { personagem, animal, avatarSeed, borda } } — tudo
   // opcional, tudo texto curto escolhido de listas (nunca texto livre).
-  var CAMPOS_PERFIL_LOCAL = ['personagem', 'animal', 'avatarSeed', 'borda'];
+  // v2.2: + titulo, comemoracao (ids de lista) e numero da camisa ("1".."99").
+  var CAMPOS_PERFIL_LOCAL = ['personagem', 'animal', 'avatarSeed', 'borda', 'titulo', 'comemoracao', 'numero'];
 
   function validarPerfilLocal(obj) {
     if (!objetoSimples(obj) || !somenteChaves(obj, ['versao', 'dados']) || obj.versao !== 1) return false;
     var d = obj.dados;
     if (!objetoSimples(d) || !somenteChaves(d, CAMPOS_PERFIL_LOCAL)) return false;
+    if (d.numero !== undefined && !(typeof d.numero === 'string' && /^(?:[1-9]|[1-9][0-9])$/.test(d.numero))) return false;
     return CAMPOS_PERFIL_LOCAL.every(function(k) { return d[k] === undefined || textoAte(d[k], 40); });
+  }
+
+  // ---------- Copa do Mundo 2026 (v2.2, copa.js) ----------
+  // { versao: 1, dados: { selecaoId, grupo: 'A'..'L', semente, status,
+  //   jogos: [{ etapa, adv, gp, gc, ms }] } } — no maximo 8 jogos, em ordem.
+  var ETAPAS_COPA = ['grupo1', 'grupo2', 'grupo3', 'dezesseis', 'oitavas', 'quartas', 'semi', 'final'];
+  var ADVERSARIO_COPA = /^(?:[a-z]{2}|gb-(?:eng|sct|wls|nir))$/;
+
+  function validarCopa(obj) {
+    if (!objetoSimples(obj) || !somenteChaves(obj, ['versao', 'dados']) || obj.versao !== 1) return false;
+    var d = obj.dados;
+    if (!objetoSimples(d) || !somenteChaves(d, ['selecaoId', 'grupo', 'semente', 'jogos', 'status'])) return false;
+    if (typeof d.selecaoId !== 'string' || !/^[a-z0-9_-]{1,32}$/.test(d.selecaoId)) return false;
+    if (typeof d.grupo !== 'string' || !/^[A-L]$/.test(d.grupo)) return false;
+    if (!inteiroEntre(d.semente, 0, 4294967295)) return false;
+    if (['andando', 'eliminado', 'campeao'].indexOf(d.status) === -1) return false;
+    if (!Array.isArray(d.jogos) || d.jogos.length > ETAPAS_COPA.length) return false;
+    return d.jogos.every(function(j, i) {
+      return objetoSimples(j) && somenteChaves(j, ['etapa', 'adv', 'gp', 'gc', 'ms']) &&
+        j.etapa === ETAPAS_COPA[i] && typeof j.adv === 'string' && ADVERSARIO_COPA.test(j.adv) &&
+        inteiroEntre(j.gp, 0, 20) && inteiroEntre(j.gc, 0, 20) && typeof j.ms === 'boolean';
+    });
   }
 
   // ---------- Estado do craque na nuvem (v2.0, codigo do craque) ----------
@@ -213,12 +239,12 @@
   // validacao do localStorage. Devolve uma copia limpa ou null.
   function validarEstadoNuvem(e) {
     if (!objetoSimples(e) || e.versao !== 1) return null;
-    if (!somenteChaves(e, ['versao', 'atualizadoEm', 'carteira', 'progressao', 'conquistas', 'perfil'])) return null;
+    if (!somenteChaves(e, ['versao', 'atualizadoEm', 'carteira', 'progressao', 'conquistas', 'perfil', 'copa'])) return null;
     if (!inteiroEntre(e.atualizadoEm, 0, 9007199254740991)) return null;
     var limpo = { versao: 1, atualizadoEm: e.atualizadoEm };
     var partes = {
       carteira: validarCarteira, progressao: validarProgressao,
-      conquistas: validarConquistas, perfil: validarPerfilLocal
+      conquistas: validarConquistas, perfil: validarPerfilLocal, copa: validarCopa
     };
     var ok = Object.keys(partes).every(function(k) {
       if (e[k] === undefined || e[k] === null) return true;
@@ -236,7 +262,8 @@
     mathgol_ultimo_resultado: validarUltimoResultado,
     mathgol_carteira: validarCarteira,
     mathgol_conquistas: validarConquistas,
-    mathgol_perfil: validarPerfilLocal
+    mathgol_perfil: validarPerfilLocal,
+    mathgol_copa: validarCopa
   };
 
   // ---------- Backups ----------
@@ -336,6 +363,7 @@
     validarCarteira: validarCarteira,
     validarConquistas: validarConquistas,
     validarPerfilLocal: validarPerfilLocal,
+    validarCopa: validarCopa,
     validarEstadoNuvem: validarEstadoNuvem,
     SALDO_MAXIMO: SALDO_MAXIMO
   };

@@ -25,7 +25,8 @@ let ANIMAIS_LOJA = [
 ];
 
 // Preço (em Cruzeiros) de cada nome vendido na Loja.
-var PRECO_NOME_LOJA = 60;
+// v2.2: 60 -> 50. Um nome sai na primeira partida boa (3 gols ~ 150).
+var PRECO_NOME_LOJA = 50;
 
 // ---------- Times ----------
 // categoria: 'selecao' (bandeira da flagcdn) ou 'clube' (escudo PROPRIO,
@@ -43,40 +44,40 @@ let SELECOES = [
   { id: 'franca',     categoria: 'selecao', preco: 0,   nome: 'França',     bandeira: 'fr',     corPrimaria: '#3A5FCD', corSecundaria: '#E0343B' },
   { id: 'alemanha',   categoria: 'selecao', preco: 0,   nome: 'Alemanha',   bandeira: 'de',     corPrimaria: '#21303B', corSecundaria: '#E0343B' },
   // Seleções da Loja
-  { id: 'portugal',   categoria: 'selecao', preco: 150, nome: 'Portugal',   bandeira: 'pt',     corPrimaria: '#C8102E', corSecundaria: '#2E9E5B' },
-  { id: 'espanha',    categoria: 'selecao', preco: 150, nome: 'Espanha',    bandeira: 'es',     corPrimaria: '#E0343B', corSecundaria: '#FFC63B' },
-  { id: 'italia',     categoria: 'selecao', preco: 150, nome: 'Itália',     bandeira: 'it',     corPrimaria: '#3A5FCD', corSecundaria: '#FFFDF6' },
-  { id: 'inglaterra', categoria: 'selecao', preco: 150, nome: 'Inglaterra', bandeira: 'gb-eng', corPrimaria: '#FFFDF6', corSecundaria: '#E0343B' },
-  { id: 'holanda',    categoria: 'selecao', preco: 150, nome: 'Holanda',    bandeira: 'nl',     corPrimaria: '#F36C21', corSecundaria: '#21303B' },
-  { id: 'uruguai',    categoria: 'selecao', preco: 120, nome: 'Uruguai',    bandeira: 'uy',     corPrimaria: '#5CBFEB', corSecundaria: '#21303B' },
-  { id: 'japao',      categoria: 'selecao', preco: 120, nome: 'Japão',      bandeira: 'jp',     corPrimaria: '#1B3C8C', corSecundaria: '#FFFDF6' },
-  { id: 'marrocos',   categoria: 'selecao', preco: 120, nome: 'Marrocos',   bandeira: 'ma',     corPrimaria: '#C1272D', corSecundaria: '#006233' },
-  { id: 'colombia',   categoria: 'selecao', preco: 120, nome: 'Colômbia',   bandeira: 'co',     corPrimaria: '#FFC63B', corSecundaria: '#3A5FCD' },
-  { id: 'mexico',     categoria: 'selecao', preco: 120, nome: 'México',     bandeira: 'mx',     corPrimaria: '#2E9E5B', corSecundaria: '#FFFDF6' },
-  { id: 'estados-unidos', categoria: 'selecao', preco: 120, nome: 'Estados Unidos', bandeira: 'us', corPrimaria: '#FFFDF6', corSecundaria: '#1B3C8C' },
-  { id: 'coreia',     categoria: 'selecao', preco: 120, nome: 'Coreia',     bandeira: 'kr',     corPrimaria: '#E0343B', corSecundaria: '#3A5FCD' },
+  { id: 'portugal',   categoria: 'selecao', preco: 200, nome: 'Portugal',   bandeira: 'pt',     corPrimaria: '#C8102E', corSecundaria: '#2E9E5B' },
+  { id: 'espanha',    categoria: 'selecao', preco: 200, nome: 'Espanha',    bandeira: 'es',     corPrimaria: '#E0343B', corSecundaria: '#FFC63B' },
+  { id: 'italia',     categoria: 'selecao', preco: 200, nome: 'Itália',     bandeira: 'it',     corPrimaria: '#3A5FCD', corSecundaria: '#FFFDF6' },
+  { id: 'inglaterra', categoria: 'selecao', preco: 200, nome: 'Inglaterra', bandeira: 'gb-eng', corPrimaria: '#FFFDF6', corSecundaria: '#E0343B' },
+  { id: 'holanda',    categoria: 'selecao', preco: 200, nome: 'Holanda',    bandeira: 'nl',     corPrimaria: '#F36C21', corSecundaria: '#21303B' },
+  { id: 'uruguai',    categoria: 'selecao', preco: 150, nome: 'Uruguai',    bandeira: 'uy',     corPrimaria: '#5CBFEB', corSecundaria: '#21303B' },
+  { id: 'japao',      categoria: 'selecao', preco: 150, nome: 'Japão',      bandeira: 'jp',     corPrimaria: '#1B3C8C', corSecundaria: '#FFFDF6' },
+  { id: 'marrocos',   categoria: 'selecao', preco: 150, nome: 'Marrocos',   bandeira: 'ma',     corPrimaria: '#C1272D', corSecundaria: '#006233' },
+  { id: 'colombia',   categoria: 'selecao', preco: 150, nome: 'Colômbia',   bandeira: 'co',     corPrimaria: '#FFC63B', corSecundaria: '#3A5FCD' },
+  { id: 'mexico',     categoria: 'selecao', preco: 150, nome: 'México',     bandeira: 'mx',     corPrimaria: '#2E9E5B', corSecundaria: '#FFFDF6' },
+  { id: 'estados-unidos', categoria: 'selecao', preco: 150, nome: 'Estados Unidos', bandeira: 'us', corPrimaria: '#FFFDF6', corSecundaria: '#1B3C8C' },
+  { id: 'coreia',     categoria: 'selecao', preco: 150, nome: 'Coreia',     bandeira: 'kr',     corPrimaria: '#E0343B', corSecundaria: '#3A5FCD' },
 
   // Brasileirão Série A 2026 (os 20 clubes da temporada). Todos na Loja.
-  { id: 'athletico-pr',  categoria: 'clube', preco: 200, nome: 'Athletico-PR',  sigla: 'CAP', corPrimaria: '#C8102E', corSecundaria: '#111111', padrao: 'vertical' },
-  { id: 'atletico-mg',   categoria: 'clube', preco: 200, nome: 'Atlético-MG',   sigla: 'CAM', corPrimaria: '#111111', corSecundaria: '#FFFFFF', padrao: 'vertical' },
-  { id: 'bahia',         categoria: 'clube', preco: 200, nome: 'Bahia',         sigla: 'BAH', corPrimaria: '#0047AB', corSecundaria: '#FFFFFF', padrao: 'tricolor-h', corTerciaria: '#E30613' },
-  { id: 'botafogo',      categoria: 'clube', preco: 200, nome: 'Botafogo',      sigla: 'BOT', corPrimaria: '#111111', corSecundaria: '#FFFFFF', padrao: 'vertical' },
-  { id: 'bragantino',    categoria: 'clube', preco: 200, nome: 'Bragantino',    sigla: 'RBB', corPrimaria: '#FFFFFF', corSecundaria: '#D2003C', padrao: 'faixa-h' },
-  { id: 'chapecoense',   categoria: 'clube', preco: 200, nome: 'Chapecoense',   sigla: 'CHA', corPrimaria: '#00843D', corSecundaria: '#FFFFFF', padrao: 'liso' },
-  { id: 'corinthians',   categoria: 'clube', preco: 200, nome: 'Corinthians',   sigla: 'COR', corPrimaria: '#FFFFFF', corSecundaria: '#111111', padrao: 'liso' },
-  { id: 'coritiba',      categoria: 'clube', preco: 200, nome: 'Coritiba',      sigla: 'CFC', corPrimaria: '#00543C', corSecundaria: '#FFFFFF', padrao: 'vertical' },
-  { id: 'cruzeiro',      categoria: 'clube', preco: 200, nome: 'Cruzeiro',      sigla: 'CRU', corPrimaria: '#0033A0', corSecundaria: '#FFFFFF', padrao: 'liso' },
-  { id: 'flamengo',      categoria: 'clube', preco: 200, nome: 'Flamengo',      sigla: 'FLA', corPrimaria: '#C8102E', corSecundaria: '#111111', padrao: 'horizontal' },
-  { id: 'fluminense',    categoria: 'clube', preco: 200, nome: 'Fluminense',    sigla: 'FLU', corPrimaria: '#7A1E3A', corSecundaria: '#00613C', padrao: 'tricolor-v', corTerciaria: '#FFFFFF' },
-  { id: 'gremio',        categoria: 'clube', preco: 200, nome: 'Grêmio',        sigla: 'GRE', corPrimaria: '#0D80BF', corSecundaria: '#111111', padrao: 'tricolor-v', corTerciaria: '#FFFFFF' },
-  { id: 'internacional', categoria: 'clube', preco: 200, nome: 'Internacional', sigla: 'INT', corPrimaria: '#E30613', corSecundaria: '#FFFFFF', padrao: 'liso' },
-  { id: 'mirassol',      categoria: 'clube', preco: 200, nome: 'Mirassol',      sigla: 'MIR', corPrimaria: '#FFD200', corSecundaria: '#00843D', padrao: 'faixa-h' },
-  { id: 'palmeiras',     categoria: 'clube', preco: 200, nome: 'Palmeiras',     sigla: 'PAL', corPrimaria: '#006437', corSecundaria: '#FFFFFF', padrao: 'liso' },
-  { id: 'remo',          categoria: 'clube', preco: 200, nome: 'Remo',          sigla: 'REM', corPrimaria: '#0A1F5C', corSecundaria: '#FFFFFF', padrao: 'faixa-h' },
-  { id: 'santos',        categoria: 'clube', preco: 200, nome: 'Santos',        sigla: 'SAN', corPrimaria: '#FFFFFF', corSecundaria: '#111111', padrao: 'liso' },
-  { id: 'sao-paulo',     categoria: 'clube', preco: 200, nome: 'São Paulo',     sigla: 'SAO', corPrimaria: '#FFFFFF', corSecundaria: '#E30613', padrao: 'tricolor-h', corTerciaria: '#111111' },
-  { id: 'vasco',         categoria: 'clube', preco: 200, nome: 'Vasco',         sigla: 'VAS', corPrimaria: '#111111', corSecundaria: '#FFFFFF', padrao: 'diagonal' },
-  { id: 'vitoria',       categoria: 'clube', preco: 200, nome: 'Vitória',       sigla: 'VIT', corPrimaria: '#E30613', corSecundaria: '#111111', padrao: 'vertical' }
+  { id: 'athletico-pr',  categoria: 'clube', preco: 250, nome: 'Athletico-PR',  sigla: 'CAP', corPrimaria: '#C8102E', corSecundaria: '#111111', padrao: 'vertical' },
+  { id: 'atletico-mg',   categoria: 'clube', preco: 250, nome: 'Atlético-MG',   sigla: 'CAM', corPrimaria: '#111111', corSecundaria: '#FFFFFF', padrao: 'vertical' },
+  { id: 'bahia',         categoria: 'clube', preco: 250, nome: 'Bahia',         sigla: 'BAH', corPrimaria: '#0047AB', corSecundaria: '#FFFFFF', padrao: 'tricolor-h', corTerciaria: '#E30613' },
+  { id: 'botafogo',      categoria: 'clube', preco: 250, nome: 'Botafogo',      sigla: 'BOT', corPrimaria: '#111111', corSecundaria: '#FFFFFF', padrao: 'vertical' },
+  { id: 'bragantino',    categoria: 'clube', preco: 250, nome: 'Bragantino',    sigla: 'RBB', corPrimaria: '#FFFFFF', corSecundaria: '#D2003C', padrao: 'faixa-h' },
+  { id: 'chapecoense',   categoria: 'clube', preco: 250, nome: 'Chapecoense',   sigla: 'CHA', corPrimaria: '#00843D', corSecundaria: '#FFFFFF', padrao: 'liso' },
+  { id: 'corinthians',   categoria: 'clube', preco: 250, nome: 'Corinthians',   sigla: 'COR', corPrimaria: '#FFFFFF', corSecundaria: '#111111', padrao: 'liso' },
+  { id: 'coritiba',      categoria: 'clube', preco: 250, nome: 'Coritiba',      sigla: 'CFC', corPrimaria: '#00543C', corSecundaria: '#FFFFFF', padrao: 'vertical' },
+  { id: 'cruzeiro',      categoria: 'clube', preco: 250, nome: 'Cruzeiro',      sigla: 'CRU', corPrimaria: '#0033A0', corSecundaria: '#FFFFFF', padrao: 'liso' },
+  { id: 'flamengo',      categoria: 'clube', preco: 250, nome: 'Flamengo',      sigla: 'FLA', corPrimaria: '#C8102E', corSecundaria: '#111111', padrao: 'horizontal' },
+  { id: 'fluminense',    categoria: 'clube', preco: 250, nome: 'Fluminense',    sigla: 'FLU', corPrimaria: '#7A1E3A', corSecundaria: '#00613C', padrao: 'tricolor-v', corTerciaria: '#FFFFFF' },
+  { id: 'gremio',        categoria: 'clube', preco: 250, nome: 'Grêmio',        sigla: 'GRE', corPrimaria: '#0D80BF', corSecundaria: '#111111', padrao: 'tricolor-v', corTerciaria: '#FFFFFF' },
+  { id: 'internacional', categoria: 'clube', preco: 250, nome: 'Internacional', sigla: 'INT', corPrimaria: '#E30613', corSecundaria: '#FFFFFF', padrao: 'liso' },
+  { id: 'mirassol',      categoria: 'clube', preco: 250, nome: 'Mirassol',      sigla: 'MIR', corPrimaria: '#FFD200', corSecundaria: '#00843D', padrao: 'faixa-h' },
+  { id: 'palmeiras',     categoria: 'clube', preco: 250, nome: 'Palmeiras',     sigla: 'PAL', corPrimaria: '#006437', corSecundaria: '#FFFFFF', padrao: 'liso' },
+  { id: 'remo',          categoria: 'clube', preco: 250, nome: 'Remo',          sigla: 'REM', corPrimaria: '#0A1F5C', corSecundaria: '#FFFFFF', padrao: 'faixa-h' },
+  { id: 'santos',        categoria: 'clube', preco: 250, nome: 'Santos',        sigla: 'SAN', corPrimaria: '#FFFFFF', corSecundaria: '#111111', padrao: 'liso' },
+  { id: 'sao-paulo',     categoria: 'clube', preco: 250, nome: 'São Paulo',     sigla: 'SAO', corPrimaria: '#FFFFFF', corSecundaria: '#E30613', padrao: 'tricolor-h', corTerciaria: '#111111' },
+  { id: 'vasco',         categoria: 'clube', preco: 250, nome: 'Vasco',         sigla: 'VAS', corPrimaria: '#111111', corSecundaria: '#FFFFFF', padrao: 'diagonal' },
+  { id: 'vitoria',       categoria: 'clube', preco: 250, nome: 'Vitória',       sigla: 'VIT', corPrimaria: '#E30613', corSecundaria: '#111111', padrao: 'vertical' }
 ];
 
 let DIFICULDADES = [
@@ -215,6 +216,10 @@ function catalogoLoja() {
   // v2.0: bordas do avatar (bordas.js). As de conquista nao sao vendidas.
   (typeof BORDAS !== 'undefined' ? BORDAS : []).forEach(function(b) {
     if (b.origem === 'loja') itens.push({ id: 'borda:' + b.id, tipo: 'borda', nome: b.nome, preco: b.preco, borda: b.id });
+  });
+  // v2.2: comemoracoes de gol (comemoracoes.js).
+  (typeof COMEMORACOES !== 'undefined' ? COMEMORACOES : []).forEach(function(c) {
+    if (c.origem === 'loja') itens.push({ id: 'comemoracao:' + c.id, tipo: 'comemoracao', nome: c.nome, preco: c.preco, comemoracao: c });
   });
   return itens;
 }

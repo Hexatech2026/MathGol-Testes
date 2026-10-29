@@ -180,12 +180,16 @@ var Progressao = (function() {
   // Aceita numero (nivel novo, 1..12) ou 'facil'/'medio'/'dificil' (progresso
   // salvo antes da escada existir), traduzido por niveis.js — por isso
   // ninguem perde o que ja tinha.
-  function dificuldadeEfetiva(nivelOuDificuldade, faseId) {
+  // v2.2: sobe pela cadeia de niveis do MESMO tipo de conta (niveis.js →
+  // nivelAcimaMesmoTipo). Antes era base + 1 por fase, e o tipo escolhido
+  // mudava no meio do caminho (ex.: nivel 2, so subtracao → nivel 4, so soma).
+  // passosExtras: degraus a mais pedidos pela Copa (mata-mata, final).
+  function dificuldadeEfetiva(nivelOuDificuldade, faseId, passosExtras) {
     var base = typeof nivelOuDificuldade === 'number'
       ? nivelOuDificuldade
       : nivelDaDificuldadeAntiga(nivelOuDificuldade);
-    var idx = indiceFase(faseId);
-    return obterNivel(base + idx * PASSO_POR_FASE).id; // obterNivel limita em 1..12
+    var passos = typeof passosExtras === 'number' ? passosExtras : indiceFase(faseId) * PASSO_POR_FASE;
+    return nivelAcimaMesmoTipo(base, passos);
   }
 
   // Registra resultado de uma fase. Retorna { desbloqueou: bool, proximaFase: string|null }

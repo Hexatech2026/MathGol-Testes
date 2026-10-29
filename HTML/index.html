@@ -193,7 +193,8 @@
     <h2 data-titulo-tela>⭐ Meu craque</h2>
     <div class="perfil-cabecalho">
       <div id="perfil-avatar-grande" class="perfil-avatar-grande"></div>
-      <p id="perfil-nome" class="perfil-nome">Novo craque</p>
+      <p class="perfil-nome"><span id="perfil-nome">Novo craque</span><span id="perfil-selo" class="selo-verificado" hidden>✔</span></p>
+      <p id="perfil-titulo" class="perfil-titulo">Estreante</p>
       <div class="perfil-numeros">
         <span class="numero-perfil"><strong id="perfil-gols">0</strong> gols</span>
         <button id="botao-perfil-conquistas" class="numero-perfil numero-perfil-botao" type="button"><strong id="perfil-conquistas">0/18</strong> conquistas</button>
@@ -201,6 +202,29 @@
       </div>
       <button id="botao-editar-craque" class="botao botao-secundario botao-compacto" type="button">✏️ Trocar nome e avatar</button>
     </div>
+
+    <h3 class="subtitulo-secao">👕 Minha camisa</h3>
+    <div class="linha-camisa">
+      <div id="previa-camisa" class="previa-camisa" aria-hidden="true">
+        <span id="previa-camisa-nome" class="previa-camisa-nome">CRAQUE</span>
+        <span id="previa-camisa-numero" class="previa-camisa-numero">10</span>
+      </div>
+      <div class="controle-numero" role="group" aria-labelledby="rotulo-numero-camisa">
+        <span id="rotulo-numero-camisa" class="rotulo-campo">Número</span>
+        <div class="linha-numero">
+          <button id="botao-numero-menos" class="botao-icone botao-numero" type="button" aria-label="Diminuir o número da camisa">−</button>
+          <input id="input-numero-camisa" class="campo-numero" type="number" inputmode="numeric" min="1" max="99" value="10" aria-label="Número da camisa, de 1 a 99">
+          <button id="botao-numero-mais" class="botao-icone botao-numero" type="button" aria-label="Aumentar o número da camisa">+</button>
+        </div>
+        <p class="texto-apoio texto-apoio-curto">O nome que vai nas costas é o do seu craque.</p>
+      </div>
+    </div>
+
+    <h3 class="subtitulo-secao">🎖️ Título</h3>
+    <div id="grade-titulos" class="lista-chips grade-titulos" role="group" aria-label="Títulos do craque"></div>
+
+    <h3 class="subtitulo-secao">🎉 Comemoração do gol</h3>
+    <div id="grade-comemoracoes" class="grade-comemoracoes" role="group" aria-label="Comemorações do gol"></div>
 
     <h3 class="subtitulo-secao">🖼️ Bordas do avatar</h3>
     <p class="texto-apoio texto-apoio-curto">Toque para usar. As com 🔒 você ganha na Loja ou nas conquistas.</p>
@@ -279,6 +303,11 @@
         <button id="botao-criar-sala" class="botao botao-cta" type="button">Criar sala</button>
       </div>
       <p id="aviso-prof" class="aviso-sala" role="status" aria-live="polite"></p>
+
+      <div id="prof-minhas-salas" class="prof-minhas-salas" hidden>
+        <h3 class="subtitulo-secao">📚 Minhas salas neste aparelho</h3>
+        <ul id="lista-minhas-salas" class="lista-minhas-salas"></ul>
+      </div>
     </div>
 
     <div id="prof-com-sala" hidden>
@@ -291,6 +320,20 @@
 
       <h3 class="subtitulo-secao">Turma <span id="prof-contagem" class="contagem-alunos">(0)</span></h3>
       <ul id="lista-alunos" class="lista-alunos" aria-live="polite"></ul>
+
+      <h3 class="subtitulo-secao">📊 Notas e desempenho</h3>
+      <p class="texto-apoio texto-apoio-curto">Baixe a tabela da turma: partidas, contas certas e erradas, % de acerto, tempo médio e uma nota sugerida.</p>
+      <div class="linha-exportar">
+        <button id="botao-exportar-excel" class="botao botao-secundario botao-compacto" type="button">📗 Baixar Excel</button>
+        <button id="botao-exportar-pdf" class="botao botao-secundario botao-compacto" type="button">📕 Baixar PDF</button>
+      </div>
+      <p id="aviso-exportar" class="aviso-sala" role="status" aria-live="polite"></p>
+      <details class="privacidade privacidade-prof">
+        <summary>🛡️ Nomes dos alunos: só no seu aparelho</summary>
+        <p>O jogo não pede o nome de ninguém. Nos alunos com selo <span class="selo-verificado">✔</span> (que criaram o código do craque) você pode anotar o nome de verdade para a sua chamada.</p>
+        <p>Esse nome fica <strong>só neste navegador</strong>: não vai para a internet nem para o banco de dados, e só aparece para você e nos arquivos que você baixar.</p>
+        <button id="botao-apagar-nomes" class="link-mais-opcoes link-perigo" type="button">🗑️ Apagar os nomes desta sala deste aparelho</button>
+      </details>
 
       <div class="pilha-botoes" style="margin-top: 16px;">
         <button id="botao-fechar-painel" class="botao" type="button">Voltar ao menu</button>
@@ -345,11 +388,39 @@
     </div>
   </section>
 
-  <section id="tela-fases" class="tela">
-    <h2>Escolha a Fase</h2>
+  <!-- v2.2: as fases viraram a Copa do Mundo 2026 (JS/copa.js). O treino
+       livre (as 3 fases antigas, sem Copa) continua embaixo. -->
+  <section id="tela-fases" class="tela tela-copa">
+    <h2>🏆 Copa do Mundo 2026</h2>
+    <p class="texto-apoio texto-apoio-curto">48 seleções · EUA, México e Canadá</p>
+    <div id="copa-painel" class="copa-painel" aria-live="polite"></div>
+    <div class="pilha-botoes">
+      <button id="botao-jogar-copa" class="botao botao-cta" type="button">Jogar! 🏟️</button>
+      <button id="botao-nova-copa" class="link-mais-opcoes" type="button">🔄 Começar uma nova Copa</button>
+    </div>
+    <details class="copa-todos-grupos">
+      <summary>🌎 Ver os 12 grupos</summary>
+      <div id="copa-grupos" class="copa-grupos"></div>
+    </details>
+
+    <h3 class="subtitulo-secao">🎮 Jogar com os amigos</h3>
+    <div class="grade-atalhos grade-modos">
+      <button id="botao-modo-duelo" class="atalho" type="button">
+        <span class="atalho-icone" aria-hidden="true">🤝</span>
+        <span class="atalho-texto">Duelo de pênaltis</span>
+        <span class="atalho-sub">2 jogadores, um aparelho</span>
+      </button>
+      <button id="botao-modo-botao" class="atalho" type="button">
+        <span class="atalho-icone" aria-hidden="true">🔘</span>
+        <span class="atalho-texto">Futebol de botão</span>
+        <span class="atalho-sub">gol só vale depois do VAR</span>
+      </button>
+    </div>
+
+    <h3 class="subtitulo-secao">⚽ Treino livre (sem Copa)</h3>
     <div id="grade-fases" class="grade-cartoes"></div>
-    <div class="pilha-botoes" style="margin-top: 24px;">
-      <button id="botao-confirmar-fase" class="botao" type="button" disabled>Começar! 🏟️</button>
+    <div class="pilha-botoes" style="margin-top: 16px;">
+      <button id="botao-confirmar-fase" class="botao" type="button" disabled>Treinar! ⚽</button>
     </div>
   </section>
 
@@ -421,6 +492,35 @@
     </div>
   </section>
 
+  <!-- v2.2: futebol de botão (JS/botao.js). Canvas 2D por toque/mouse ou
+       teclado; todo gol passa pelo VAR (JS/var.js). -->
+  <section id="tela-botao" class="tela tela-botao">
+    <h2 data-titulo-tela>🔘 Futebol de botão</h2>
+    <div id="botao-escolha" class="botao-escolha">
+      <p class="texto-apoio texto-apoio-curto">Arraste um botão do seu time para trás e solte para chutar. Quem fizer 3 gols ganha. Todo gol vai para o VAR!</p>
+      <div class="pilha-botoes">
+        <button id="botao-botao-cpu" class="botao botao-cta" type="button">🤖 Contra o computador</button>
+        <button id="botao-botao-2j" class="botao" type="button">🤝 2 jogadores</button>
+      </div>
+    </div>
+    <div id="botao-jogo" class="botao-jogo" hidden>
+      <div class="botao-placar" aria-live="polite">
+        <span id="botao-nome-a" class="botao-time botao-time-a">Você</span>
+        <strong id="botao-placar">0 x 0</strong>
+        <span id="botao-nome-b" class="botao-time botao-time-b">Computador</span>
+      </div>
+      <p id="botao-vez" class="botao-vez" aria-live="polite">Sua vez!</p>
+      <div class="botao-campo-caixa">
+        <canvas id="botao-canvas" class="botao-canvas" tabindex="0" role="img"
+                aria-label="Campo do futebol de botão. Arraste um botão do seu time para trás e solte. No teclado: setas miram e dão força, N troca o botão, Enter chuta."></canvas>
+      </div>
+      <p class="texto-apoio texto-apoio-curto">Teclado: ← → mira · ↑ ↓ força · N troca de botão · Enter chuta.</p>
+    </div>
+    <div class="pilha-botoes" style="margin-top: 12px;">
+      <button id="botao-sair-botao" class="botao" type="button">Sair</button>
+    </div>
+  </section>
+
   <section id="tela-resultado" class="tela">
     <h2 id="titulo-resultado">Fim da fase Pênaltis!</h2>
     <div id="estrelas-resultado" class="estrelas-resultado" role="img" aria-label="0 estrelas de 3"></div>
@@ -431,7 +531,7 @@
     <ul id="lista-cobrancas" class="lista-cobrancas" aria-label="Resumo de cada cobrança"></ul>
     <p id="mensagem-desbloqueio" class="mensagem-desbloqueio" aria-live="polite" aria-atomic="true"></p>
     <div class="pilha-botoes">
-      <button id="botao-proxima-fase" class="botao botao-cta" type="button">Escolher fase 🏟️</button>
+      <button id="botao-proxima-fase" class="botao botao-cta" type="button">Ir para a Copa 🏆</button>
       <button id="botao-loja-resultado" class="botao botao-menu-loja" type="button">🛒 Gastar na Loja</button>
       <button id="botao-voltar-menu" class="botao" type="button">Voltar ao menu</button>
     </div>
@@ -451,6 +551,7 @@
       <button type="button" class="aba-loja" data-aba="avatar" aria-pressed="false">🙂 Avatares</button>
       <button type="button" class="aba-loja" data-aba="nome" aria-pressed="false">🏷️ Nomes</button>
       <button type="button" class="aba-loja" data-aba="borda" aria-pressed="false">🖼️ Bordas</button>
+      <button type="button" class="aba-loja" data-aba="comemoracao" aria-pressed="false">🎉 Comemorações</button>
     </div>
     <p id="status-loja" class="status-loja" role="status" aria-live="polite"></p>
     <div id="grade-loja" class="grade-loja"></div>
@@ -682,6 +783,34 @@
   </div>
 </div>
 
+<!-- v2.2: Duelo de pênaltis — quem é o jogador 2 (nome de lista, nunca texto livre). -->
+<div id="sobreposicao-duelo" class="sobreposicao" aria-hidden="true">
+  <div class="painel-compra" role="dialog" aria-modal="true" aria-labelledby="titulo-duelo">
+    <h2 id="titulo-duelo" style="text-align:center; margin-bottom:10px;">🤝 Duelo de pênaltis</h2>
+    <p class="texto-compra">Cada um bate 5 pênaltis, um de cada vez, no mesmo aparelho. Empatou? Morte súbita!</p>
+    <p class="texto-compra"><strong id="duelo-jogador1">Jogador 1</strong> contra quem?</p>
+    <div id="duelo-jogadores2" class="lista-chips" role="group" aria-label="Nome do jogador 2"></div>
+    <div class="pilha-botoes">
+      <button id="botao-comecar-duelo" class="botao botao-cta-simples" type="button" disabled>Começar o duelo!</button>
+      <button id="botao-cancelar-duelo" class="botao botao-cancelar" type="button">Agora não</button>
+    </div>
+  </div>
+</div>
+
+<!-- v2.2: VAR do futebol de botão. Não fecha clicando fora: o gol fica em
+     análise até a criança acertar a expressão. -->
+<div id="sobreposicao-var" class="sobreposicao sobreposicao-var" aria-hidden="true">
+  <div class="painel-var" role="dialog" aria-modal="true" aria-labelledby="titulo-var" aria-describedby="texto-var">
+    <h2 id="titulo-var" style="text-align:center; margin-bottom:6px;">📺 VAR: gol em análise</h2>
+    <p id="texto-var" class="texto-compra">Para o juiz confirmar o gol, resolva a expressão:</p>
+    <p id="expressao-var" class="expressao-var" aria-live="polite">--</p>
+    <p class="dica-var">💡 <span id="dica-var">Primeiro os parênteses, depois × e ÷, por último + e −.</span></p>
+    <div id="alternativas-var" class="alternativas-var" role="group" aria-label="Respostas"></div>
+    <p id="aviso-var" class="aviso-sala" role="status" aria-live="assertive"></p>
+    <button id="botao-ouvir-var" class="botao-ouvir-novamente" type="button">🔊 Ouvir a expressão</button>
+  </div>
+</div>
+
 <!-- v2.0: Código do craque — mostrado UMA vez, logo depois de criado. Só
      fecha no "Já guardei!" (clicar fora não fecha: a criança não pode
      perder o código por um toque sem querer). -->
@@ -752,8 +881,11 @@
 <script src="../JS/data.js"></script>
 <script src="../JS/niveis.js"></script>
 <script src="../JS/sala.js"></script>
+<script src="../JS/turma.js"></script>
 <script src="../JS/avatar-data.js"></script>
 <script src="../JS/bordas.js"></script>
+<script src="../JS/titulos.js"></script>
+<script src="../JS/comemoracoes.js"></script>
 <script src="../JS/codigo-craque.js"></script>
 <script src="../JS/carteira.js"></script>
 <script src="../JS/conquistas.js"></script>
@@ -766,11 +898,14 @@
 <script src="../JS/game.js"></script>
 <script src="../JS/game-2d.js"></script>
 <script src="../JS/progressao.js"></script>
+<script src="../JS/copa.js"></script>
+<script src="../JS/var.js"></script>
 <script src="../JS/main.js"></script>
 <script src="../JS/loja.js"></script>
 <script src="../JS/tutorial.js"></script>
 <script src="../JS/conta.js"></script>
 <script src="../JS/telas-v2.js"></script>
+<script src="../JS/botao.js"></script>
 <script src="../JS/fundo.js"></script>
 <script src="../JS/carregar-externos.js"></script>
 

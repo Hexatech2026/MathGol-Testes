@@ -2,7 +2,8 @@
 // nuvem e o CODIGO DO CRAQUE (continuar de outro aparelho).
 //
 // PERFIL LOCAL — localStorage "mathgol_perfil"
-//   { versao: 1, dados: { personagem, animal, avatarSeed, borda } }
+//   { versao: 1, dados: { personagem, animal, avatarSeed, borda,
+//                         titulo, comemoracao, numero } }   (v2.2: + 3 ultimos)
 // Antes o nome e o avatar so viviam na memoria e a crianca escolhia tudo de
 // novo a cada visita. Agora ficam salvos (e entram no backup e na nuvem).
 //
@@ -24,7 +25,7 @@ var Conta = (function() {
   // Tudo que e "da crianca" e sai do aparelho ao trocar de jogador. As
   // preferencias do aparelho (acessibilidade, tutorial visto) ficam.
   var CHAVES_DO_JOGADOR = ['mathgol_carteira', 'mathgol_progressao', 'mathgol_conquistas',
-    'mathgol_perfil', 'mathgol_ultimo_resultado', CHAVE_SYNC];
+    'mathgol_perfil', 'mathgol_ultimo_resultado', 'mathgol_copa', CHAVE_SYNC];
 
   var perfil = {};
   var ouvintes = [];
@@ -66,6 +67,28 @@ var Conta = (function() {
     return b && bordaDisponivel(b) ? b.id : (typeof BORDA_PADRAO !== 'undefined' ? BORDA_PADRAO : 'simples');
   }
 
+  // v2.2 — titulo, comemoracao e camisa. Mesma regra da borda: o salvo so
+  // vale se ainda estiver disponivel; senao, o padrao.
+  function tituloAtual() {
+    var t = typeof tituloPorId === 'function' ? tituloPorId(perfil.titulo) : null;
+    return t && tituloDisponivel(t) ? t : (typeof tituloPorId === 'function' ? tituloPorId(TITULO_PADRAO) : null);
+  }
+  function comemoracaoAtual() {
+    var c = typeof comemoracaoPorId === 'function' ? comemoracaoPorId(perfil.comemoracao) : null;
+    return c && comemoracaoDisponivel(c) ? c.id : (typeof COMEMORACAO_PADRAO !== 'undefined' ? COMEMORACAO_PADRAO : 'classica');
+  }
+  function numeroCamisa() {
+    return /^(?:[1-9]|[1-9][0-9])$/.test(perfil.numero || '') ? perfil.numero : '10';
+  }
+  // Nome nas costas: a PRIMEIRA palavra do apelido (o personagem). Nunca o
+  // nome de verdade da crianca — o jogo nem pergunta (LGPD).
+  function nomeCamisa() {
+    var n = perfil.personagem || 'Craque';
+    return n.toUpperCase().slice(0, 12);
+  }
+  // Selo de verificado: a crianca tem o codigo do craque (a chave).
+  function verificado() { return !!statusNuvem.temCodigo; }
+
   function aoMudar(fn) { if (typeof fn === 'function') ouvintes.push(fn); }
   function avisar() {
     ouvintes.forEach(function(fn) { try { fn(); } catch (e) { console.warn('Erro num ouvinte da conta:', e); } });
@@ -94,6 +117,7 @@ var Conta = (function() {
     if (typeof Progressao !== 'undefined' && Progressao.exportar) e.progressao = Progressao.exportar();
     if (typeof Conquistas !== 'undefined') e.conquistas = Conquistas.exportar().dados;
     if (Object.keys(perfil).length) e.perfil = obterPerfil();
+    if (typeof Copa !== 'undefined' && Copa.exportar()) e.copa = Copa.exportar();
     return e;
   }
 
@@ -104,7 +128,8 @@ var Conta = (function() {
     if (!limpo) return false;
     aplicando = true;
     try {
-      var partes = { carteira: 'mathgol_carteira', progressao: 'mathgol_progressao', conquistas: 'mathgol_conquistas', perfil: CHAVE_PERFIL };
+      var partes = { carteira: 'mathgol_carteira', progressao: 'mathgol_progressao', conquistas: 'mathgol_conquistas',
+        perfil: CHAVE_PERFIL, copa: 'mathgol_copa' };
       Object.keys(partes).forEach(function(k) {
         if (limpo[k]) gravar(partes[k], JSON.stringify({ versao: 1, dados: limpo[k] }));
         else try { localStorage.removeItem(partes[k]); } catch (e) {}
@@ -113,6 +138,7 @@ var Conta = (function() {
       if (typeof Carteira !== 'undefined') Carteira.recarregar();
       if (typeof Progressao !== 'undefined' && Progressao.recarregar) Progressao.recarregar();
       if (typeof Conquistas !== 'undefined') Conquistas.recarregar();
+      if (typeof Copa !== 'undefined') Copa.recarregar();
       carregarPerfil();
     } finally {
       aplicando = false;
@@ -478,6 +504,11 @@ var Conta = (function() {
     apelido: apelido,
     salvarPerfil: salvarPerfil,
     bordaAtual: bordaAtual,
+    tituloAtual: tituloAtual,
+    comemoracaoAtual: comemoracaoAtual,
+    numeroCamisa: numeroCamisa,
+    nomeCamisa: nomeCamisa,
+    verificado: verificado,
     status: status,
     aoMudar: aoMudar,
     marcarMudanca: marcarMudanca,

@@ -54,8 +54,8 @@ test('catalogo do Brasileirao tem os 20 clubes da Serie A 2026', async ({ page }
 });
 
 test('comprar um clube: confirma, desconta o saldo e o time aparece na escolha', async ({ page }) => {
-  const erros = await A.abrirJogo(page, { carteira: carteira(250) });
-  await expect(page.locator('#saldo-topo')).toHaveText('250');
+  const erros = await A.abrirJogo(page, { carteira: carteira(300) }); // clube custa 250 (v2.2)
+  await expect(page.locator('#saldo-topo')).toHaveText('300');
   await page.evaluate(() => irParaSelecao());
   await page.click('#botao-loja-selecao');
   await expect(page.locator('#tela-loja')).toHaveClass(/tela-ativa/);
@@ -68,14 +68,14 @@ test('comprar um clube: confirma, desconta o saldo e o time aparece na escolha',
   await expect(page.locator('[data-item="clube:palmeiras"] .botao-comprar')).toHaveText(/É seu/);
   // Sem saldo: o proximo clube fica desabilitado e mostra quanto falta.
   await expect(page.locator('[data-item="clube:santos"] .botao-comprar')).toBeDisabled();
-  await expect(page.locator('[data-item="clube:santos"] .item-loja-falta')).toHaveText('Faltam 150');
+  await expect(page.locator('[data-item="clube:santos"] .item-loja-falta')).toHaveText('Faltam 200');
   await page.click('#botao-sair-loja');
   await expect(page.locator('#tela-selecao')).toHaveClass(/tela-ativa/);
   await expect(page.locator('#grade-clubes .cartao')).toHaveCount(1);
   await page.locator('#grade-clubes .cartao').click();
   expect(await page.evaluate(() => estado.selecaoId)).toBe('palmeiras');
   const salvo = await page.evaluate(() => JSON.parse(localStorage.getItem('mathgol_carteira')));
-  expect(salvo).toEqual({ versao: 1, dados: { saldo: 50, totalGanho: 750, itens: ['clube:palmeiras'] } });
+  expect(salvo).toEqual({ versao: 1, dados: { saldo: 50, totalGanho: 800, itens: ['clube:palmeiras'] } });
   expect(erros).toEqual([]);
 });
 

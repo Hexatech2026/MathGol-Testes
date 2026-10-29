@@ -67,7 +67,37 @@ test('conquistas: metas por contador (10 contas certas)', () => {
   for (let i = 0; i < 9; i++) q.registrar('conta-certa', { tempoMs: 8000 });
   assert.equal(q.feita('contas-10'), false);
   assert.equal(q.progresso(q.porId('contas-10')), 0.9);
-  assert.deepEqual(q.registrar('conta-certa', { tempoMs: 8000 }).map(m => m.id), ['contas-10']);
+  // v2.2: as 10 foram seguidas, entao sai junto o "+1000 de Aura".
+  assert.deepEqual(q.registrar('conta-certa', { tempoMs: 8000 }).map(m => m.id), ['contas-10', 'aura-maxima']);
+});
+
+test('v2.2: aura so com 10 SEGUIDAS; errar zera a sequencia', () => {
+  const { q } = nova();
+  for (let i = 0; i < 9; i++) q.registrar('conta-certa', { tempoMs: 8000 });
+  q.registrar('conta-errada');
+  q.registrar('conta-certa', { tempoMs: 8000 });
+  assert.equal(q.feita('contas-10'), true);
+  assert.equal(q.feita('aura-maxima'), false);
+});
+
+test('v2.2: 6-7, ego de campeao, Copa, VAR e Mito', () => {
+  const { q } = nova();
+  assert.deepEqual(q.registrar('gol', { tipo: 'meia', pontos: 67 }).map(m => m.id).sort(), ['primeiro-gol', 'seis-sete']);
+  for (let i = 0; i < 3; i++) q.registrar('partida-fim', { faseId: 'penaltis', gols: 3, total: 3, resumo: 'GGG', pontuacao: 200 });
+  assert.equal(q.feita('ego-campeao'), true);
+  assert.deepEqual(q.registrar('copa-jogo', { venceu: true, morteSubita: true }).map(m => m.id).sort(), ['copa-estreia', 'morte-subita']);
+  assert.deepEqual(q.registrar('copa-avancou', { etapa: 'quartas' }).map(m => m.id), ['copa-quartas']);
+  q.registrar('copa-campeao');
+  assert.equal(q.contador('copas'), 1);
+  for (let i = 0; i < 5; i++) q.registrar('var-confirmado');
+  assert.equal(q.feita('var-5'), true);
+  ['comemoracao-trocada', 'numero-trocado', 'titulo-trocado', 'duelo-fim', 'borda-trocada', 'codigo-criado'].forEach(e => q.registrar(e));
+  q.registrar('botao-fim', { venceu: true });
+  assert.equal(q.feita('medalhas-20'), false); // 18 ate aqui
+  q.registrar('copa-avancou', { etapa: 'dezesseis' });
+  q.registrar('copa-avancou', { etapa: 'final' });
+  assert.ok(q.quantasFeitas() >= 20);
+  assert.equal(q.feita('medalhas-20'), true);
 });
 
 test('conquistas: hat-trick, partida perfeita e campeao saem do resumo da partida', () => {

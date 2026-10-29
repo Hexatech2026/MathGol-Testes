@@ -73,7 +73,7 @@ var Carteira = (function() {
   // Compra um item. Devolve { ok: true } ou { ok: false, motivo }.
   //   motivo: 'ja-possui' | 'saldo' | 'invalido'
   function comprar(idItem, preco) {
-    if (typeof idItem !== 'string' || !/^(selecao|clube|avatar|nome|borda):.{1,32}$/.test(idItem)) {
+    if (typeof idItem !== 'string' || !/^(selecao|clube|avatar|nome|borda|comemoracao):.{1,32}$/.test(idItem)) {
       return { ok: false, motivo: 'invalido' };
     }
     var p = Math.floor(Number(preco));

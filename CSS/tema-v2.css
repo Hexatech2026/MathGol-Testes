@@ -570,3 +570,220 @@ body.alto-contraste .numero-perfil strong { color: #000000; }
 body.alto-contraste .moldura-avatar { outline: 3px solid #000000; outline-offset: 0; }
 body.alto-contraste .estrela { color: #FFFFFF; -webkit-text-stroke: 2px #000000; }
 body.alto-contraste .estrela-acesa { color: #000000; filter: none; }
+
+/* ==========================================================================
+   v2.2 — selo de verificado, titulo, camisa, comemoracoes, borda Taca
+   ========================================================================== */
+.selo-verificado {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 1.15em; height: 1.15em; margin-left: 6px;
+  border-radius: 50%;
+  background: #1D9BF0; color: #FFFFFF;
+  font-size: 0.72em; font-weight: 700; line-height: 1;
+  vertical-align: 0.12em;
+  box-shadow: 0 0 0 2px #FFFFFF, 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+.selo-verificado[hidden] { display: none; }
+.selo-verificado-p { font-size: 0.68em; }
+.perfil-titulo {
+  margin: 0; padding: 3px 14px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #FFF1C2, #FFE08A);
+  color: #6B4A00;
+  font-family: var(--fonte-titulo); font-weight: 600; font-size: 0.9rem;
+}
+.perfil-titulo:empty { display: none; }
+
+.linha-camisa {
+  display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: center;
+  width: 100%; margin-bottom: 18px;
+}
+/* Previa das costas da camisa, nas cores do time escolhido. */
+.previa-camisa {
+  --camisa-p: #3A5FCD; --camisa-s: #FFFDF6;
+  position: relative;
+  width: 118px; height: 128px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0;
+  background: var(--camisa-p);
+  clip-path: polygon(22% 0, 38% 6%, 62% 6%, 78% 0, 100% 16%, 90% 36%, 82% 31%, 82% 100%, 18% 100%, 18% 31%, 10% 36%, 0 16%);
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.25));
+}
+.previa-camisa-nome, .previa-camisa-numero {
+  color: var(--camisa-s);
+  font-family: 'Arial Black', Arial, sans-serif; font-weight: 900;
+  -webkit-text-stroke: 1px rgba(0, 0, 0, 0.35);
+  line-height: 1;
+  max-width: 76px; overflow: hidden; text-overflow: clip; white-space: nowrap;
+}
+.previa-camisa-nome { font-size: 0.7rem; letter-spacing: 0.02em; margin-top: 14px; }
+.previa-camisa-numero { font-size: 2.6rem; }
+.controle-numero { display: flex; flex-direction: column; align-items: center; gap: 6px; max-width: 220px; }
+.linha-numero { display: flex; align-items: center; gap: 8px; }
+.botao-numero { width: 46px; height: 46px; font-size: 1.5rem; border-radius: 14px; }
+.campo-numero {
+  width: 76px; height: 50px;
+  border: 3px solid var(--grafite); border-radius: 14px;
+  font-family: var(--fonte-titulo); font-size: 1.6rem; font-weight: 700; text-align: center;
+  color: var(--grafite); background: #FFFFFF;
+}
+.campo-numero:focus-visible { outline: 4px solid var(--azul-ceu); outline-offset: 2px; }
+
+.grade-titulos { max-height: 168px; }
+.chip-escolha.chip-bloqueado { opacity: 0.7; background: #EEF1F4; border-style: dashed; }
+
+.grade-comemoracoes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 10px; width: 100%; margin-bottom: 20px;
+}
+.item-comemoracao {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 10px 4px 8px;
+  border: 3px solid transparent; border-radius: 20px;
+  background: #F4F8FB;
+  font-family: var(--fonte-titulo); color: var(--grafite);
+  cursor: pointer;
+  transition: transform 0.12s ease, border-color 0.12s ease;
+}
+.item-comemoracao:hover { transform: translateY(-2px); }
+.item-comemoracao:focus-visible { outline: 4px solid var(--azul-ceu); outline-offset: 2px; }
+.item-comemoracao-icone { font-size: 2rem; line-height: 1.2; }
+.item-comemoracao.item-borda-bloqueada .item-comemoracao-icone { filter: grayscale(0.6); }
+.item-comemoracao.item-borda-ativa .item-comemoracao-icone { animation: pulo-avatar 0.5s ease; }
+.loja-etiqueta-comemoracao { font-size: 2.2rem; }
+
+.borda-taca { background: conic-gradient(#FFE14D, #1D9BF0, #2E9E5B, #E0343B, #FFE14D); box-shadow: 0 0 0 3px #7A3E00, 0 0 20px rgba(255, 225, 77, 0.9); }
+.borda-taca::before { animation: girar-borda 5s linear infinite; }
+.borda-taca::after {
+  content: '🏆';
+  position: absolute;
+  top: calc(var(--tam) * -0.3);
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: calc(var(--tam) * 0.38);
+  line-height: 1;
+  filter: drop-shadow(0 2px 2px rgba(0,0,0,0.3));
+}
+@media (prefers-reduced-motion: reduce) {
+  .borda-taca::before, .item-comemoracao.item-borda-ativa .item-comemoracao-icone { animation: none; }
+  .item-comemoracao { transition: none; }
+}
+body.alto-contraste .previa-camisa { --camisa-p: #000000; --camisa-s: #FFFFFF; }
+body.alto-contraste .selo-verificado { background: #000000; }
+
+/* ---------- v2.2: painel do professor ---------- */
+.campo-nome-aluno {
+  width: 100%; max-width: 260px; margin-top: 4px;
+  padding: 6px 10px;
+  border: 2px solid #C6E0FA; border-radius: 10px;
+  font-family: var(--fonte-corpo); font-size: 0.85rem; color: var(--grafite);
+  background: #FFFFFF;
+}
+.campo-nome-aluno:focus-visible { outline: 3px solid var(--azul-ceu); outline-offset: 1px; }
+.aluno-dica { display: block; font-size: 0.72rem; color: var(--grafite-suave); margin-top: 2px; }
+.aluno-nome .selo-verificado { font-size: 0.7em; }
+.linha-exportar { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; width: 100%; }
+.privacidade-prof { color: var(--grafite); background: #F2F7F4; border-radius: 16px; padding: 10px 14px; margin-top: 12px; width: 100%; }
+.privacidade-prof p { font-size: 0.85rem; margin: 6px 0; }
+.prof-minhas-salas { width: 100%; margin-top: 18px; }
+.lista-minhas-salas { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.item-minha-sala { display: flex; gap: 8px; align-items: stretch; }
+.botao-minha-sala {
+  flex: 1; display: flex; justify-content: space-between; align-items: center; gap: 10px;
+  padding: 10px 14px; border-radius: 14px; border: 2px solid #C6E0FA; background: #EAF4FF;
+  font-family: var(--fonte-titulo); font-size: 0.95rem; color: var(--grafite); cursor: pointer; text-align: left;
+}
+.botao-minha-sala:hover { background: #DCEBFB; }
+.botao-minha-sala:focus-visible { outline: 4px solid var(--azul-ceu); outline-offset: 2px; }
+.minha-sala-codigo { font-family: 'Courier New', monospace; font-weight: 700; letter-spacing: 0.08em; color: var(--azul-texto); }
+.botao-esquecer-sala { width: 44px; min-height: 44px; border-radius: 12px; }
+
+/* ---------- v2.2: Copa do Mundo 2026 ---------- */
+.copa-painel { width: 100%; display: flex; flex-direction: column; gap: 12px; margin: 6px 0 12px; }
+.copa-cartao {
+  display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center;
+  padding: 16px 14px; border-radius: 22px;
+  background: linear-gradient(160deg, #0F3B2A, #1E6E4A); color: #FFFDF6;
+  box-shadow: var(--sombra-suave);
+}
+.copa-proximo-final { background: linear-gradient(160deg, #6B4A00, #C99A12); }
+.copa-campea { background: linear-gradient(160deg, #B7790A, #FFC63B); color: #3A2600; }
+.copa-eliminada { background: linear-gradient(160deg, #21303B, #3A5068); }
+.copa-titulo-cartao { font-family: var(--fonte-titulo); font-weight: 700; font-size: 1.25rem; }
+.copa-etapa {
+  font-family: var(--fonte-titulo); font-weight: 700; font-size: 0.85rem; letter-spacing: 0.06em; text-transform: uppercase;
+  padding: 3px 12px; border-radius: 999px; background: rgba(255, 255, 255, 0.18);
+}
+.copa-texto { font-size: 0.9rem; line-height: 1.35; opacity: 0.95; }
+.copa-aviso { font-size: 0.82rem; color: #8A4B00; background: #FFF1C2; border-radius: 12px; padding: 8px 12px; text-align: center; }
+.copa-confronto { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; }
+.copa-x { font-family: var(--fonte-titulo); font-size: 1.4rem; font-weight: 700; opacity: 0.8; }
+.copa-time { display: inline-flex; align-items: center; gap: 6px; font-family: var(--fonte-titulo); font-weight: 600; }
+.copa-proximo .copa-time { font-size: 1.05rem; }
+.copa-time-voce .copa-time-nome { text-decoration: underline; text-decoration-color: var(--ouro); text-decoration-thickness: 3px; }
+.copa-bandeira { width: 26px; height: auto; border-radius: 4px; box-shadow: 0 0 0 1px rgba(0,0,0,0.15); flex: 0 0 auto; }
+.copa-bandeira-grande { width: 64px; }
+.copa-bandeira-vazia { display: inline-flex; justify-content: center; width: 26px; box-shadow: none; }
+.copa-time .escudo-clube { transform: scale(0.45); margin: -16px -14px; }
+.copa-campanha { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.copa-jogo {
+  display: grid; grid-template-columns: 1fr auto 1.4fr; align-items: center; gap: 8px;
+  padding: 8px 12px; border-radius: 14px; background: #F4F8FB; border-left: 6px solid #9AA8B5; font-size: 0.88rem;
+}
+.copa-jogo-v { border-left-color: var(--verde-grama); }
+.copa-jogo-e { border-left-color: var(--ouro); }
+.copa-jogo-d { border-left-color: #E0343B; }
+.copa-jogo-etapa { color: var(--grafite-suave); font-size: 0.8rem; }
+.copa-jogo-placar { font-family: var(--fonte-titulo); font-weight: 700; font-size: 1.05rem; color: var(--grafite); }
+.copa-tabela { width: 100%; border-collapse: collapse; font-size: 0.85rem; background: #FFFFFF; border-radius: 14px; overflow: hidden; }
+.copa-tabela caption { font-family: var(--fonte-titulo); font-weight: 700; text-align: left; padding: 6px 4px; color: var(--grafite); }
+.copa-tabela th { background: #17683A; color: #FFFFFF; font-weight: 600; padding: 5px 4px; text-align: center; }
+.copa-tabela td { padding: 5px 4px; text-align: center; border-bottom: 1px solid #E3EAF0; }
+.copa-tabela td:nth-child(2), .copa-tabela th:nth-child(2) { text-align: left; }
+.copa-tabela .copa-time { font-size: 0.85rem; }
+.copa-linha-classifica td:first-child { color: var(--verde-texto); font-weight: 700; }
+.copa-linha-voce { background: #FFF6D6; font-weight: 700; }
+.copa-todos-grupos { width: 100%; margin-bottom: 16px; }
+.copa-todos-grupos summary { cursor: pointer; font-family: var(--fonte-titulo); font-weight: 600; padding: 8px 0; color: var(--azul-texto); }
+.copa-grupos { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
+#botao-nova-copa[hidden] { display: none; }
+@media (max-width: 380px) {
+  .copa-tabela th:nth-child(5), .copa-tabela td:nth-child(5),
+  .copa-tabela th:nth-child(6), .copa-tabela td:nth-child(6),
+  .copa-tabela th:nth-child(7), .copa-tabela td:nth-child(7) { display: none; }
+  .copa-jogo { grid-template-columns: 1fr auto; }
+  .copa-jogo .copa-time { grid-column: 1 / -1; }
+}
+body.alto-contraste .copa-cartao { background: #000000; color: #FFFFFF; }
+
+/* ---------- v2.2: modos com amigos, futebol de botão e VAR ---------- */
+.grade-modos { width: 100%; grid-template-columns: repeat(2, 1fr); margin-bottom: 8px; }
+.atalho-sub { display: block; font-size: 0.72rem; font-family: var(--fonte-corpo); color: var(--grafite-suave); line-height: 1.2; }
+.botao-escolha { width: 100%; }
+.botao-jogo { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.botao-placar { display: flex; align-items: center; justify-content: center; gap: 12px; font-family: var(--fonte-titulo); }
+.botao-placar strong { font-size: 1.8rem; color: var(--grafite); min-width: 80px; text-align: center; }
+.botao-time { padding: 4px 12px; border-radius: 999px; font-weight: 600; font-size: 0.9rem; color: #FFFFFF; }
+.botao-time-a { background: #2E9E5B; }
+.botao-time-b { background: #E0343B; }
+.botao-vez { min-height: 1.4em; margin: 0; font-family: var(--fonte-titulo); font-weight: 600; text-align: center; color: var(--azul-texto); }
+.botao-campo-caixa { width: 100%; display: flex; justify-content: center; }
+.botao-canvas { display: block; border-radius: 18px; box-shadow: var(--sombra-suave); touch-action: none; cursor: grab; }
+.botao-canvas:focus-visible { outline: 4px solid var(--azul-ceu); outline-offset: 3px; }
+.painel-var {
+  background: var(--vidro); border-radius: 26px; padding: 22px 18px; width: min(440px, calc(100vw - 32px));
+  box-shadow: var(--sombra-cartao); display: flex; flex-direction: column; align-items: center; gap: 8px;
+  border-top: 8px solid #21303B;
+}
+.expressao-var {
+  margin: 4px 0; padding: 10px 16px; border-radius: 16px; background: #21303B; color: #FFE14D;
+  font-family: var(--fonte-titulo); font-size: clamp(1.4rem, 6vw, 2rem); font-weight: 700; text-align: center;
+  letter-spacing: 0.02em; word-break: keep-all;
+}
+.dica-var { margin: 0; font-size: 0.85rem; color: var(--grafite-suave); text-align: center; }
+.alternativas-var { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; width: 100%; }
+.botao-var { min-height: 54px; font-size: 1.4rem; }
+.botao-var.errou { opacity: 0.45; text-decoration: line-through; }
+.painel-var .aviso-sala { color: var(--grafite); font-weight: 600; text-align: center; min-height: 1.2em; }
+.painel-var .aviso-sala.aviso-ok { color: var(--verde-texto); }
+.painel-var .aviso-sala.aviso-erro { color: #B4232A; }

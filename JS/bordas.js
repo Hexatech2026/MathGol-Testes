@@ -17,16 +17,19 @@ var BORDAS = [
   { id: 'simples',   nome: 'Clássica',      origem: 'gratis' },
   { id: 'grama',     nome: 'Gramado',       origem: 'gratis' },
   { id: 'ceu',       nome: 'Céu Azul',      origem: 'gratis' },
-  { id: 'ouro',      nome: 'Ouro',          origem: 'loja', preco: 60 },
-  { id: 'gelo',      nome: 'Gelo',          origem: 'loja', preco: 120 },
-  { id: 'arco-iris', nome: 'Arco-íris',     origem: 'loja', preco: 150, animada: true },
-  { id: 'fogo',      nome: 'Fogo',          origem: 'loja', preco: 150, animada: true },
-  { id: 'neon',      nome: 'Neon',          origem: 'loja', preco: 180, animada: true },
-  { id: 'galaxia',   nome: 'Galáxia',       origem: 'loja', preco: 220, animada: true },
+  // v2.2: precos revistos (ver Docs/economia-da-loja.md). As animadas sao
+  // o "item de desejo" — custam algumas partidas, nao uma so.
+  { id: 'ouro',      nome: 'Ouro',          origem: 'loja', preco: 80 },
+  { id: 'gelo',      nome: 'Gelo',          origem: 'loja', preco: 150 },
+  { id: 'arco-iris', nome: 'Arco-íris',     origem: 'loja', preco: 220, animada: true },
+  { id: 'fogo',      nome: 'Fogo',          origem: 'loja', preco: 220, animada: true },
+  { id: 'neon',      nome: 'Neon',          origem: 'loja', preco: 280, animada: true },
+  { id: 'galaxia',   nome: 'Galáxia',       origem: 'loja', preco: 400, animada: true },
   { id: 'estrela',   nome: 'Estrela',       origem: 'conquista', conquista: 'primeiro-gol' },
   { id: 'raio',      nome: 'Relâmpago',     origem: 'conquista', conquista: 'relampago', animada: true },
   { id: 'coroa',     nome: 'Coroa',         origem: 'conquista', conquista: 'gols-50' },
-  { id: 'trofeu',    nome: 'Campeão',       origem: 'conquista', conquista: 'campeao', animada: true }
+  { id: 'trofeu',    nome: 'Campeão',       origem: 'conquista', conquista: 'campeao', animada: true },
+  { id: 'taca',      nome: 'Taça do Mundo', origem: 'conquista', conquista: 'copa-campeao', animada: true }
 ];
 
 var BORDA_PADRAO = 'simples';

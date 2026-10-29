@@ -47,7 +47,8 @@ import {
   collection,
   serverTimestamp,
   writeBatch,
-  onSnapshot
+  onSnapshot,
+  increment
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
 
 // A config web do Firebase é pública por natureza (vai para o navegador);
@@ -381,7 +382,16 @@ async function buscarProgresso() {
 // continua sendo o uid anonimo do Auth — nenhum dado pessoal novo.
 //
 //   salas/{codigo}                 -> { nome, nivel, tipos, dono, criadoEm }
-//   salas/{codigo}/alunos/{uid}    -> { apelido, avatarSeed, gols, pontuacao }
+//   salas/{codigo}/alunos/{uid}    -> { apelido, avatarSeed, gols, pontuacao,
+//                                       fase, nivelId, verificado, totais }
+//
+// v2.2 — "totais" soma TODAS as partidas da crianca na sala (o professor
+// exporta em PDF/Excel para dar nota): partidas, cobrancas, contas certas
+// e erradas, gols, pontos e o tempo de resposta somado. "verificado" e
+// true quando a conta tem o codigo do craque (nao e mais anonima): so
+// esses mantem o mesmo uid em outro aparelho, entao so neles o professor
+// pode guardar o nome de verdade — e esse nome fica SO no navegador dele
+// (main.js → NomesDaTurma), nunca aqui.
 
 // Alfabeto sem 0/O/1/I/L: o codigo e copiado do quadro pra tela, e esses
 // caracteres geram erro de leitura.
@@ -478,16 +488,40 @@ async function entrarNaSala(codigo, aluno) {
 
   const gols = parseInt(aluno && aluno.gols, 10);
   const pontos = parseInt(aluno && aluno.pontuacao, 10);
+  const nivelId = parseInt(aluno && aluno.nivelId, 10);
+  const inteiro = function(v, max) {
+    const n = parseInt(v, 10);
+    return isFinite(n) && n >= 0 ? Math.min(n, max) : 0;
+  };
+
+  const dados = {
+    apelido: String((aluno && aluno.apelido) || 'Craque').slice(0, 40),
+    avatarSeed: String((aluno && aluno.avatarSeed) || '').slice(0, 40),
+    gols: isFinite(gols) && gols >= 0 ? gols : 0,
+    pontuacao: isFinite(pontos) && pontos >= 0 ? pontos : 0,
+    fase: String((aluno && aluno.fase) || '').slice(0, 20),
+    verificado: !user.isAnonymous,
+    atualizadoEm: serverTimestamp()
+  };
+  if (isFinite(nivelId) && nivelId >= 1 && nivelId <= 12) dados.nivelId = nivelId;
+  // Uma partida terminada soma nos totais (increment: duas abas abertas
+  // nao apagam a partida uma da outra).
+  const p = aluno && aluno.partida;
+  if (p) {
+    dados.totais = {
+      partidas: increment(1),
+      cobrancas: increment(inteiro(p.cobrancas, 7)),
+      contasCertas: increment(inteiro(p.contasCertas, 7)),
+      contasErradas: increment(inteiro(p.contasErradas, 7)),
+      gols: increment(inteiro(p.gols, 7)),
+      pontos: increment(inteiro(p.pontos, 700)),
+      tempoRespostaMs: increment(inteiro(p.tempoRespostaMs, 7 * 15000))
+    };
+    dados.ultimaPartidaEm = serverTimestamp();
+  }
 
   try {
-    await setDoc(doc(collection(doc(db, 'salas', cod), 'alunos'), user.uid), {
-      apelido: String((aluno && aluno.apelido) || 'Craque').slice(0, 40),
-      avatarSeed: String((aluno && aluno.avatarSeed) || '').slice(0, 40),
-      gols: isFinite(gols) && gols >= 0 ? gols : 0,
-      pontuacao: isFinite(pontos) && pontos >= 0 ? pontos : 0,
-      fase: String((aluno && aluno.fase) || '').slice(0, 20),
-      atualizadoEm: serverTimestamp()
-    }, { merge: true });
+    await setDoc(doc(collection(doc(db, 'salas', cod), 'alunos'), user.uid), dados, { merge: true });
     return true;
   } catch (erro) {
     console.warn('Nao foi possivel entrar na sala:', erro);
