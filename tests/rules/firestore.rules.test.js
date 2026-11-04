@@ -148,3 +148,60 @@ test('esquema do resultado: limites plausiveis e campos inesperados', async () =
   const semData = resultado(); delete semData.data;
   await assertFails(setDoc(ref('j'), semData));                                               // campo obrigatorio
 });
+
+// ---------- HU-14: Sala do Professor (card R03) ----------
+// alice = professora dona da sala ABC-123; bob = aluno; carol = outra pessoa
+// logada que sabe o codigo.
+const carol = () => env.authenticatedContext('carol').firestore();
+const sala = (extra = {}) => Object.assign({ nome: '5A manha', nivel: 3, tipos: ['soma'], dono: 'alice', criadoEm: serverTimestamp() }, extra);
+const aluno = (extra = {}) => Object.assign({ apelido: 'Raio Lobo', gols: 2, pontuacao: 150, fase: 'penaltis', nivelId: 3, verificado: false, atualizadoEm: serverTimestamp() }, extra);
+
+async function semearSala() {
+  await env.withSecurityRulesDisabled(async ctx => {
+    const db = ctx.firestore();
+    await setDoc(doc(db, 'salas', 'ABC-123'), { nome: '5A manha', nivel: 3, tipos: [], dono: 'alice', criadoEm: Timestamp.now() });
+    await setDoc(doc(db, 'salas', 'ABC-123', 'alunos', 'bob'), { apelido: 'Raio Lobo', gols: 2, pontuacao: 150 });
+  });
+}
+
+test('sala: professor cria a sala so em nome proprio e com formato valido', async () => {
+  await assertSucceeds(setDoc(doc(alice(), 'salas', 'XYZ-789'), sala()));
+  await assertFails(setDoc(doc(alice(), 'salas', 'XYZ-790'), sala({ dono: 'bob' })));       // dono alheio
+  await assertFails(setDoc(doc(alice(), 'salas', 'xyz790'), sala()));                      // codigo fora do formato
+  await assertFails(setDoc(doc(alice(), 'salas', 'XYZ-791'), sala({ nivel: 13 })));         // nivel fora da escada
+  await assertFails(setDoc(doc(alice(), 'salas', 'XYZ-792'), sala({ tipos: ['potencia'] }))); // tipo inexistente
+  await assertFails(setDoc(doc(alice(), 'salas', 'XYZ-793'), sala({ extra: 1 })));          // campo inesperado
+  await assertFails(setDoc(doc(anonimo(), 'salas', 'XYZ-794'), sala()));                    // sem login
+});
+
+test('sala: quem sabe o codigo le a sala, mas ninguem lista as salas', async () => {
+  await semearSala();
+  await assertSucceeds(getDoc(doc(bob(), 'salas', 'ABC-123')));
+  await assertSucceeds(getDoc(doc(bob(), 'salas', 'NAO-EXI')));   // conferir se o codigo existe
+  await assertFails(getDoc(doc(anonimo(), 'salas', 'ABC-123')));
+  await assertFails(getDocs(collection(bob(), 'salas')));
+  await assertFails(getDocs(collection(alice(), 'salas')));
+});
+
+test('sala: so a professora dona troca o nivel, sem trocar o dono', async () => {
+  await semearSala();
+  await assertSucceeds(setDoc(doc(alice(), 'salas', 'ABC-123'), { nivel: 5, tipos: ['subtracao'] }, { merge: true }));
+  await assertFails(setDoc(doc(carol(), 'salas', 'ABC-123'), { nivel: 12 }, { merge: true }));
+  await assertFails(setDoc(doc(bob(), 'salas', 'ABC-123'), { nivel: 12 }, { merge: true }));
+  await assertFails(setDoc(doc(alice(), 'salas', 'ABC-123'), { dono: 'carol' }, { merge: true }));
+  await assertFails(setDoc(doc(carol(), 'salas', 'ABC-123'), sala({ dono: 'carol' })));   // "recriar" por cima
+  await assertFails(deleteDoc(doc(alice(), 'salas', 'ABC-123')));
+});
+
+test('sala: so a professora ve a turma; cada aluno so escreve o proprio lugar', async () => {
+  await semearSala();
+  await assertSucceeds(getDocs(collection(alice(), 'salas', 'ABC-123', 'alunos')));
+  await assertFails(getDocs(collection(carol(), 'salas', 'ABC-123', 'alunos')));
+  await assertFails(getDocs(collection(bob(), 'salas', 'ABC-123', 'alunos')));
+  await assertSucceeds(getDoc(doc(bob(), 'salas', 'ABC-123', 'alunos', 'bob')));
+  await assertFails(getDoc(doc(carol(), 'salas', 'ABC-123', 'alunos', 'bob')));
+  await assertSucceeds(setDoc(doc(carol(), 'salas', 'ABC-123', 'alunos', 'carol'), aluno()));
+  await assertFails(setDoc(doc(carol(), 'salas', 'ABC-123', 'alunos', 'bob'), aluno({ gols: 0 })));
+  await assertFails(setDoc(doc(carol(), 'salas', 'ABC-123', 'alunos', 'carol'), aluno({ nomeReal: 'Joao' })));
+  await assertSucceeds(deleteDoc(doc(bob(), 'salas', 'ABC-123', 'alunos', 'bob')));
+});

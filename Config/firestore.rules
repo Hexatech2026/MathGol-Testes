@@ -202,29 +202,54 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // Nega tudo mais por padrão (inclui documentos antigos de "token").
-    // HU-14 — Sala do Professor. Quem sabe o codigo entra; o professor dita
-    // o codigo para a turma. Mesmo modelo anonimo do resto do jogo: o uid do
-    // Auth identifica quem entrou, sem nome real nem e-mail.
+    // HU-14 — Sala do Professor. O professor dita o codigo para a turma.
+    // Mesmo modelo anonimo do resto do jogo: o uid do Auth identifica quem
+    // entrou, sem nome real nem e-mail.
     //
-    // RESSALVA (card R03): "dono" guarda o uid do professor, mas NAO e
-    // checado aqui — qualquer cliente com o codigo pode trocar o nivel da
-    // sala, e a lista de alunos e legivel por quem tiver o codigo.
-    // Para turma de verdade, trocar a linha de update por:
-    //   allow update: if request.auth != null
-    //                 && resource.data.dono == request.auth.uid;
+    // Card R03 (resolvido): saber o codigo da LEITURA da sala (e como a
+    // crianca entra e descobre o nivel), mas NAO da direito de trocar o
+    // nivel, de listar as salas nem de ver a turma. Isso e so do professor
+    // que criou a sala ("dono" == uid dele).
+    function codigoSalaValido(c) {
+      return c.matches('^[A-Z0-9]{3}-[A-Z0-9]{3}$');
+    }
+
+    function salaValida(d) {
+      return d.keys().hasOnly(['nome', 'nivel', 'tipos', 'dono', 'criadoEm'])
+        && d.dono is string
+        && textoAte(d.nome, 40)
+        && d.nivel is int && d.nivel >= 1 && d.nivel <= 12
+        && d.tipos is list && d.tipos.size() <= 4
+        && d.tipos.hasOnly(['soma', 'subtracao', 'multiplicacao', 'divisao']);
+    }
+
+    function ehProfessorDaSala(codigo) {
+      return autenticado()
+        && get(/databases/$(database)/documents/salas/$(codigo)).data.dono == request.auth.uid;
+    }
+
     match /salas/{codigo} {
-      allow read: if true;
-      allow create, update: if true;
+      allow get: if autenticado();
+      allow list: if false;
+      allow create: if autenticado()
+        && codigoSalaValido(codigo)
+        && request.resource.data.dono == request.auth.uid
+        && request.resource.data.criadoEm == request.time
+        && salaValida(request.resource.data);
+      allow update: if autenticado()
+        && resource.data.dono == request.auth.uid
+        && request.resource.data.dono == resource.data.dono
+        && request.resource.data.criadoEm == resource.data.criadoEm
+        && salaValida(request.resource.data);
       allow delete: if false;
 
-      // v2.2: cada crianca so escreve (e apaga) o PROPRIO lugar na sala —
-      // antes qualquer um com o codigo podia mudar a nota de outro aluno,
-      // e agora isso vira nota no PDF/Excel do professor. A leitura continua
-      // aberta a quem tem o codigo (o painel do professor). Nome de verdade
-      // NUNCA vem para ca: o professor guarda so no navegador dele.
+      // Cada crianca so escreve (e apaga) o PROPRIO lugar na sala; isso vira
+      // nota no PDF/Excel do professor. So o professor da sala lista a
+      // turma. Nome de verdade NUNCA vem para ca: o professor guarda so no
+      // navegador dele.
       match /alunos/{uid} {
-        allow read: if true;
+        allow get: if ehDono(uid) || ehProfessorDaSala(codigo);
+        allow list: if ehProfessorDaSala(codigo);
         allow delete: if ehDono(uid);
         allow create, update: if ehDono(uid)
           && request.resource.data.keys().hasOnly(
@@ -233,6 +258,7 @@ service cloud.firestore {
       }
     }
 
+    // Nega tudo mais por padrão (inclui documentos antigos de "token").
     match /{document=**} {
       allow read, write: if false;
     }
