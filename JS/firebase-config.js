@@ -466,10 +466,16 @@ async function buscarSala(codigo) {
 async function atualizarSala(codigo, mudancas) {
   const cod = normalizarCodigoSala(codigo);
   if (cod.length !== 7) return false;
+  // So envia os campos que mudaram: antes o nome ia sempre como "Turma"
+  // e apagava o nome que o professor deu ao criar a sala.
+  const limpo = limparDadosSala(mudancas);
+  const envio = {};
+  ['nome', 'nivel', 'tipos'].forEach(function(k) {
+    if (mudancas && k in mudancas) envio[k] = limpo[k];
+  });
+  if (!Object.keys(envio).length) return true;
   try {
-    await setDoc(doc(db, 'salas', cod), limparDadosSala(
-      Object.assign({ nome: 'Turma' }, mudancas)
-    ), { merge: true });
+    await setDoc(doc(db, 'salas', cod), envio, { merge: true });
     return true;
   } catch (erro) {
     console.warn('Nao foi possivel atualizar a sala:', erro);
