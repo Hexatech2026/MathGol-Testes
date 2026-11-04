@@ -1,0 +1,74 @@
+name: CI
+
+# Roda a suite em cada push no main e em cada pull request. Antes deste
+# arquivo nada era verificado automaticamente: os testes existiam e so
+# rodavam se alguem se lembrasse de rodar na propria maquina.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Um push novo no mesmo PR cancela a execucao anterior, que ficou obsoleta.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    name: Testes unitarios
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run test:unit
+
+  regras-firestore:
+    name: Regras do Firestore (emulador)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      # O emulador do Firestore e um processo Java. E justamente por falta
+      # de Java que este job nao roda na maquina de quem desenvolve — aqui
+      # ele roda, e e o unico lugar onde Config/firestore.rules e validado.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - run: npm ci
+      - run: npm run test:rules
+
+  e2e:
+    name: Testes E2E (Playwright)
+    runs-on: ubuntu-latest
+    # A cena 3D roda em WebGL por software e o config fixa workers: 1 de
+    # proposito (ver tests/playwright.config.js), entao a suite leva por
+    # volta de 10 min. O teto evita que uma travada consuma 6 horas.
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      # --with-deps instala as bibliotecas de sistema que o Chromium exige
+      # no runner; sem isso o navegador nao abre.
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - name: Guardar o relatorio quando falhar
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 14
