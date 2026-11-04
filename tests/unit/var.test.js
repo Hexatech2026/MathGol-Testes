@@ -49,10 +49,12 @@ test('uma alternativa errada costuma ser "da esquerda para a direita" (erro de o
   assert.strictEqual(VAR.calcularDaEsquerdaParaDireita('3 + 4 × 2'), 14);
   assert.strictEqual(avaliar('3 + 4 × 2'), 11);
   let achou = 0;
-  for (let i = 0; i < 100; i++) {
+  // 1000 sorteios (nao 100): a taxa real e ~30%, e com 100 o limite de 20
+  // falhava por azar em ~1,5% das execucoes. Com 1000 a margem e de 7 desvios.
+  for (let i = 0; i < 1000; i++) {
     const e = VAR.gerarExpressao(8);
     const errado = VAR.calcularDaEsquerdaParaDireita(e.texto);
     if (errado !== null && errado !== e.resultado && e.alternativas.includes(errado)) achou++;
   }
-  assert.ok(achou > 20, 'pegadinha de ordem aparece: ' + achou);
+  assert.ok(achou > 200, 'pegadinha de ordem aparece: ' + achou);
 });

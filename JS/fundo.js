@@ -84,6 +84,9 @@ var FundoVivo = (function() {
   // e so copiado em cada quadro — mais leve no celular.
   var camadaCeu = null;
   function prepararCeu() {
+    // Janela ainda sem tamanho (aba em segundo plano, iframe oculto): um
+    // canvas 0x0 faz o drawImage lancar erro. Usa a cor solida ate o resize.
+    if (!canvas.width || !canvas.height) { camadaCeu = null; return; }
     camadaCeu = document.createElement('canvas');
     camadaCeu.width = canvas.width;
     camadaCeu.height = canvas.height;
@@ -198,7 +201,8 @@ var FundoVivo = (function() {
     ctx.strokeStyle = 'rgba(255,253,246,0.45)';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.ellipse(W / 2 + px * 12, H + 10, Math.min(W * 0.32, 220), (H - topo) * 0.75, 0, Math.PI, 2 * Math.PI);
+    // Raio nunca negativo: em janela muito baixa (ou 0x0) o ellipse lanca erro.
+    ctx.ellipse(W / 2 + px * 12, H + 10, Math.max(0, Math.min(W * 0.32, 220)), Math.max(0, (H - topo) * 0.75), 0, Math.PI, 2 * Math.PI);
     ctx.stroke();
   }
 
@@ -307,8 +311,8 @@ var FundoVivo = (function() {
     }
     if (!reduz) {
       window.addEventListener('pointermove', function(ev) {
-        alvoPx = (ev.clientX / Math.max(1, W)) * 2 - 1;
-        alvoPy = (ev.clientY / Math.max(1, H)) * 2 - 1;
+        alvoPx = Math.max(-1, Math.min(1, (ev.clientX / Math.max(1, W)) * 2 - 1));
+        alvoPy = Math.max(-1, Math.min(1, (ev.clientY / Math.max(1, H)) * 2 - 1));
       }, { passive: true });
       window.addEventListener('deviceorientation', function(ev) {
         if (ev.gamma == null || ev.beta == null) return;

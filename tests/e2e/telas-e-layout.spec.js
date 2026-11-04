@@ -297,3 +297,24 @@ test('configuracao remota maliciosa nao injeta HTML', async ({ page }) => {
   expect(await page.evaluate(() => SELECOES[0].nome)).toBe('Brasil');
   expect(erros).toEqual([]);
 });
+
+// Aba em segundo plano ou iframe oculto: a janela abre com 0x0. O fundo
+// animado lancava erro no drawImage e o init parava ali, sem nenhum botao.
+test('janela sem tamanho na abertura nao derruba o init (fundo animado)', async ({ page }) => {
+  await page.addInitScript(() => {
+    const w = Object.getOwnPropertyDescriptor(window, 'innerWidth');
+    const h = Object.getOwnPropertyDescriptor(window, 'innerHeight');
+    Object.defineProperty(window, 'innerWidth', { get: () => 0, configurable: true });
+    Object.defineProperty(window, 'innerHeight', { get: () => 0, configurable: true });
+    window.__restaurarJanela = () => {
+      Object.defineProperty(window, 'innerWidth', w);
+      Object.defineProperty(window, 'innerHeight', h);
+      window.dispatchEvent(new Event('resize'));
+    };
+  });
+  const erros = await A.abrirJogo(page);
+  await page.evaluate(() => window.__restaurarJanela());
+  await page.locator('#botao-jogar').click({ force: true }); // botao CTA pulsa
+  await expect(page.locator('#tela-apelido')).toHaveClass(/tela-ativa/);
+  expect(erros).toEqual([]);
+});
