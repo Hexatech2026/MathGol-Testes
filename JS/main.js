@@ -3157,7 +3157,11 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   restaurarCraqueSalvo();
   if (typeof TelasV2 !== 'undefined') TelasV2.init();
-  if (typeof FundoVivo !== 'undefined') FundoVivo.init();
+  // Fundo e decorativo: um erro nele nao pode impedir o resto do init
+  // (sem isto, nenhum botao do jogo funcionava).
+  if (typeof FundoVivo !== 'undefined') {
+    try { FundoVivo.init(); } catch (e) { console.warn('Fundo animado desligado:', e); }
+  }
   initNavegacaoTopo();
   initTelaCheia();
   initMenu();
