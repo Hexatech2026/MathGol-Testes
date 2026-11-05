@@ -29,7 +29,7 @@ const INCLUIR = [
   'index.html',
   'HTML', 'CSS', 'JS', 'Imagens', 'Audio', 'Fontes', 'Vendor', 'Config', 'Docs',
   'vercel.json', 'firebase.json', 'package.json', 'package-lock.json',
-  'README.md', 'LEIA-ME.md', 'MUDANCAS-NO-MAIN.md', '.gitignore'
+  'README.md', '.gitignore'
 ];
 
 // Não entra, mesmo dentro das pastas acima.
@@ -42,7 +42,12 @@ const EXCLUIR = [
   /(^|[\\/])\.env$/,
   /\.zip$/,
   /firebase-debug\.log$/,
-  /firestore-debug\.log$/
+  /firestore-debug\.log$/,
+  // Instrucoes do patch de niveis/sala, ja aplicado no codigo em 2026.
+  // Sao historico: ficam no git, nao no site publicado.
+  /(^|[\/])LEIA-ME\.(md|txt)$/,
+  /(^|[\/])MUDANCAS-NO-MAIN\.md$/,
+  /TRECHO-SALA/
 ];
 
 function listar(rel) {
