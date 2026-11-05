@@ -52,6 +52,31 @@ chute). A bola conta como dentro só se passar **inteira** (o raio da bola
 Sem nome real, sem e-mail e sem cadastro: a nuvem usa **login anônimo** do
 Firebase.
 
+## Novidades da v2.3 (sprint de fechamento)
+
+- **Pausar a sala (HU-15):** o professor aperta "Pausar sala" e a turma
+  inteira vê uma tela de pausa na hora. O relógio congela, os botões de
+  resposta travam, o locutor cala, e o tempo parado **não** conta na
+  pontuação por velocidade. Quem entra durante a pausa já cai na tela.
+  Só o professor que criou a sala pausa.
+- **Duelo online (HU-21):** um jogador cria a partida e recebe um código de
+  4 dígitos; o amigo entra com o código, cada um no seu aparelho. As cinco
+  contas são as mesmas nos dois, o placar dos dois atualiza ao vivo, e se
+  alguém cair a partida encerra avisando. Sem chat e sem texto livre.
+- **Nada de terceiros no navegador da criança (DEF-39):** Three.js,
+  bandeiras e fontes passaram a ser servidos pelo próprio jogo
+  (`Vendor/`, `Imagens/bandeiras/`, `Fontes/`). Com `cdn.jsdelivr.net`,
+  `flagcdn.com` e o Google Fonts bloqueados, o jogo abre em 3D, com
+  bandeiras e com as fontes certas — e há teste automatizado para isso.
+- **Prazos de retenção (HU-20):** sala some em 30 dias, duelo online em
+  24 h, perfil e histórico em 12 meses sem acesso. Os prazos aparecem no
+  jogo em linguagem simples e estão em [`Docs/POLITICA-DE-DADOS.md`](Docs/POLITICA-DE-DADOS.md).
+- **Correções do relatório de QA da Sprint 5:** faixa de mensagem respeita
+  o tempo mínimo de leitura também com duração explícita (DEF-38); o foco
+  volta para um elemento visível quando a tela de fundo mudou com o modal
+  aberto (DEF-40); as funcionalidades da Sprint 5 ganharam teste
+  automatizado — rotas por hash, faixa e avatares (DEF-41).
+
 ## Novidades da v1.5
 
 - **Cruzeiros (moeda do jogo):** a pontuação de cada partida (10 a 100 por
@@ -87,15 +112,21 @@ Ainda **não** é salva no Firebase (exigiria mudar `Config/firestore.rules`).
 ```
 index.html   entrada na raiz → redireciona para HTML/index.html (link relativo)
 HTML/        index.html (o jogo)
-CSS/         styles.css
+CSS/         styles.css, tema-v2.css, fontes-locais.css
 JS/          regras-chute.js, backup-validacao.js, carregar-externos.js, data.js, avatar-data.js,
-             carteira.js, questions.js, banco-questoes.js, narration.js, sfx.js,
-             game.js, game-2d.js, progressao.js, main.js, loja.js, tutorial.js,
-             firebase-config.js, seed-firestore.js
+             carteira.js, questions.js, banco-questoes.js, niveis.js, narration.js, falas.js, sfx.js,
+             game.js, game-2d.js, botao.js, var.js, copa.js, festa.js, fundo.js, bordas.js,
+             progressao.js, main.js, loja.js, loja-dados.js, tutorial.js, conquistas.js,
+             comemoracoes.js, titulos.js, conta.js, codigo-craque.js, telas-v2.js,
+             sala.js, online.js, turma.js, firebase-config.js, seed-firestore.js
 Config/      firestore.rules
-Imagens/     logos, estrela, favicon, foto da equipe
+Imagens/     logos, estrela, favicon, foto da equipe, avatares/ (18), bandeiras/ (48)
+Fontes/      Fredoka e Atkinson Hyperlegible (.woff2) + LICENCA.txt
+Vendor/      three.min.js (r149), xlsx, jspdf, jspdf-autotable
+Audio/falas/ 50 falas gravadas do locutor
+Docs/        COMECE-AQUI.md, COMO-RODAR.md, POLITICA-DE-DADOS.md, roteiros
 tests/       unit/ (Node), e2e/ (Playwright), rules/ (Firebase Emulator)
-raiz         package.json, firebase.json, playwright.config.js, vercel.json
+raiz         package.json, firebase.json, vercel.json
 ```
 
 | Arquivo | O que é |
@@ -110,6 +141,14 @@ raiz         package.json, firebase.json, playwright.config.js, vercel.json
 | `JS/loja.js` | tela da Loja e modal de confirmação de compra |
 | `JS/tutorial.js` | tela "Como jogar" (6 passos ilustrados) |
 | `JS/progressao.js` | fases, desbloqueio e recordes (localStorage) |
+| `JS/copa.js` | Copa do Mundo 2026: grupos, mata-mata e morte súbita |
+| `JS/botao.js` + `JS/var.js` | futebol de botão e o VAR de expressões numéricas |
+| `JS/niveis.js` | escada de 12 níveis de conta |
+| `JS/conquistas.js` | 39 medalhas, prêmios em Cruzeiros e bordas |
+| `JS/conta.js` + `JS/codigo-craque.js` | perfil do craque e o código de 16 caracteres |
+| `JS/sala.js` | Sala do Professor: entrar, nível ao vivo e pausa (HU-15) |
+| `JS/online.js` | duelo online entre dois aparelhos (HU-21) |
+| `JS/turma.js` | chamada do professor e exportação em Excel/PDF |
 | `JS/firebase-config.js` | Firebase Auth anônimo + Firestore |
 | `JS/seed-firestore.js` | script Node que popula as coleções de configuração |
 | `Config/firestore.rules` | regras de segurança (publicar no Console) |
@@ -167,15 +206,26 @@ abre normalmente, a partida usa o modo simplificado e a nuvem fica
 desligada. O jogo **não funciona 100% offline** na primeira visita: os
 próprios arquivos do jogo precisam ser baixados.
 
-### Dependências externas (CDN)
+### Dependências externas
 
-| O quê | De onde |
-|---|---|
-| Three.js r149 (`three@0.149.0`) | `cdn.jsdelivr.net` |
-| Firebase JS SDK 12.18.0 (app, auth, firestore) | `www.gstatic.com` |
-| Fontes Fredoka e Atkinson Hyperlegible | `fonts.googleapis.com` |
-| Avatares (pixel-art) | `api.dicebear.com` (com fallback local) |
-| Bandeiras | `flagcdn.com` |
+Desde a v2.3 **o navegador da criança não busca nada de terceiros**
+(DEF-39 / SEC-11 do relatório de QA). Tudo é servido pelo próprio jogo:
+
+| O quê | De onde | Observação |
+|---|---|---|
+| Three.js r149 | `Vendor/three.min.js` | o CDN ficou só como segunda tentativa |
+| Fontes Fredoka e Atkinson Hyperlegible | `Fontes/*.woff2` | SIL OFL 1.1, ver `Fontes/LICENCA.txt` |
+| Bandeiras das 48 seleções | `Imagens/bandeiras/*.png` | 100 KB somados |
+| Avatares | `Imagens/avatares/*.svg` | 18 arquivos, 16 KB somados |
+| Excel e PDF do professor | `Vendor/xlsx…`, `Vendor/jspdf…` | só carregam quando ele exporta |
+
+A **única** conexão externa que resta é o SDK do Firebase
+(`www.gstatic.com`), necessário para o login anônimo e o Firestore. Sem
+ele o jogo abre e funciona; só não salva na nuvem.
+
+O teste `tests/e2e/sem-terceiros.spec.js` bloqueia toda a rede externa e
+confere que o jogo abre em 3D, com bandeiras e com as fontes aplicadas.
+
 
 ## Firebase — segurança e configuração
 
@@ -207,13 +257,24 @@ próprios arquivos do jogo precisam ser baixados.
 
 ### Checklist (manual, no Console do Firebase)
 
+> **Ordem importa:** publique as regras **antes** de subir o site novo.
+> As regras atuais precisam conhecer os campos `pausada` e `expiraEm`
+> (HU-15 e HU-20) e a coleção `partidas` (HU-21).
+
 1. **Authentication → Método de login → Anônimo → Ativar.**
    Sem isso o login falha e o jogo segue sem salvar na nuvem.
+1b. **Authentication → Método de login → E-mail/senha → Ativar.**
+   É o que faz o "código do craque" funcionar. A conta anônima da criança
+   é promovida com um e-mail sintético (`craque.XXXXXX@<authDomain>`) que
+   nunca recebe mensagem; a senha é o próprio código de 16 caracteres.
 2. **Authentication → Configurações → Domínios autorizados**: adicione o
    domínio do deploy (ex.: `seu-usuario.github.io`, `mathgol.vercel.app`).
 3. **Firestore → Regras**: cole `Config/firestore.rules` e publique
    (ou `npx firebase deploy --only firestore:rules`).
-4. **Seed das configurações** (uma vez):
+4. **Firestore → Time-to-live (TTL)** (uma vez, HU-20): política em
+   `salas.expiraEm`, em `partidas.expiraEm` e em `jogadores.ultimoAcessoEm`.
+   Prazos e ressalvas em [`Docs/POLITICA-DE-DADOS.md`](Docs/POLITICA-DE-DADOS.md).
+5. **Seed das configurações** (uma vez):
    ```bash
    npm install
    cp .env.example .env   # credenciais do Admin SDK (Contas de serviço)

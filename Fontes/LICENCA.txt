@@ -1,0 +1,34 @@
+Fontes do MathGol
+=================
+
+Os arquivos .woff2 desta pasta são servidos pelo próprio jogo em vez de
+virem do Google Fonts (DEF-39 / SEC-11 do relatório de QA). As duas
+famílias são distribuídas sob a SIL Open Font License, versão 1.1, que
+permite usar, redistribuir e embutir as fontes, inclusive em projeto
+comercial, desde que a licença acompanhe os arquivos — é o que este
+arquivo faz.
+
+Fredoka
+  Autor: Milena Brandão, Hafontia
+  Licença: SIL Open Font License 1.1
+  Origem: https://fonts.google.com/specimen/Fredoka
+
+Atkinson Hyperlegible
+  Autor: Braille Institute of America
+  Licença: SIL Open Font License 1.1
+  Origem: https://fonts.google.com/specimen/Atkinson+Hyperlegible
+
+Texto completo da licença: https://openfontlicense.org/
+
+Resumo das obrigações (SIL OFL 1.1):
+  - a licença e este aviso acompanham os arquivos;
+  - os arquivos não são vendidos isoladamente (fazem parte do jogo);
+  - uma versão modificada não pode usar o nome original reservado.
+
+Como atualizar
+--------------
+1. Baixe o CSS do Google Fonts com as famílias e pesos usados.
+2. Baixe os .woff2 que esse CSS aponta.
+3. Refaça CSS/fontes-locais.css trocando cada URL pelo arquivo local.
+Os nomes locais trazem um resumo (hash) da URL de origem, para que dois
+arquivos da mesma família nunca se sobrescrevam.

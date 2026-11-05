@@ -787,3 +787,53 @@ body.alto-contraste .copa-cartao { background: #000000; color: #FFFFFF; }
 .painel-var .aviso-sala { color: var(--grafite); font-weight: 600; text-align: center; min-height: 1.2em; }
 .painel-var .aviso-sala.aviso-ok { color: var(--verde-texto); }
 .painel-var .aviso-sala.aviso-erro { color: #B4232A; }
+
+/* ---------- HU-15: pausa da sala ---------- */
+
+/* Fica ACIMA dos outros modais (z-index 50): se o professor pausa com um
+   modal aberto na tela da crianca, a pausa e que precisa aparecer. */
+.sobreposicao-pausa { z-index: 70; background: rgba(18, 48, 95, 0.82); }
+
+.painel-pausa {
+  background: var(--branco-giz, #FFFDF6);
+  border: 3px solid var(--grafite, #21303B);
+  border-radius: var(--raio-grande, 18px);
+  padding: 28px 24px;
+  max-width: 420px;
+  width: 100%;
+  text-align: center;
+}
+
+.painel-pausa h2 { margin: 6px 0 10px; }
+
+.pausa-icone {
+  font-size: 48px;
+  line-height: 1;
+  margin: 0;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .pausa-icone { animation: pulsar-pausa 2s ease-in-out infinite; }
+  @keyframes pulsar-pausa {
+    0%, 100% { transform: scale(1); }
+    50%      { transform: scale(1.12); }
+  }
+}
+
+/* Botao de pausar no painel do professor. */
+.linha-pausa { margin-top: 14px; }
+#botao-pausar-sala[aria-pressed="true"] {
+  background: var(--amarelo-gol, #FFC63B);
+  border-color: var(--grafite, #21303B);
+}
+
+/* ---------- HU-21: duelo online ---------- */
+
+.campo-codigo-partida {
+  font-size: 32px;
+  letter-spacing: 0.3em;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  max-width: 220px;
+}
+
+#online-escolha .texto-apoio-curto { text-align: center; opacity: .7; margin: 10px 0; }

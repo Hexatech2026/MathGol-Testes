@@ -81,6 +81,15 @@ escrever o documento de qualquer criança. O `firestore.rules` deste pacote é o
 
 **Publique este arquivo assim que subir o repositório.**
 
+> ⚠️ **Correção de 04/11/2026.** O texto abaixo dizia que as regras da sala
+> estavam fechadas, e elas **não estavam**: o arquivo entregue tinha
+> `allow read: if true` e `allow create, update: if true` em `salas`.
+> Qualquer pessoa logada listava as salas, trocava o nível de qualquer
+> turma e lia os apelidos e as notas dos alunos. Corrigido e publicado no
+> mesmo dia. O bloco de regras agora é o que está em
+> `Config/firestore.rules`, com teste no emulador
+> (`npm run test:rules`).
+
 ## A sala ficou segura (R03 resolvido para ela)
 
 Como o código de vocês já usa Firebase Auth anônimo, deu pra escrever a regra

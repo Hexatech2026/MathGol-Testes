@@ -8,11 +8,12 @@
 
 <link rel="icon" type="image/x-icon" href="../Imagens/favicon.ico">
 
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<!-- Fontes sem bloquear a página: se o Google Fonts travar, o jogo abre
-     com as fontes do sistema (media="print" + onload troca para "all"). -->
-<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<!-- DEF-39 (SEC-11): as fontes são servidas pelo próprio jogo (Fontes/),
+     não mais pelo Google. Some a conexão aos domínios de fonte no
+     navegador da criança, e o texto aparece na fonte certa mesmo com a
+     rede de terceiros bloqueada. Licença das duas famílias (SIL OFL 1.1)
+     em Fontes/LICENCA.txt. -->
+<link rel="stylesheet" href="../CSS/fontes-locais.css">
 
 <link rel="stylesheet" href="../CSS/styles.css">
 <!-- v2.0: visual novo (menu, perfil, conquistas, bordas, avisos). Vem
@@ -147,7 +148,7 @@
       <span id="cartao-jogador-avatar" class="cartao-jogador-avatar" aria-hidden="true"></span>
       <span class="cartao-jogador-info">
         <span id="cartao-jogador-nome" class="cartao-jogador-nome">Novo craque</span>
-        <span id="cartao-jogador-detalhe" class="cartao-jogador-detalhe">🏅 0/18</span>
+        <span id="cartao-jogador-detalhe" class="cartao-jogador-detalhe">🏅 0/39</span>
       </span>
       <span class="cartao-jogador-seta" aria-hidden="true">›</span>
     </button>
@@ -170,7 +171,7 @@
         <button id="botao-conquistas" class="atalho atalho-conquistas" type="button">
           <span class="atalho-icone" aria-hidden="true">🏆</span>
           <span class="atalho-texto">Conquistas</span>
-          <span id="selo-conquistas" class="selo-contagem">0/18</span>
+          <span id="selo-conquistas" class="selo-contagem">0/39</span>
         </button>
         <button id="botao-loja" class="atalho atalho-loja" type="button">
           <span class="atalho-icone" aria-hidden="true">🛒</span>
@@ -197,7 +198,7 @@
       <p id="perfil-titulo" class="perfil-titulo">Estreante</p>
       <div class="perfil-numeros">
         <span class="numero-perfil"><strong id="perfil-gols">0</strong> gols</span>
-        <button id="botao-perfil-conquistas" class="numero-perfil numero-perfil-botao" type="button"><strong id="perfil-conquistas">0/18</strong> conquistas</button>
+        <button id="botao-perfil-conquistas" class="numero-perfil numero-perfil-botao" type="button"><strong id="perfil-conquistas">0/39</strong> conquistas</button>
         <span class="numero-perfil"><strong id="perfil-partidas">0</strong> partidas</span>
       </div>
       <button id="botao-editar-craque" class="botao botao-secundario botao-compacto" type="button">✏️ Trocar nome e avatar</button>
@@ -246,6 +247,16 @@
           <li>Guardamos só o que é do jogo: Cruzeiros, itens, fases, conquistas, avatar e borda.</li>
           <li>Você pode apagar tudo quando quiser, aqui embaixo em “Apagar meus dados”.</li>
           <li>Pais e responsáveis: os dados ficam no Google Firebase e servem só para o jogo funcionar (LGPD, art. 14).</li>
+        </ul>
+        <!-- HU-20 (CA-20.6): por quanto tempo cada coisa fica guardada,
+             em linguagem simples, dentro do próprio jogo. -->
+        <h4 class="subtitulo-secao">Por quanto tempo guardamos</h4>
+        <ul>
+          <li><strong>Seu craque e suas partidas:</strong> enquanto você jogar. Se ninguém entrar com o seu código por <strong>12 meses</strong>, apagamos.</li>
+          <li><strong>Sala de aula:</strong> some sozinha <strong>30 dias</strong> depois de criada.</li>
+          <li><strong>Duelo online:</strong> some sozinho <strong>24 horas</strong> depois da partida.</li>
+          <li><strong>Neste aparelho:</strong> fica até você apagar aqui ou limpar os dados do navegador.</li>
+          <li>Quer apagar antes? Use “Apagar meus dados” aqui embaixo, ou peça para um adulto falar com a equipe HexaTech.</li>
         </ul>
       </details>
       <div class="acoes-conta">
@@ -318,6 +329,12 @@
       <label class="rotulo-campo" for="select-nivel-ativo">Trocar o nível da turma</label>
       <select id="select-nivel-ativo" class="campo-sala"></select>
 
+      <!-- HU-15: pausar a aula para explicar uma questão. -->
+      <div class="linha-pausa">
+        <button id="botao-pausar-sala" class="botao botao-secundario" type="button" aria-pressed="false">⏸️ Pausar sala</button>
+        <p id="aviso-pausa" class="aviso-sala" role="status" aria-live="polite"></p>
+      </div>
+
       <h3 class="subtitulo-secao">Turma <span id="prof-contagem" class="contagem-alunos">(0)</span></h3>
       <ul id="lista-alunos" class="lista-alunos" aria-live="polite"></ul>
 
@@ -337,6 +354,39 @@
 
       <div class="pilha-botoes" style="margin-top: 16px;">
         <button id="botao-fechar-painel" class="botao" type="button">Voltar ao menu</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- HU-21: duelo online. Um cria e dita o código de 4 dígitos; o outro
+       digita. As contas são as mesmas nos dois aparelhos. -->
+  <section id="tela-online" class="tela tela-online">
+    <h2 data-titulo-tela>🌐 Duelo online</h2>
+    <p class="texto-apoio">Cada um no seu aparelho, as mesmas 5 contas, e o placar dos dois na tela.</p>
+
+    <div id="online-escolha">
+      <div class="pilha-botoes">
+        <button id="botao-criar-partida" class="botao botao-cta" type="button">Criar partida</button>
+      </div>
+      <p class="texto-apoio texto-apoio-curto">ou</p>
+      <label class="rotulo-campo" for="input-codigo-partida">Entrar com o código do amigo</label>
+      <input id="input-codigo-partida" class="campo-sala campo-codigo-partida" type="text"
+             inputmode="numeric" maxlength="4" placeholder="0000" autocomplete="off">
+      <div class="pilha-botoes">
+        <button id="botao-entrar-partida" class="botao" type="button">Entrar</button>
+      </div>
+      <p id="aviso-online" class="aviso-sala" role="status" aria-live="polite"></p>
+    </div>
+
+    <div id="online-sala-espera" hidden>
+      <p class="texto-apoio">Dite este código para o seu amigo:</p>
+      <p id="codigo-partida" class="codigo-sala">----</p>
+      <h3 class="subtitulo-secao">Quem já entrou</h3>
+      <ul id="lista-jogadores-online" class="lista-alunos" aria-live="polite"></ul>
+      <p id="aviso-espera" class="aviso-sala" role="status" aria-live="polite">Esperando o seu amigo entrar...</p>
+      <div class="pilha-botoes" style="margin-top: 16px;">
+        <button id="botao-comecar-online" class="botao botao-cta" type="button" disabled>Começar o duelo!</button>
+        <button id="botao-sair-online" class="botao" type="button">Sair</button>
       </div>
     </div>
   </section>
@@ -414,6 +464,11 @@
         <span class="atalho-icone" aria-hidden="true">🔘</span>
         <span class="atalho-texto">Futebol de botão</span>
         <span class="atalho-sub">gol só vale depois do VAR</span>
+      </button>
+      <button id="botao-modo-online" class="atalho" type="button">
+        <span class="atalho-icone" aria-hidden="true">🌐</span>
+        <span class="atalho-texto">Duelo online</span>
+        <span class="atalho-sub">cada um no seu aparelho</span>
       </button>
     </div>
 
@@ -799,6 +854,18 @@
 
 <!-- v2.2: VAR do futebol de botão. Não fecha clicando fora: o gol fica em
      análise até a criança acertar a expressão. -->
+<!-- HU-15: a turma inteira vê esta tela enquanto o professor explica. Não é
+     um modal com foco preso: a criança não tem nada a fazer aqui, e o que
+     ela aperta enquanto espera não pode cair na partida. -->
+<div id="sobreposicao-pausa" class="sobreposicao sobreposicao-pausa" aria-hidden="true">
+  <div class="painel-pausa" role="status" aria-live="assertive">
+    <p class="pausa-icone" aria-hidden="true">⏸️</p>
+    <h2 id="titulo-pausa">Aula pausada</h2>
+    <p class="texto-apoio">Seu professor pediu um tempo para explicar. O relógio parou e a sua pontuação está guardada.</p>
+    <p class="texto-apoio texto-apoio-curto">O jogo volta sozinho quando ele retomar.</p>
+  </div>
+</div>
+
 <div id="sobreposicao-var" class="sobreposicao sobreposicao-var" aria-hidden="true">
   <div class="painel-var" role="dialog" aria-modal="true" aria-labelledby="titulo-var" aria-describedby="texto-var">
     <h2 id="titulo-var" style="text-align:center; margin-bottom:6px;">📺 VAR: gol em análise</h2>
@@ -881,6 +948,7 @@
 <script src="../JS/data.js"></script>
 <script src="../JS/niveis.js"></script>
 <script src="../JS/sala.js"></script>
+<script src="../JS/online.js"></script>
 <script src="../JS/turma.js"></script>
 <script src="../JS/avatar-data.js"></script>
 <script src="../JS/bordas.js"></script>

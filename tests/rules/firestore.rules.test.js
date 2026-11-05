@@ -205,3 +205,76 @@ test('sala: so a professora ve a turma; cada aluno so escreve o proprio lugar', 
   await assertFails(setDoc(doc(carol(), 'salas', 'ABC-123', 'alunos', 'carol'), aluno({ nomeReal: 'Joao' })));
   await assertSucceeds(deleteDoc(doc(bob(), 'salas', 'ABC-123', 'alunos', 'bob')));
 });
+
+// ---------- HU-15: pausa da sala ----------
+
+test('sala: so a dona pausa e retoma a aula', async () => {
+  await semearSala();
+  await assertSucceeds(setDoc(doc(alice(), 'salas', 'ABC-123'), { pausada: true }, { merge: true }));
+  await assertSucceeds(setDoc(doc(alice(), 'salas', 'ABC-123'), { pausada: false }, { merge: true }));
+  await assertFails(setDoc(doc(carol(), 'salas', 'ABC-123'), { pausada: true }, { merge: true }));
+  await assertFails(setDoc(doc(bob(), 'salas', 'ABC-123'), { pausada: true }, { merge: true }));
+  await assertFails(setDoc(doc(alice(), 'salas', 'ABC-123'), { pausada: 'sim' }, { merge: true }));
+  // A crianca precisa LER a pausa para a tela aparecer.
+  await assertSucceeds(getDoc(doc(bob(), 'salas', 'ABC-123')));
+});
+
+// ---------- HU-21: duelo online (partidas/{codigo}) ----------
+
+const perguntas = [{ a: 2, b: 3, tipo: 'soma' }, { a: 5, b: 1, tipo: 'subtracao' }];
+const partida = (extra = {}) => Object.assign({ dono: 'alice', nivel: 3, perguntas, status: 'esperando', criadoEm: serverTimestamp() }, extra);
+const jogadorP = (extra = {}) => Object.assign({ apelido: 'Fera Tigre', avatarSeed: 'Tigre', gols: 1, pontuacao: 80, cobranca: 2, fim: false, atualizadoEm: serverTimestamp() }, extra);
+
+async function semearPartida() {
+  await env.withSecurityRulesDisabled(async ctx => {
+    const db = ctx.firestore();
+    await setDoc(doc(db, 'partidas', '1234'), { dono: 'alice', nivel: 3, perguntas, status: 'esperando', criadoEm: Timestamp.now() });
+    await setDoc(doc(db, 'partidas', '1234', 'jogadores', 'alice'), { apelido: 'Capita Onca', gols: 0, pontuacao: 0, cobranca: 0, fim: false });
+    await setDoc(doc(db, 'partidas', '1234', 'jogadores', 'bob'), { apelido: 'Raio Lobo', gols: 2, pontuacao: 150, cobranca: 3, fim: false });
+  });
+}
+
+test('partida: criada so em nome proprio, com codigo de 4 digitos', async () => {
+  await assertSucceeds(setDoc(doc(alice(), 'partidas', '4321'), partida()));
+  await assertFails(setDoc(doc(alice(), 'partidas', '4322'), partida({ dono: 'bob' })));
+  await assertFails(setDoc(doc(alice(), 'partidas', 'abcd'), partida()));
+  await assertFails(setDoc(doc(alice(), 'partidas', '43'), partida()));
+  await assertFails(setDoc(doc(alice(), 'partidas', '4323'), partida({ nivel: 99 })));
+  await assertFails(setDoc(doc(alice(), 'partidas', '4324'), partida({ perguntas: [] })));
+  await assertFails(setDoc(doc(alice(), 'partidas', '4325'), partida({ chat: 'oi' })));
+  await assertFails(setDoc(doc(anonimo(), 'partidas', '4326'), partida()));
+});
+
+test('partida: quem tem o codigo le; ninguem varre as partidas', async () => {
+  await semearPartida();
+  await assertSucceeds(getDoc(doc(bob(), 'partidas', '1234')));
+  await assertFails(getDocs(collection(bob(), 'partidas')));
+  await assertFails(getDoc(doc(anonimo(), 'partidas', '1234')));
+});
+
+test('partida: as contas combinadas nao mudam no meio', async () => {
+  await semearPartida();
+  await assertSucceeds(setDoc(doc(alice(), 'partidas', '1234'), { status: 'jogando' }, { merge: true }));
+  await assertFails(setDoc(doc(alice(), 'partidas', '1234'), { perguntas: [{ a: 9, b: 9, tipo: 'soma' }] }, { merge: true }));
+  await assertFails(setDoc(doc(alice(), 'partidas', '1234'), { nivel: 12 }, { merge: true }));
+  await assertFails(setDoc(doc(bob(), 'partidas', '1234'), { status: 'fim' }, { merge: true }));
+  await assertFails(deleteDoc(doc(alice(), 'partidas', '1234')));
+});
+
+test('partida: cada um grava so o proprio placar (CA-21.8)', async () => {
+  await semearPartida();
+  await assertSucceeds(setDoc(doc(bob(), 'partidas', '1234', 'jogadores', 'bob'), jogadorP()));
+  await assertFails(setDoc(doc(bob(), 'partidas', '1234', 'jogadores', 'alice'), jogadorP({ gols: 0 })));
+  await assertFails(setDoc(doc(bob(), 'partidas', '1234', 'jogadores', 'bob'), jogadorP({ recado: 'oi' })));
+  await assertFails(setDoc(doc(bob(), 'partidas', '1234', 'jogadores', 'bob'), jogadorP({ gols: 99 })));
+  await assertFails(setDoc(doc(bob(), 'partidas', '1234', 'jogadores', 'bob'), jogadorP({ pontuacao: -5 })));
+});
+
+test('partida: so quem esta dentro ve a lista de jogadores', async () => {
+  await semearPartida();
+  await assertSucceeds(getDocs(collection(alice(), 'partidas', '1234', 'jogadores')));
+  await assertSucceeds(getDocs(collection(bob(), 'partidas', '1234', 'jogadores')));
+  // carol sabe o codigo mas nao entrou: nao ve os apelidos da partida.
+  await assertFails(getDocs(collection(carol(), 'partidas', '1234', 'jogadores')));
+  await assertFails(getDoc(doc(carol(), 'partidas', '1234', 'jogadores', 'bob')));
+});

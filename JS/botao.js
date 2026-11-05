@@ -367,8 +367,10 @@ var FutebolBotao = (function() {
   function comecar(novoModo) {
     modo = novoModo;
     placar = [0, 0];
-    var eu = (typeof Conta !== 'undefined' && Conta.apelido()) || 'Você';
-    nomes = modo === 'cpu' ? ['Você', 'Computador'] : [eu, 'Jogador 2'];
+    // No modo 2 jogadores sao duas criancas no mesmo aparelho: sem apelido
+    // montado, "Voce" nao diz qual das duas e. Ali o padrao e "Jogador 1".
+    var eu = (typeof Conta !== 'undefined' && Conta.apelido()) || null;
+    nomes = modo === 'cpu' ? [eu || 'Você', 'Computador'] : [eu || 'Jogador 1', 'Jogador 2'];
     // Cor do time A = time escolhido (data.js); B = contraste.
     var t = typeof SELECOES !== 'undefined' && typeof estado !== 'undefined'
       ? SELECOES.find(function(s) { return s.id === estado.selecaoId; }) : null;

@@ -62,7 +62,11 @@ function montarPergunta(a, b, tipo, nivelId) {
     // Metadados — usados pelo painel do professor e pelo resumo da fase.
     nivel: nivelId,
     tipo,
-    digitos: Math.max(String(a).length, String(b).length)
+    digitos: Math.max(String(a).length, String(b).length),
+    // HU-21: o duelo online guarda só estes dois números e o tipo, e cada
+    // aparelho remonta o enunciado aqui mesmo (nada de texto vindo de fora).
+    a,
+    b
   };
 }
 
