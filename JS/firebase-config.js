@@ -227,10 +227,9 @@ async function salvarEstado(estado) {
   const user = await aguardarUsuario();
   if (!user) return false;
   try {
-    await setDoc(doc(db, 'jogadores', user.uid), {
-      estado: limpo,
-      ultimoAcessoEm: serverTimestamp()
-    }, { merge: true });
+    await setDoc(doc(db, 'jogadores', user.uid), Object.assign({
+      estado: limpo
+    }, marcaDeAcesso()), { merge: true });
     return true;
   } catch (erro) {
     console.warn('Estado salvo só localmente (Firebase indisponível):', erro);
@@ -322,9 +321,8 @@ async function salvarPerfil(dados) {
   try {
     const batch = writeBatch(db);
     batch.set(doc(db, 'jogadores', user.uid), Object.assign({}, perfil, {
-      atualizadoEm: serverTimestamp(),
-      ultimoAcessoEm: serverTimestamp()
-    }), { merge: true });
+      atualizadoEm: serverTimestamp()
+    }, marcaDeAcesso()), { merge: true });
     batch.set(doc(db, 'apelidos', user.uid), Object.assign({}, perfil, {
       atualizadoEm: serverTimestamp()
     }));
@@ -354,7 +352,7 @@ async function salvarProgresso(resumo) {
     const jogadorRef = doc(db, 'jogadores', user.uid);
     const batch = writeBatch(db);
     batch.set(doc(collection(jogadorRef, 'resultados')), Object.assign({}, dados, { criadoEm: serverTimestamp() }));
-    batch.set(jogadorRef, { ultimoAcessoEm: serverTimestamp(), ultimoResultado: dados }, { merge: true });
+    batch.set(jogadorRef, Object.assign({ ultimoResultado: dados }, marcaDeAcesso()), { merge: true });
     await batch.commit();
     return true;
   } catch (erro) {
@@ -417,10 +415,24 @@ function normalizarCodigoSala(codigo) {
 // Docs/POLITICA-DE-DADOS.md — mudar aqui e lá junto.
 const DIAS_SALA = 30;
 const HORAS_PARTIDA = 24;
+const DIAS_JOGADOR = 365;   // 12 meses SEM ACESSO (renovado a cada entrada)
 
 function daquiA(ms) { return Timestamp.fromMillis(Date.now() + ms); }
 function validadeDaSala() { return daquiA(DIAS_SALA * 24 * 60 * 60 * 1000); }
 function validadeDaPartida() { return daquiA(HORAS_PARTIDA * 60 * 60 * 1000); }
+
+// ATENCAO: o TTL do Firestore apaga o documento quando o campo aponta para
+// um instante JA PASSADO. Entao a politica NAO pode ser criada sobre
+// "ultimoAcessoEm", que guarda a hora da ultima entrada e por isso esta
+// sempre no passado: todo perfil seria apagado em 24 h. O campo do TTL e
+// este "expiraEm", que guarda a DATA DE VALIDADE e e empurrado para a
+// frente a cada acesso.
+function validadeDoJogador() { return daquiA(DIAS_JOGADOR * 24 * 60 * 60 * 1000); }
+
+// Carimbo que acompanha toda gravacao no documento do jogador.
+function marcaDeAcesso() {
+  return { ultimoAcessoEm: serverTimestamp(), expiraEm: validadeDoJogador() };
+}
 
 // Aceita so o que a sala precisa, no formato certo. Vale o mesmo cuidado do
 // resto do arquivo: nada do cliente entra no Firestore sem conferencia.
@@ -764,7 +776,7 @@ async function restaurarDadosFirebase(dadosValidados) {
   if (dadosValidados.perfil) {
     const perfil = V.validarPerfil(dadosValidados.perfil);
     if (perfil) {
-      operacoes.push(b => b.set(jogadorRef, Object.assign({}, perfil, { atualizadoEm: serverTimestamp(), ultimoAcessoEm: serverTimestamp() }), { merge: true }));
+      operacoes.push(b => b.set(jogadorRef, Object.assign({}, perfil, { atualizadoEm: serverTimestamp() }, marcaDeAcesso()), { merge: true }));
       operacoes.push(b => b.set(doc(db, 'apelidos', user.uid), Object.assign({}, perfil, { atualizadoEm: serverTimestamp() })));
     }
   }

@@ -278,3 +278,17 @@ test('partida: so quem esta dentro ve a lista de jogadores', async () => {
   await assertFails(getDocs(collection(carol(), 'partidas', '1234', 'jogadores')));
   await assertFails(getDoc(doc(carol(), 'partidas', '1234', 'jogadores', 'bob')));
 });
+
+// ---------- HU-20: validade do perfil (campo do TTL) ----------
+//
+// O TTL do Firestore apaga o documento quando o campo aponta para um
+// instante JA PASSADO. Por isso a politica tem de ser criada sobre
+// "expiraEm" (data de validade, no futuro) e NUNCA sobre
+// "ultimoAcessoEm", que guarda a hora da ultima entrada.
+
+test('jogador: expiraEm e aceito e tem de ser timestamp', async () => {
+  const daqui12meses = Timestamp.fromMillis(Date.now() + 365 * 24 * 60 * 60 * 1000);
+  await assertSucceeds(setDoc(doc(alice(), 'jogadores', 'alice'), perfil({ expiraEm: daqui12meses })));
+  await assertFails(setDoc(doc(alice(), 'jogadores', 'alice'), perfil({ expiraEm: 'daqui a um ano' })));
+  await assertFails(setDoc(doc(alice(), 'jogadores', 'alice'), perfil({ validade: daqui12meses })));
+});

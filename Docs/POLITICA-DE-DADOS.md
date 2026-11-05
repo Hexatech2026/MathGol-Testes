@@ -38,7 +38,7 @@ e some com o botão "Apagar os nomes desta sala deste aparelho".
 
 | Dado | Prazo | Como é apagado |
 |---|---|---|
-| Perfil e histórico do jogador (`jogadores/*`, `apelidos/*`) | **12 meses** sem acesso | TTL do Firestore sobre `ultimoAcessoEm` |
+| Perfil e histórico do jogador (`jogadores/*`, `apelidos/*`) | **12 meses** sem acesso | TTL do Firestore sobre `expiraEm` |
 | Sala de aula (`salas/*` e os alunos dela) | **30 dias** após a criação | TTL do Firestore sobre `expiraEm` |
 | Duelo online (`partidas/*`) | **24 horas** após a criação | TTL do Firestore sobre `expiraEm` |
 | Dados no navegador da criança | até ela apagar ou limpar o navegador | botão "Apagar meus dados" |
@@ -48,8 +48,9 @@ O raciocínio de cada prazo:
 
 - **12 meses** acompanha o ano letivo. Quem jogou no ano passado e voltou
   não perde o progresso; quem nunca mais voltou não fica guardado para
-  sempre. O campo `ultimoAcessoEm` é atualizado a cada entrada, então o
-  prazo conta a partir da última vez que a criança jogou, não da primeira.
+  sempre. O campo `expiraEm` é empurrado 12 meses para a frente a cada
+  entrada, então o prazo conta a partir da última vez que a criança jogou,
+  não da primeira.
 - **30 dias** para a sala cobre com folga o uso dela, que é de uma aula.
 - **24 horas** para o duelo online: a partida acaba em minutos.
 
@@ -61,8 +62,19 @@ Console, uma vez:
 1. Console do Firebase → **Firestore Database → Time-to-live (TTL)**.
 2. Criar política: coleção `salas`, campo `expiraEm`.
 3. Criar política: coleção `partidas`, campo `expiraEm`.
-4. Criar política: coleção `jogadores`, campo `ultimoAcessoEm`, e
-   configurar o prazo de 12 meses.
+4. Criar política: coleção `jogadores`, campo `expiraEm`.
+
+> ⚠️ **Nunca crie a política sobre `ultimoAcessoEm`.** O TTL apaga o
+> documento quando o campo aponta para um instante **já passado**, e
+> `ultimoAcessoEm` guarda a hora da última entrada — ou seja, está sempre
+> no passado. Uma política ali apagaria **todos os perfis das crianças em
+> até 24 horas**. O campo certo é `expiraEm`, que guarda a data de
+> validade (entrada + 12 meses). A diferença está travada por teste em
+> `tests/unit/ttl-validade.test.js`.
+>
+> Pelo mesmo motivo o prazo não é configurado na política: o console só
+> aceita deslocamento em dias, horas, minutos e segundos, e quem calcula
+> os 12 meses é o próprio jogo, ao gravar `expiraEm`.
 
 > O TTL do Firestore apaga o documento, **não** as subcoleções dele. Os
 > documentos em `salas/{codigo}/alunos` e `partidas/{codigo}/jogadores`
