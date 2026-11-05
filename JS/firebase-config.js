@@ -46,6 +46,7 @@ import {
   deleteDoc,
   collection,
   serverTimestamp,
+  Timestamp,
   writeBatch,
   onSnapshot,
   increment
@@ -410,6 +411,17 @@ function normalizarCodigoSala(codigo) {
   return limpo.length === 6 ? limpo.slice(0, 3) + '-' + limpo.slice(3) : limpo;
 }
 
+// HU-20 (CA-20.3, CA-20.5): prazos de retenção. Uma sala de aula serve
+// para aquela aula; uma partida online, para aquela partida. Ficam com
+// data de validade e o TTL do Firestore apaga sozinho. Os prazos estão em
+// Docs/POLITICA-DE-DADOS.md — mudar aqui e lá junto.
+const DIAS_SALA = 30;
+const HORAS_PARTIDA = 24;
+
+function daquiA(ms) { return Timestamp.fromMillis(Date.now() + ms); }
+function validadeDaSala() { return daquiA(DIAS_SALA * 24 * 60 * 60 * 1000); }
+function validadeDaPartida() { return daquiA(HORAS_PARTIDA * 60 * 60 * 1000); }
+
 // Aceita so o que a sala precisa, no formato certo. Vale o mesmo cuidado do
 // resto do arquivo: nada do cliente entra no Firestore sem conferencia.
 function limparDadosSala(dados) {
@@ -421,7 +433,8 @@ function limparDadosSala(dados) {
   return {
     nome: String((dados && dados.nome) || 'Turma').slice(0, 40),
     nivel: (isFinite(nivel) && nivel >= 1 && nivel <= 12) ? nivel : 1,
-    tipos: tipos
+    tipos: tipos,
+    pausada: !!(dados && dados.pausada)   // HU-15
   };
 }
 
@@ -430,16 +443,27 @@ async function criarSala(dados) {
   if (!user) { console.warn('Sala nao criada (sem login na nuvem).'); return null; }
 
   const limpo = limparDadosSala(dados);
+  // A sala nasce SEM o campo "pausada" (ausente = não pausada). Assim uma
+  // sala nova continua sendo criada mesmo onde as regras publicadas ainda
+  // são as de antes da HU-15 — só a pausa em si precisa das regras novas.
+  delete limpo.pausada;
   try {
     for (let tentativa = 0; tentativa < 5; tentativa++) {
       const codigo = sortearCodigoSala();
       const jaExiste = await getDoc(doc(db, 'salas', codigo));
       if (jaExiste.exists()) continue;
 
-      await setDoc(doc(db, 'salas', codigo), Object.assign({}, limpo, {
-        dono: user.uid,
-        criadoEm: serverTimestamp()
-      }));
+      const base = Object.assign({}, limpo, { dono: user.uid, criadoEm: serverTimestamp() });
+      try {
+        // HU-20: a sala se apaga sozinha depois do prazo (TTL do Firestore
+        // sobre "expiraEm"). Ver Docs/POLITICA-DE-DADOS.md.
+        await setDoc(doc(db, 'salas', codigo), Object.assign({}, base, { expiraEm: validadeDaSala() }));
+      } catch (semCampo) {
+        // Regras ainda sem "expiraEm" (deploy que não publicou as novas):
+        // a sala é criada do mesmo jeito, só sem a validade automática.
+        console.warn('Sala criada sem prazo de validade (regras antigas):', semCampo);
+        await setDoc(doc(db, 'salas', codigo), base);
+      }
       return codigo;
     }
     console.warn('Nao foi possivel gerar um codigo de sala livre.');
@@ -470,7 +494,7 @@ async function atualizarSala(codigo, mudancas) {
   // e apagava o nome que o professor deu ao criar a sala.
   const limpo = limparDadosSala(mudancas);
   const envio = {};
-  ['nome', 'nivel', 'tipos'].forEach(function(k) {
+  ['nome', 'nivel', 'tipos', 'pausada'].forEach(function(k) {
     if (mudancas && k in mudancas) envio[k] = limpo[k];
   });
   if (!Object.keys(envio).length) return true;
@@ -552,6 +576,146 @@ function observarAlunos(codigo, aoMudar) {
     });
   } catch (erro) {
     console.warn('Nao foi possivel observar a sala:', erro);
+    return function() {};
+  }
+}
+
+// HU-15: acompanha a SALA em si (nao os alunos). E por aqui que a crianca
+// fica sabendo, na hora, que o professor pausou ou trocou o nivel — antes o
+// nivel so chegava no momento de entrar. Mesmo contrato de observarAlunos:
+// quem chama guarda o cancelamento e chama ao sair da tela.
+function observarSala(codigo, aoMudar) {
+  const cod = normalizarCodigoSala(codigo);
+  if (cod.length !== 7) return function() {};
+  try {
+    return onSnapshot(doc(db, 'salas', cod), function(snap) {
+      if (!snap.exists()) { aoMudar(null); return; }
+      aoMudar(Object.assign({ codigo: cod }, snap.data()));
+    }, function(erro) {
+      console.warn('Observacao da sala interrompida:', erro);
+    });
+  } catch (erro) {
+    console.warn('Nao foi possivel observar a sala:', erro);
+    return function() {};
+  }
+}
+
+// ---------- HU-21: duelo online (partidas/{codigo}) ----------
+//
+//   partidas/{codigo}            -> { dono, nivel, perguntas, status, criadoEm }
+//   partidas/{codigo}/jogadores/{uid} -> { apelido, avatarSeed, gols,
+//                                          pontuacao, cobranca, fim, atualizadoEm }
+//
+// O codigo tem 4 digitos (CA-21.1). As perguntas sao guardadas como
+// numeros: [{a, b, tipo}] — ver o cabecalho de JS/online.js.
+
+const TIPOS_CONTA = ['soma', 'subtracao', 'multiplicacao', 'divisao'];
+
+function sortearCodigoPartida() {
+  const n = Math.floor(Math.random() * 10000);
+  return String(n).padStart(4, '0');
+}
+
+function limparPerguntasPartida(lista) {
+  if (!Array.isArray(lista)) return [];
+  return lista.slice(0, 10).map(q => ({
+    a: Math.max(0, Math.min(999, parseInt(q && q.a, 10) || 0)),
+    b: Math.max(0, Math.min(999, parseInt(q && q.b, 10) || 0)),
+    tipo: TIPOS_CONTA.indexOf(q && q.tipo) !== -1 ? q.tipo : 'soma'
+  }));
+}
+
+async function criarPartida(dados) {
+  const user = await aguardarUsuario();
+  if (!user) { console.warn('Partida nao criada (sem login na nuvem).'); return null; }
+
+  const nivel = parseInt(dados && dados.nivel, 10);
+  const limpo = {
+    nivel: (isFinite(nivel) && nivel >= 1 && nivel <= 12) ? nivel : 1,
+    perguntas: limparPerguntasPartida(dados && dados.perguntas),
+    status: 'esperando'
+  };
+  if (!limpo.perguntas.length) return null;
+
+  try {
+    for (let tentativa = 0; tentativa < 6; tentativa++) {
+      const codigo = sortearCodigoPartida();
+      const jaExiste = await getDoc(doc(db, 'partidas', codigo));
+      if (jaExiste.exists()) continue;
+      await setDoc(doc(db, 'partidas', codigo), Object.assign({}, limpo, {
+        dono: user.uid,
+        criadoEm: serverTimestamp(),
+        expiraEm: validadeDaPartida()   // HU-20: some sozinha em 24 h
+      }));
+      // Quem cria tambem entra: o placar precisa dos dois documentos.
+      await entrarNaPartida(codigo, {});
+      return { codigo, uid: user.uid };
+    }
+    console.warn('Nao foi possivel gerar um codigo de partida livre.');
+    return null;
+  } catch (erro) {
+    console.warn('Nao foi possivel criar a partida:', erro);
+    return null;
+  }
+}
+
+async function buscarPartida(codigo) {
+  const cod = String(codigo || '').replace(/\D/g, '');
+  if (cod.length !== 4) return null;
+  try {
+    const snap = await getDoc(doc(db, 'partidas', cod));
+    if (!snap.exists()) return null;
+    return Object.assign({ codigo: cod }, snap.data());
+  } catch (erro) {
+    console.warn('Nao foi possivel ler a partida:', erro);
+    return null;
+  }
+}
+
+// Entra (ou atualiza o proprio placar). Devolve o uid, que o online.js usa
+// para saber qual documento da lista e o dele.
+async function entrarNaPartida(codigo, jogador) {
+  const cod = String(codigo || '').replace(/\D/g, '');
+  if (cod.length !== 4) return null;
+  const user = await aguardarUsuario();
+  if (!user) return null;
+
+  const inteiro = (v, max) => {
+    const n = parseInt(v, 10);
+    return isFinite(n) && n >= 0 ? Math.min(n, max) : 0;
+  };
+  const dados = {
+    apelido: String((jogador && jogador.apelido) || 'Craque').slice(0, 40),
+    avatarSeed: String((jogador && jogador.avatarSeed) || '').slice(0, 40),
+    gols: inteiro(jogador && jogador.gols, 10),
+    pontuacao: inteiro(jogador && jogador.pontuacao, 1000),
+    cobranca: inteiro(jogador && jogador.cobranca, 10),
+    fim: !!(jogador && jogador.fim),
+    atualizadoEm: serverTimestamp()
+  };
+  try {
+    await setDoc(doc(collection(doc(db, 'partidas', cod), 'jogadores'), user.uid), dados, { merge: true });
+    return user.uid;
+  } catch (erro) {
+    console.warn('Nao foi possivel entrar na partida:', erro);
+    return null;
+  }
+}
+
+function observarPartida(codigo, aoMudar) {
+  const cod = String(codigo || '').replace(/\D/g, '');
+  if (cod.length !== 4) return function() {};
+  try {
+    const ref = collection(doc(db, 'partidas', cod), 'jogadores');
+    return onSnapshot(ref, function(snap) {
+      const lista = [];
+      snap.forEach(function(d) { lista.push(Object.assign({ uid: d.id }, d.data())); });
+      aoMudar(lista);
+    }, function(erro) {
+      console.warn('Observacao da partida interrompida:', erro);
+    });
+  } catch (erro) {
+    console.warn('Nao foi possivel observar a partida:', erro);
     return function() {};
   }
 }
@@ -642,5 +806,10 @@ window.FirebaseMathGol = {
   buscarSala,
   atualizarSala,
   entrarNaSala,
-  observarAlunos
+  observarAlunos,
+  observarSala,
+  criarPartida,
+  buscarPartida,
+  entrarNaPartida,
+  observarPartida
 };

@@ -215,12 +215,16 @@ service cloud.firestore {
     }
 
     function salaValida(d) {
-      return d.keys().hasOnly(['nome', 'nivel', 'tipos', 'dono', 'criadoEm'])
+      return d.keys().hasOnly(['nome', 'nivel', 'tipos', 'dono', 'criadoEm', 'pausada', 'expiraEm'])
         && d.dono is string
         && textoAte(d.nome, 40)
         && d.nivel is int && d.nivel >= 1 && d.nivel <= 12
         && d.tipos is list && d.tipos.size() <= 4
-        && d.tipos.hasOnly(['soma', 'subtracao', 'multiplicacao', 'divisao']);
+        && d.tipos.hasOnly(['soma', 'subtracao', 'multiplicacao', 'divisao'])
+        // HU-15: pausa da aula. So o dono grava (regra de update abaixo).
+        && (!('pausada' in d) || d.pausada is bool)
+        // HU-20: data de validade da sala (TTL do Firestore apaga).
+        && (!('expiraEm' in d) || d.expiraEm is timestamp);
     }
 
     function ehProfessorDaSala(codigo) {
@@ -255,6 +259,66 @@ service cloud.firestore {
           && request.resource.data.keys().hasOnly(
                ['apelido', 'avatarSeed', 'gols', 'pontuacao', 'fase', 'nivelId', 'verificado',
                 'totais', 'atualizadoEm', 'ultimaPartidaEm']);
+      }
+    }
+
+    // ---------- HU-21: duelo online (partidas/{codigo}) ----------
+    //
+    // Codigo de 4 digitos, ditado de uma crianca para a outra. Saber o
+    // codigo deixa LER a partida e entrar nela; nao deixa varrer as
+    // partidas nem escrever no placar de ninguem (CA-21.8). A lista de
+    // jogadores so e visivel para quem ja esta dentro da partida.
+    function codigoPartidaValido(c) {
+      return c.matches('^[0-9]{4}$');
+    }
+
+    function partidaValida(d) {
+      return d.keys().hasOnly(['dono', 'nivel', 'perguntas', 'status', 'criadoEm', 'expiraEm'])
+        && d.dono is string
+        && d.nivel is int && d.nivel >= 1 && d.nivel <= 12
+        && d.perguntas is list && d.perguntas.size() > 0 && d.perguntas.size() <= 10
+        && d.status in ['esperando', 'jogando', 'fim']
+        && (!('expiraEm' in d) || d.expiraEm is timestamp);
+    }
+
+    function jogadorPartidaValido(d) {
+      return d.keys().hasOnly(['apelido', 'avatarSeed', 'gols', 'pontuacao',
+                               'cobranca', 'fim', 'atualizadoEm'])
+        && textoAte(d.apelido, 40)
+        && (!('avatarSeed' in d) || d.avatarSeed is string)
+        && d.gols is int && d.gols >= 0 && d.gols <= 10
+        && d.pontuacao is int && d.pontuacao >= 0 && d.pontuacao <= 1000
+        && d.cobranca is int && d.cobranca >= 0 && d.cobranca <= 10
+        && d.fim is bool;
+    }
+
+    function estaNaPartida(codigo) {
+      return autenticado()
+        && exists(/databases/$(database)/documents/partidas/$(codigo)/jogadores/$(request.auth.uid));
+    }
+
+    match /partidas/{codigo} {
+      allow get: if autenticado();
+      allow list: if false;
+      allow create: if autenticado()
+        && codigoPartidaValido(codigo)
+        && request.resource.data.dono == request.auth.uid
+        && request.resource.data.criadoEm == request.time
+        && partidaValida(request.resource.data);
+      // So o status anda; as perguntas combinadas nao mudam no meio.
+      allow update: if autenticado()
+        && resource.data.dono == request.auth.uid
+        && request.resource.data.dono == resource.data.dono
+        && request.resource.data.perguntas == resource.data.perguntas
+        && request.resource.data.nivel == resource.data.nivel
+        && partidaValida(request.resource.data);
+      allow delete: if false;
+
+      match /jogadores/{uid} {
+        allow get: if ehDono(uid) || estaNaPartida(codigo);
+        allow list: if estaNaPartida(codigo);
+        allow create, update: if ehDono(uid) && jogadorPartidaValido(request.resource.data);
+        allow delete: if ehDono(uid);
       }
     }
 

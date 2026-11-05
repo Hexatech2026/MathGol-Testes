@@ -45,6 +45,7 @@ var estado = {
   perguntaAtual: null,
   zonaCorreta: null,
   jogoPenalti: null,
+  online: false,      // HU-21: partida em duelo online
   timerInicio: 0,
   timerInterval: null,
   timerSegundos: 15,
@@ -168,7 +169,12 @@ function mostrarFaixa(tipo, texto, duracao) {
   alvo.textContent = texto;
   faixa.hidden = false;
   faixaDesde = Date.now();
-  if (duracao > 0) agendarNaSessao(function() { esconderFaixa(); }, duracao);
+  // DEF-38: com duracao explicita o minimo de leitura valia so pelo caminho
+  // de limpeza da cobranca anterior, e a faixa de "acerto" saia em ~1 s.
+  // A frase e conteudo: o minimo vale nos dois caminhos.
+  if (duracao > 0) {
+    agendarNaSessao(function() { esconderFaixa(); }, Math.max(duracao, TEMPO_MINIMO_FAIXA));
+  }
 }
 
 // Chamada quando a pergunta seguinte entra. Se a faixa acabou de subir,
@@ -354,7 +360,8 @@ var TELA_ANTERIOR = {
   'tela-fase1':      'tela-fases',
   'tela-resultado':  'tela-fases',
   'tela-entrar-sala':'tela-menu',
-  'tela-professor':  'tela-menu'
+  'tela-professor':  'tela-menu',
+  'tela-online':     'tela-fases'
 };
 
 // opcoes.focar === false: nao move o foco (ex.: carga inicial da pagina).
@@ -781,12 +788,16 @@ function corEhClara(hex) {
   return (0.299 * r + 0.587 * g + 0.114 * b) > 160;
 }
 
+// DEF-39 (SEC-11): as bandeiras saem do PROPRIO jogo (Imagens/bandeiras),
+// como ja acontecia com os avatares. Eram 48 requisicoes ao flagcdn.com a
+// cada tela de times. Se um arquivo faltar, a bandeira some e o cartao
+// continua legivel pelo nome do time — nada de buscar de fora.
 function criarBandeira(codigo, classe) {
   var img = document.createElement('img');
   img.className = classe || 'cartao-bandeira';
-  img.src = 'https://flagcdn.com/w80/' + codigo + '.png';
-  img.srcset = 'https://flagcdn.com/w160/' + codigo + '.png 2x';
+  img.src = '../Imagens/bandeiras/' + codigo + '.png';
   img.alt = '';
+  img.loading = 'lazy';
   img.onerror = function() { this.onerror = null; this.hidden = true; };
   return img;
 }
@@ -1205,6 +1216,220 @@ function irParaResultadoDuelo() {
   Narracao.falar(mensagem, { tom: 'resultado' });
 }
 
+// ======================================================================
+// HU-21 — Duelo online (cada criança no seu aparelho)
+// ======================================================================
+// A partida roda igual à de sempre: as cobranças são locais, com mira,
+// altura e força. O que vem da nuvem são as CONTAS combinadas (as mesmas
+// nos dois aparelhos) e o placar do adversário, ao vivo. Pontos pela mesma
+// regra de velocidade do jogo normal (CA-21.4).
+
+function estaEmDueloOnline() {
+  return typeof Online !== 'undefined' && Online.estaOnline() && estado.online;
+}
+
+function tituloOnline() {
+  var a = Online.eu(), b = Online.adversario();
+  var meuNome = (a && a.apelido) || 'Você';
+  var nomeDele = (b && b.apelido) || 'Amigo';
+  var g1 = a ? a.gols : estado.gols;
+  var g2 = b ? b.gols : 0;
+  return '🌐 ' + meuNome + ' ' + g1 + ' x ' + g2 + ' ' + nomeDele;
+}
+
+// CA-21.5: o placar dos dois acompanha cada cobrança, dos dois lados.
+function atualizarPlacarOnline() {
+  if (!estaEmDueloOnline()) return;
+  var alvo = document.getElementById('titulo-fase');
+  if (alvo) alvo.textContent = tituloOnline();
+}
+
+function reportarJogadaOnline(fim) {
+  if (!estaEmDueloOnline()) return;
+  Online.reportar({
+    gols: estado.gols,
+    pontuacao: estado.pontuacao,
+    cobranca: estado.cobrancaAtual,
+    fim: !!fim
+  }).then(atualizarPlacarOnline);
+}
+
+// CA-21.7: o adversário sumiu. A partida encerra avisando, sem erro.
+function encerrarOnlinePorQueda() {
+  if (!estaEmDueloOnline()) return;
+  encerrarJogoEmAndamento();
+  var b = Online.adversario();
+  var nome = (b && b.apelido) || 'Seu amigo';
+  irParaResultadoOnline(nome + ' saiu do duelo. A partida foi encerrada.');
+}
+
+function irParaResultadoOnline(aviso) {
+  encerrarJogoEmAndamento();
+  var a = Online.eu(), b = Online.adversario();
+  var meusGols = a ? a.gols : estado.gols;
+  var golsDele = b ? b.gols : 0;
+  var quem = Online.vencedor();
+
+  document.getElementById('titulo-resultado').textContent =
+    quem === -1 ? '🤝 Empate no duelo online!'
+    : quem === 0 ? '🏆 Você venceu o duelo online!'
+    : '😄 ' + ((b && b.apelido) || 'Seu amigo') + ' venceu desta vez!';
+  document.getElementById('placar-final').textContent = meusGols + ' x ' + golsDele;
+
+  var pontuacaoFinal = document.getElementById('pontuacao-final');
+  pontuacaoFinal.textContent = estado.pontuacao + ' ';
+  pontuacaoFinal.appendChild(criarIconeCruzeiro(''));
+  pontuacaoFinal.appendChild(document.createTextNode('Cruzeiros'));
+
+  ultimoGanho = estado.pontuacao;
+  ultimoGanhoConquistas = 0;
+  if (typeof Carteira !== 'undefined') {
+    var antes = Carteira.saldo();
+    Carteira.adicionar(estado.pontuacao);
+    if (typeof Conquistas !== 'undefined') Conquistas.registrar('duelo-fim');
+    ultimoGanhoConquistas = Math.max(0, Carteira.saldo() - antes - estado.pontuacao);
+  }
+  atualizarGanhoCarteira();
+
+  var mensagem = aviso || (quem === -1
+    ? 'Empatou! Joguem de novo para desempatar.'
+    : quem === 0 ? 'Parabéns! Você fez mais gols.' : 'Quase! Chame para a revanche.');
+  document.getElementById('resumo-resultado').textContent = mensagem;
+  renderizarListaCobrancas();
+  var el = document.getElementById('mensagem-desbloqueio');
+  if (el) { el.textContent = ''; el.classList.remove('visivel'); }
+  if (typeof TelasV2 !== 'undefined') TelasV2.mostrarEstrelas(meusGols, Online.COBRANCAS);
+  SFX.faseCompleta();
+
+  estado.online = false;
+  Online.sair();
+  mostrarTela('tela-resultado');
+  Narracao.falar(mensagem, { tom: 'resultado' });
+}
+
+function renderizarJogadoresOnline(foto) {
+  var lista = document.getElementById('lista-jogadores-online');
+  if (!lista) return;
+  lista.textContent = '';
+  foto.jogadores.forEach(function(j) {
+    var li = document.createElement('li');
+    li.className = 'linha-aluno';
+    var img = document.createElement('img');
+    img.className = 'avatar-aluno';
+    img.alt = '';
+    img.src = gerarUrlAvatar(j.avatarSeed || '');
+    var nome = document.createElement('span');
+    nome.className = 'nome-aluno';
+    // CA-21.3: apelido e avatar do adversário, e nada mais.
+    nome.textContent = j.apelido || 'Craque';
+    li.appendChild(img);
+    li.appendChild(nome);
+    lista.appendChild(li);
+  });
+  var comecar = document.getElementById('botao-comecar-online');
+  var aviso = document.getElementById('aviso-espera');
+  var dois = foto.jogadores.length >= 2;
+  if (comecar) comecar.disabled = !dois;
+  if (aviso) {
+    aviso.textContent = dois
+      ? 'Prontos! Cada um aperta "Começar o duelo!" no seu aparelho.'
+      : 'Esperando o seu amigo entrar...';
+  }
+}
+
+function initOnline() {
+  var abrir = document.getElementById('botao-modo-online');
+  var criar = document.getElementById('botao-criar-partida');
+  var entrar = document.getElementById('botao-entrar-partida');
+  var comecar = document.getElementById('botao-comecar-online');
+  var sairBotao = document.getElementById('botao-sair-online');
+  var campo = document.getElementById('input-codigo-partida');
+  var aviso = document.getElementById('aviso-online');
+  if (!abrir || !criar) return;
+
+  function avisar(txt, classe) {
+    if (!aviso) return;
+    aviso.textContent = txt;
+    aviso.className = 'aviso-sala' + (classe ? ' ' + classe : '');
+  }
+
+  function mostrarEspera(codigo) {
+    document.getElementById('online-escolha').hidden = true;
+    document.getElementById('online-sala-espera').hidden = false;
+    document.getElementById('codigo-partida').textContent = codigo;
+  }
+
+  function voltarAEscolha() {
+    document.getElementById('online-escolha').hidden = false;
+    document.getElementById('online-sala-espera').hidden = true;
+    avisar('');
+  }
+
+  abrir.addEventListener('click', function() {
+    SFX.clique();
+    estado.copaJogo = null;
+    estado.duelo = null;
+    voltarAEscolha();
+    if (!window.FirebaseMathGol) { avisar(motivoNuvemFora(), 'erro'); }
+    mostrarTela('tela-online');
+  });
+
+  criar.addEventListener('click', function() {
+    if (!window.FirebaseMathGol) { avisar(motivoNuvemFora(), 'erro'); return; }
+    SFX.selecionar();
+    criar.disabled = true;
+    avisar('Criando a partida...');
+    var nivel = Progressao.dificuldadeEfetiva(estado.dificuldadeId || 1, 'penaltis');
+    Online.criar(nivel, null).then(function(p) {
+      criar.disabled = false;
+      if (!p) { avisar('Não deu para criar a partida agora. Tente de novo.', 'erro'); return; }
+      mostrarEspera(p.codigo);
+    });
+  });
+
+  entrar.addEventListener('click', function() {
+    if (!window.FirebaseMathGol) { avisar(motivoNuvemFora(), 'erro'); return; }
+    var cod = (campo.value || '').replace(/\D/g, '');
+    if (cod.length !== 4) { avisar('O código tem 4 números. Confira com o seu amigo.', 'erro'); return; }
+    SFX.selecionar();
+    entrar.disabled = true;
+    avisar('Entrando...');
+    Online.entrar(cod).then(function(r) {
+      entrar.disabled = false;
+      if (r.ok) { mostrarEspera(cod); return; }
+      avisar(r.motivo === 'nao-encontrada' ? 'Não achei a partida ' + cod + '. Confira o código.'
+           : r.motivo === 'encerrada' ? 'Essa partida já terminou. Peça um código novo.'
+           : r.motivo === 'formato' ? 'O código tem 4 números.'
+           : motivoNuvemFora(), 'erro');
+    });
+  });
+
+  comecar.addEventListener('click', function() {
+    SFX.selecionar();
+    Online.zerarPlacar();
+    estado.online = true;
+    estado.duelo = null;
+    estado.copaJogo = null;
+    estado.faseAtual = 'penaltis';   // relógio de 15 s
+    iniciarPartida();
+  });
+
+  sairBotao.addEventListener('click', function() {
+    SFX.clique();
+    Online.sair();
+    estado.online = false;
+    voltarAEscolha();
+    mostrarTela('tela-fases');
+  });
+
+  Online.aoMudar(function(foto) {
+    var tela = document.getElementById('tela-online');
+    if (tela && tela.classList.contains('tela-ativa')) renderizarJogadoresOnline(foto);
+    if (foto.queda && estaEmDueloOnline()) { encerrarOnlinePorQueda(); return; }
+    atualizarPlacarOnline();
+  });
+}
+
 function irParaFases() {
   renderizarCopa();
   var grade = document.getElementById('grade-fases');
@@ -1355,10 +1580,15 @@ function iniciarPartida() {
     estado.duelo.gols = [0, 0];
     estado.duelo.extras = 0;
   }
+  // HU-21: no duelo online cada um bate as suas 5 cobrancas, no proprio
+  // aparelho; o placar do outro chega pela nuvem.
+  if (estaEmDueloOnline()) TOTAL_COBRANCAS = Online.COBRANCAS;
+
   var tituloFase = document.getElementById('titulo-fase');
   if (tituloFase) {
-    tituloFase.textContent = estado.duelo ? tituloDuelo()
-      : (estado.copaJogo ? tituloCopa() : fase.icone + ' ' + fase.nome);
+    tituloFase.textContent = estaEmDueloOnline() ? tituloOnline()
+      : (estado.duelo ? tituloDuelo()
+      : (estado.copaJogo ? tituloCopa() : fase.icone + ' ' + fase.nome));
   }
 
   mostrarTela('tela-fase1');
@@ -1418,6 +1648,7 @@ function iniciarTimer() {
   var idSessao = cicloPartida.sessaoJogoId;
   estado.timerInterval = setInterval(function() {
     if (!sessaoValida(idSessao) || estado.etapa !== ETAPA.RESPOSTA) { pararTimer(); return; }
+    if (pausaDaSala.ativa) return;   // HU-15: aula pausada, relogio congelado
     var decorrido = Math.floor((Date.now() - estado.timerInicio) / 1000);
     estado.timerSegundos = Math.max(0, TIMER_MAX - decorrido);
     atualizarDisplayTimer();
@@ -1439,6 +1670,82 @@ function iniciarTimer() {
 
 function pararTimer() {
   if (estado.timerInterval) { clearInterval(estado.timerInterval); estado.timerInterval = null; }
+}
+
+// ---------- HU-15: pausa da sala ----------
+//
+// O professor pausa e a turma inteira para. O relogio congela empurrando
+// estado.timerInicio para a frente pelo tempo parado: assim o display E a
+// pontuacao por velocidade (que mede Date.now() - timerInicio) ignoram a
+// pausa de uma vez so, sem contador paralelo para sair de sincronia.
+
+var pausaDaSala = { ativa: false, desde: 0 };
+
+function salaEstaPausada() {
+  return typeof Sala !== 'undefined' && Sala.estaPausada && Sala.estaPausada();
+}
+
+function aplicarPausaDaSala(pausada) {
+  if (!!pausada === pausaDaSala.ativa) return;
+  pausaDaSala.ativa = !!pausada;
+
+  var caixa = document.getElementById('sobreposicao-pausa');
+  if (caixa) {
+    caixa.classList.toggle('aberta', pausaDaSala.ativa);
+    caixa.setAttribute('aria-hidden', pausaDaSala.ativa ? 'false' : 'true');
+  }
+
+  if (pausaDaSala.ativa) {
+    pausaDaSala.desde = Date.now();
+    pararTimer();
+    // CA-15.6: nada de locutor nem efeito sonoro por cima da explicacao.
+    if (typeof Narracao !== 'undefined' && Narracao.cancelar) Narracao.cancelar();
+    // CA-15.3: botoes de resposta desabilitados enquanto durar a pausa.
+    document.querySelectorAll('.botao-resposta').forEach(function(b) { b.disabled = true; });
+    return;
+  }
+
+  // Retomando: o relogio continua de onde parou.
+  var parado = Math.max(0, Date.now() - pausaDaSala.desde);
+  pausaDaSala.desde = 0;
+  // Math.min: se a pergunta entrou NO MEIO da pausa, o relogio dela comeca
+  // agora, inteiro — empurrar pelo tempo parado daria tempo extra de graca.
+  if (estado.timerInicio) estado.timerInicio = Math.min(Date.now(), estado.timerInicio + parado);
+  if (estado.etapa === ETAPA.RESPOSTA) {
+    document.querySelectorAll('.botao-resposta').forEach(function(b) { b.disabled = false; });
+    retomarTimer();
+  }
+}
+
+// Mesmo laco do iniciarTimer, sem zerar o relogio (CA-15.5).
+function retomarTimer() {
+  pararTimer();
+  if (!estado.timerInicio) return;
+  atualizarDisplayTimer();
+  var idSessao = cicloPartida.sessaoJogoId;
+  estado.timerInterval = setInterval(function() {
+    if (!sessaoValida(idSessao) || estado.etapa !== ETAPA.RESPOSTA) { pararTimer(); return; }
+    if (pausaDaSala.ativa) return;
+    var decorrido = Math.floor((Date.now() - estado.timerInicio) / 1000);
+    estado.timerSegundos = Math.max(0, TIMER_MAX - decorrido);
+    atualizarDisplayTimer();
+    if (estado.timerSegundos > 0 && estado.timerSegundos <= 4 &&
+        estado.timerSegundos !== estado.ultimoSegundoAlertado) {
+      estado.ultimoSegundoAlertado = estado.timerSegundos;
+      SFX.timerAlerta();
+    }
+    if (estado.timerSegundos <= 0) {
+      pararTimer();
+      tempoEsgotado();
+    }
+  }, 200);
+}
+
+function initPausaDaSala() {
+  if (typeof Sala === 'undefined' || !Sala.aoMudarSala) return;
+  Sala.aoMudarSala(function(sala) {
+    aplicarPausaDaSala(!!(sala && sala.pausada));
+  });
 }
 
 function atualizarDisplayTimer() {
@@ -1481,7 +1788,10 @@ function carregarProximaPergunta() {
     ? Sala.nivelDaSala()
     : estado.dificuldadeId;
   var nivelDaVez = Progressao.dificuldadeEfetiva(nivelBase, estado.faseAtual);
-  estado.perguntaAtual = BancoQuestoes.sortearPergunta(nivelDaVez, Sala.filtrosDaSala());
+  // CA-21.2: no duelo online a conta vem da lista combinada, igual nos dois
+  // aparelhos. Se faltar alguma (lista curta), cai no sorteio normal.
+  var combinada = estaEmDueloOnline() ? Online.perguntaDa(estado.cobrancaAtual) : null;
+  estado.perguntaAtual = combinada || BancoQuestoes.sortearPergunta(nivelDaVez, Sala.filtrosDaSala());
   document.getElementById('mensagem-feedback').textContent = '';
   // A faixa da cobranca anterior sai, mas so depois de ter ficado tempo
   // suficiente na tela para ser lida (ver TEMPO_MINIMO_FAIXA).
@@ -1500,6 +1810,8 @@ function carregarProximaPergunta() {
     botao.className = 'botao-resposta';
     botao.setAttribute('data-zona', zonaId);
     botao.textContent = alt.valor;
+    // CA-15.7: pergunta que entra durante a pausa ja nasce travada.
+    if (pausaDaSala.ativa) botao.disabled = true;
     botao.addEventListener('click', function() { responderAlternativa(botao); });
     container.appendChild(botao);
     if (alt.correta) estado.zonaCorreta = zonaId;
@@ -1937,7 +2249,18 @@ function finalizarCobranca(detalhes) {
 
   // v2.1: a proxima conta espera o locutor terminar (no maximo 5 s a mais),
   // senao a leitura da pergunta cortaria a frase no meio.
+  // HU-21: o placar do duelo online sobe a cada cobranca, nos dois lados.
+  if (estaEmDueloOnline()) {
+    reportarJogadaOnline(estado.cobrancaAtual >= TOTAL_COBRANCAS);
+    atualizarPlacarOnline();
+  }
+
   depoisDoLocutor(function() {
+    if (estaEmDueloOnline()) {
+      if (estado.cobrancaAtual < TOTAL_COBRANCAS) { carregarProximaPergunta(); return; }
+      irParaResultadoOnline();
+      return;
+    }
     if (estado.duelo) { seguirDuelo(); return; }
     if (estado.cobrancaAtual < TOTAL_COBRANCAS) { carregarProximaPergunta(); return; }
     // v2.2: mata-mata empatado = MORTE SUBITA, uma cobranca de cada lado.
@@ -2376,10 +2699,28 @@ var Modal = (function() {
     return !!el && typeof el.focus === 'function' && !el.hidden && el.offsetParent !== null;
   }
 
+  // DEF-40: se a tela de fundo mudou enquanto o modal estava aberto, nem a
+  // origem nem o "Mais opcoes" continuam na tela, e o foco caia no <body>
+  // (o teclado voltava pro topo do documento). Ultimo recurso: o primeiro
+  // elemento focavel da tela que esta visivel agora.
+  var FOCAVEIS = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+
+  function primeiroFocavelDaTela() {
+    var tela = document.querySelector('.tela.tela-ativa');
+    if (!tela) return null;
+    var lista = tela.querySelectorAll(FOCAVEIS);
+    for (var i = 0; i < lista.length; i++) {
+      if (visivel(lista[i]) && !lista[i].disabled) return lista[i];
+    }
+    return null;
+  }
+
   function devolverFoco(origem) {
     if (visivel(origem)) { origem.focus(); return; }
     var alternativa = document.getElementById('botao-mais-opcoes');
-    if (visivel(alternativa)) alternativa.focus();
+    if (visivel(alternativa)) { alternativa.focus(); return; }
+    var primeiro = primeiroFocavelDaTela();
+    if (primeiro) primeiro.focus();
   }
 
   document.addEventListener('keydown', function(ev) {
@@ -3013,8 +3354,41 @@ function mostrarPainelDaSala(sala) {
     });
   };
 
+  // HU-15: pausar / retomar. O botao so existe aqui, no painel de quem
+  // criou a sala, e a regra do Firestore so aceita a gravacao do dono
+  // (CA-15.8) — um aluno nao consegue pausar nem vendo o codigo.
+  atualizarBotaoPausa(!!sala.pausada);
+  var botaoPausa = document.getElementById('botao-pausar-sala');
+  if (botaoPausa) {
+    botaoPausa.onclick = function() {
+      var querPausar = botaoPausa.getAttribute('aria-pressed') !== 'true';
+      botaoPausa.disabled = true;
+      Sala.pausar(sala.codigo, querPausar).then(function(ok) {
+        botaoPausa.disabled = false;
+        if (!ok) { avisarPausa('Não deu para mudar agora. Tente de novo.', 'erro'); return; }
+        sala.pausada = querPausar;
+        atualizarBotaoPausa(querPausar);
+      });
+    };
+  }
+
   renderizarAlunos([]);
   Sala.observar(sala.codigo, renderizarAlunos);
+}
+
+function avisarPausa(texto, classe) {
+  var el = document.getElementById('aviso-pausa');
+  if (!el) return;
+  el.textContent = texto;
+  el.className = 'aviso-sala' + (classe ? ' ' + classe : '');
+}
+
+function atualizarBotaoPausa(pausada) {
+  var b = document.getElementById('botao-pausar-sala');
+  if (!b) return;
+  b.setAttribute('aria-pressed', pausada ? 'true' : 'false');
+  b.textContent = pausada ? '▶️ Retomar sala' : '⏸️ Pausar sala';
+  avisarPausa(pausada ? 'A turma está vendo a tela de pausa.' : '');
 }
 
 function initProfessor() {
@@ -3179,6 +3553,8 @@ document.addEventListener('DOMContentLoaded', function() {
   initMaisOpcoes();
   initEntrarSala();
   initProfessor();
+  initPausaDaSala();
+  initOnline();
   mostrarTela('tela-menu', { focar: false });
 
   // Depois do menu, para que o endereco direto mande na tela inicial.

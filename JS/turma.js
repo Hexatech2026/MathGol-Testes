@@ -86,24 +86,40 @@ var SalasDoProfessor = (function() {
 var RelatorioTurma = (function() {
   'use strict';
 
-  // Bibliotecas so baixadas quando o professor pede o arquivo.
-  var URL_XLSX = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
-  var URL_JSPDF = 'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js';
-  var URL_AUTOTABLE = 'https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js';
+  // Bibliotecas so carregadas quando o professor pede o arquivo.
+  //
+  // DEF-39 (SEC-11): vem do PROPRIO jogo (Vendor/). O jsDelivr ficou so
+  // como segunda tentativa, para um deploy que tenha esquecido a pasta.
+  var URL_XLSX = ['../Vendor/xlsx.full.min.js', 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'];
+  var URL_JSPDF = ['../Vendor/jspdf.umd.min.js', 'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js'];
+  var URL_AUTOTABLE = ['../Vendor/jspdf.plugin.autotable.min.js', 'https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js'];
   var carregados = {};
 
-  function carregar(url) {
-    if (!carregados[url]) {
-      carregados[url] = new Promise(function(ok, falha) {
-        var s = document.createElement('script');
-        s.src = url; s.async = true; s.crossOrigin = 'anonymous';
-        var limite = setTimeout(function() { falha(new Error('tempo')); }, 12000);
-        s.onload = function() { clearTimeout(limite); ok(); };
-        s.onerror = function() { clearTimeout(limite); delete carregados[url]; falha(new Error('rede')); };
-        document.head.appendChild(s);
+  function carregarUma(url, externa) {
+    return new Promise(function(ok, falha) {
+      var s = document.createElement('script');
+      s.src = url; s.async = true;
+      if (externa) s.crossOrigin = 'anonymous';
+      var limite = setTimeout(function() { falha(new Error('tempo')); }, 12000);
+      s.onload = function() { clearTimeout(limite); ok(); };
+      s.onerror = function() { clearTimeout(limite); falha(new Error('rede')); };
+      document.head.appendChild(s);
+    });
+  }
+
+  // Aceita a lista [local, cdn] e tenta na ordem.
+  function carregar(urls) {
+    var lista = Array.isArray(urls) ? urls : [urls];
+    var chave = lista[0];
+    if (!carregados[chave]) {
+      carregados[chave] = lista.reduce(function(antes, url, i) {
+        return antes.catch(function() { return carregarUma(url, i > 0); });
+      }, Promise.reject()).catch(function(erro) {
+        delete carregados[chave];
+        throw erro;
       });
     }
-    return carregados[url];
+    return carregados[chave];
   }
 
   var COLUNAS = ['Nº', 'Aluno', 'Apelido no jogo', 'Verificado', 'Partidas', 'Contas certas', 'Contas erradas',

@@ -19,8 +19,10 @@ var Sala = (function() {
 
   var CHAVE = 'mathgol_sala';
 
-  var atual = null;            // { codigo, nome, nivel, tipos }
+  var atual = null;            // { codigo, nome, nivel, tipos, pausada }
   var cancelarObserva = null;
+  var cancelarObservaSala = null;
+  var ouvintesDaSala = [];     // HU-15: quem quer saber de pausa/nivel
 
   // ---------- Estado ----------
 
@@ -28,6 +30,7 @@ var Sala = (function() {
   function codigo() { return atual ? atual.codigo : null; }
   function nome() { return atual ? atual.nome : null; }
   function nivelDaSala() { return atual ? atual.nivel : null; }
+  function estaPausada() { return !!(atual && atual.pausada); }
 
   // Filtros que o banco de questoes entende. Sala sem tipos marcados = o
   // nivel manda sozinho.
@@ -63,9 +66,13 @@ var Sala = (function() {
         codigo: sala.codigo,
         nome: sala.nome || 'Turma',
         nivel: sala.nivel || 1,
-        tipos: Array.isArray(sala.tipos) ? sala.tipos : []
+        tipos: Array.isArray(sala.tipos) ? sala.tipos : [],
+        pausada: !!sala.pausada
       };
       lembrar(atual.codigo);
+      // CA-15.7: quem entra com a sala pausada ja cai na tela de pausa —
+      // o primeiro disparo do onSnapshot vem com o estado atual.
+      acompanharSalaAtual();
 
       return window.FirebaseMathGol.entrarNaSala(atual.codigo, aluno || {})
         .then(function() { return { ok: true, sala: atual }; });
@@ -79,6 +86,57 @@ var Sala = (function() {
     atual = null;
     lembrar(null);
     pararDeObservar();
+    pararDeAcompanhar();
+    avisarOuvintes();
+  }
+
+  // ---------- HU-15: pausa da sala, ao vivo ----------
+
+  // Quem quiser reagir a pausa (ou a troca de nivel no meio da aula) se
+  // inscreve aqui. Chamado tambem ao sair da sala, com atual = null.
+  function aoMudarSala(fn) {
+    if (typeof fn === 'function') ouvintesDaSala.push(fn);
+  }
+
+  function avisarOuvintes() {
+    for (var i = 0; i < ouvintesDaSala.length; i++) {
+      try { ouvintesDaSala[i](atual); } catch (e) { console.warn('Ouvinte da sala falhou:', e); }
+    }
+  }
+
+  function acompanharSalaAtual() {
+    pararDeAcompanhar();
+    if (!atual || !window.FirebaseMathGol || !window.FirebaseMathGol.observarSala) return;
+    var codigoObservado = atual.codigo;
+    cancelarObservaSala = window.FirebaseMathGol.observarSala(codigoObservado, function(sala) {
+      // Trocou de sala (ou saiu) enquanto o aviso estava a caminho.
+      if (!atual || atual.codigo !== codigoObservado) return;
+      if (!sala) { sair(); return; }   // professor apagou a sala
+      atual.nome = sala.nome || atual.nome;
+      atual.nivel = sala.nivel || atual.nivel;
+      atual.tipos = Array.isArray(sala.tipos) ? sala.tipos : [];
+      atual.pausada = !!sala.pausada;
+      avisarOuvintes();
+    });
+  }
+
+  function pararDeAcompanhar() {
+    if (typeof cancelarObservaSala === 'function') cancelarObservaSala();
+    cancelarObservaSala = null;
+  }
+
+  // Lado do professor. A regra do Firestore so deixa o DONO da sala gravar
+  // (CA-15.8), entao nao ha como outra pessoa pausar a turma.
+  function pausar(codigoSala, pausada) {
+    if (!temFirebase()) return Promise.resolve(false);
+    return window.FirebaseMathGol.atualizarSala(codigoSala, { pausada: !!pausada })
+      .then(function(ok) {
+        if (ok && atual && atual.codigo === codigoSala) {
+          atual.pausada = !!pausada;
+          avisarOuvintes();
+        }
+        return ok;
+      });
   }
 
   // Reabre a sala guardada neste navegador, se ainda existir no servidor.
@@ -145,6 +203,7 @@ var Sala = (function() {
     codigo: codigo,
     nome: nome,
     nivelDaSala: nivelDaSala,
+    estaPausada: estaPausada,
     filtrosDaSala: filtrosDaSala,
     entrar: entrar,
     sair: sair,
@@ -152,7 +211,10 @@ var Sala = (function() {
     reportarResultado: reportarResultado,
     criar: criar,
     mudarNivel: mudarNivel,
+    pausar: pausar,
+    aoMudarSala: aoMudarSala,
     observar: observar,
-    pararDeObservar: pararDeObservar
+    pararDeObservar: pararDeObservar,
+    pararDeAcompanhar: pararDeAcompanhar
   };
 })();

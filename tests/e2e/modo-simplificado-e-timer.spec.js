@@ -132,13 +132,16 @@ test('2D: goleiro termina deitado no gramado', async ({ page }) => {
 
 test('QA-2 (DEF-06): CDNs travadas (Firebase, Three.js e fontes) nao impedem o menu', async ({ page }) => {
   const erros = await A.abrirJogo(page, { travar: ['gstatic.com', 'cdn.jsdelivr.net', 'fonts.googleapis.com'] });
-  // O menu responde logo, mesmo com as tres requisicoes pendentes.
+  // O menu responde logo, mesmo com as requisicoes pendentes.
   await page.locator('#botao-jogar').click({ force: true, timeout: 3000 });
   await expect(page.locator('#tela-apelido')).toHaveClass(/tela-ativa/, { timeout: 3000 });
-  expect(await page.evaluate(() => window.MathGolExternos)).toEqual({ three: 'carregando', firebase: 'carregando' });
-  // Uma partida comeca no modo simplificado, sem esperar o CDN.
+  // DEF-39 mudou este ponto para melhor: com o CDN travado, o Three.js
+  // agora vem do proprio jogo, entao a partida sai em 3D em vez de cair
+  // no modo simplificado. O Firebase e o unico que continua pendurado.
+  expect(await page.evaluate(() => window.MathGolExternos.three)).toBe('ok');
+  expect(await page.evaluate(() => window.MathGolExternos.firebase)).toBe('carregando');
   await A.iniciarPartida(page);
-  expect(await page.evaluate(() => estado.jogoPenalti.modo)).toBe('2d');
+  expect(await page.evaluate(() => estado.jogoPenalti.modo)).toBe('3d');
   await page.waitForTimeout(10500); // relatorio: observar por 10,5 s
   await page.evaluate(() => sairParaMenu());
   await A.abrirMaisOpcoes(page);
