@@ -4,10 +4,19 @@ const fs = require('fs');
 
 const THREE_LOCAL = fs.readFileSync(path.join(__dirname, '..', '..', 'node_modules', 'three', 'build', 'three.min.js'));
 
-// Bloqueia tudo que e externo. semThree: simula CDN do Three.js fora do ar.
+// Bloqueia tudo que e externo. semThree: simula o Three.js indisponivel.
 // travar: lista de trechos de URL cujas requisicoes ficam PENDENTES para
 // sempre (CDN travada, sem erro nem resposta).
+//
+// DEF-39: desde que o Three.js passou a ser servido pelo PROPRIO jogo
+// (Vendor/three.min.js), bloquear so o CDN nao simula mais nada — o
+// arquivo local carrega e a cena 3D abre. Entao semThree precisa derrubar
+// os dois, o local e o do CDN; senao os testes do modo simplificado
+// passam a exercitar o 3D sem ninguem perceber.
 async function prepararRede(page, { semThree = false, travar = [] } = {}) {
+  if (semThree) {
+    await page.route(/\/Vendor\/three\.min\.js$/, route => route.abort());
+  }
   await page.route(/^https?:\/\/(?!localhost)/, route => {
     const url = route.request().url();
     if (travar.some(t => url.includes(t))) return; // nunca responde

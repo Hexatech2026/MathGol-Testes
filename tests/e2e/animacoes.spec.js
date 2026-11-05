@@ -64,7 +64,11 @@ for (const caso of [{ nome: 'por cima', forca: 1, x: 0 }, { nome: 'pela lateral'
   test(`bola ${caso.nome} continua o voo e cai no chao (nao fica suspensa)`, async ({ page }) => {
     const a = await amostrar(page, `jogo.chutarLivre({ x: ${caso.x}, y: 1.3 }, ${caso.forca}, 0.5, function(){})`, 6000);
     const atras = a.filter(x => x.bola.z < -0.5);
-    expect(atras.length).toBeGreaterThan(5);
+    // O numero de amostras depende da taxa de quadros, que cai quando a
+    // maquina esta carregada (ja ficou exatamente em 5 numa rodada cheia).
+    // O que o teste protege e a bola NAO ficar suspensa, e quem prova isso
+    // sao as duas conferencias de posicao abaixo; aqui basta haver voo.
+    expect(atras.length).toBeGreaterThan(2);
     const ultima = atras[atras.length - 1];
     expect(ultima.bola.y).toBeLessThan(0.3);                     // no gramado
     expect(ultima.bola.z).toBeLessThan(-2);                      // atras do gol
