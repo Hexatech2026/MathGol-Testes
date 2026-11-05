@@ -48,10 +48,16 @@ Console → **Firestore Database → Time-to-live (TTL)**. Três políticas:
 |---|---|---|
 | `salas` | `expiraEm` | o próprio campo já vem com 30 dias |
 | `partidas` | `expiraEm` | o próprio campo já vem com 24 horas |
-| `jogadores` | `ultimoAcessoEm` | configurar 12 meses |
+| `jogadores` | `expiraEm` | o próprio campo já vem com 12 meses |
 
-Detalhes e o que ainda falta (limpeza das subcoleções) em
-[`POLITICA-DE-DADOS.md`](POLITICA-DE-DADOS.md).
+> ⚠️ **Não crie a política sobre `ultimoAcessoEm`.** O TTL apaga o
+> documento quando o campo está no passado, e esse campo guarda a hora da
+> última entrada: a política ali apagaria todos os perfis das crianças em
+> até 24 horas. Use `expiraEm`.
+
+Em todos os três casos a política só aponta para o campo — o prazo já vem
+calculado dentro dele. Detalhes e o que ainda falta (limpeza das
+subcoleções) em [`POLITICA-DE-DADOS.md`](POLITICA-DE-DADOS.md).
 
 ## 4. Subir os arquivos
 

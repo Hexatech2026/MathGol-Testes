@@ -272,7 +272,9 @@ confere que o jogo abre em 3D, com bandeiras e com as fontes aplicadas.
 3. **Firestore → Regras**: cole `Config/firestore.rules` e publique
    (ou `npx firebase deploy --only firestore:rules`).
 4. **Firestore → Time-to-live (TTL)** (uma vez, HU-20): política em
-   `salas.expiraEm`, em `partidas.expiraEm` e em `jogadores.ultimoAcessoEm`.
+   `salas.expiraEm`, `partidas.expiraEm` e `jogadores.expiraEm` — nunca
+   sobre `ultimoAcessoEm`, que está sempre no passado e faria o TTL apagar
+   todo perfil em 24 h.
    Prazos e ressalvas em [`Docs/POLITICA-DE-DADOS.md`](Docs/POLITICA-DE-DADOS.md).
 5. **Seed das configurações** (uma vez):
    ```bash

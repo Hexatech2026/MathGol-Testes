@@ -128,12 +128,17 @@ service cloud.firestore {
     }
 
     function jogadorValido(d) {
-      return d.keys().hasOnly(['apelido', 'avatarSeed', 'atualizadoEm', 'ultimoAcessoEm', 'ultimoResultado', 'estado'])
+      return d.keys().hasOnly(['apelido', 'avatarSeed', 'atualizadoEm', 'ultimoAcessoEm', 'expiraEm', 'ultimoResultado', 'estado'])
         && (!('estado' in d) || estadoValido(d.estado))
         && (!('apelido' in d) || textoAte(d.apelido, 40))
         && (!('avatarSeed' in d) || textoAte(d.avatarSeed, 40))
         && (!('atualizadoEm' in d) || d.atualizadoEm is timestamp)
         && (!('ultimoAcessoEm' in d) || d.ultimoAcessoEm is timestamp)
+        // HU-20: data de validade do perfil (12 meses sem acesso), empurrada
+        // para a frente a cada entrada. E ESTE o campo da politica de TTL —
+        // nunca "ultimoAcessoEm", que esta sempre no passado e faria o TTL
+        // apagar todo perfil em 24 h.
+        && (!('expiraEm' in d) || d.expiraEm is timestamp)
         && (!('ultimoResultado' in d) || (
               d.ultimoResultado is map
               && d.ultimoResultado.keys().hasOnly(camposResumo())
