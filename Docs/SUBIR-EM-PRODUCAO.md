@@ -42,22 +42,19 @@ o domínio de produção precisa estar na lista, senão o login falha ali.
 
 ## 3. Prazos de retenção (HU-20)
 
-Console → **Firestore Database → Time-to-live (TTL)**. Três políticas:
+**Nada a fazer no Console.** O TTL do Firestore exige o plano Blaze, e o
+projeto está no Spark — a tela devolve `403: Project math-gol has billing
+disabled`. A limpeza é feita por um script da equipe:
 
-| Coleção | Campo | Prazo |
-|---|---|---|
-| `salas` | `expiraEm` | o próprio campo já vem com 30 dias |
-| `partidas` | `expiraEm` | o próprio campo já vem com 24 horas |
-| `jogadores` | `expiraEm` | o próprio campo já vem com 12 meses |
+```bash
+npm run limpar            # mostra o que venceu
+npm run limpar -- --apagar
+```
 
-> ⚠️ **Não crie a política sobre `ultimoAcessoEm`.** O TTL apaga o
-> documento quando o campo está no passado, e esse campo guarda a hora da
-> última entrada: a política ali apagaria todos os perfis das crianças em
-> até 24 horas. Use `expiraEm`.
-
-Em todos os três casos a política só aponta para o campo — o prazo já vem
-calculado dentro dele. Detalhes e o que ainda falta (limpeza das
-subcoleções) em [`POLITICA-DE-DADOS.md`](POLITICA-DE-DADOS.md).
+Uma vez por mês basta. Ele apaga salas com mais de 30 dias, duelos com
+mais de 24 h e perfis com 12 meses sem acesso — junto com as subcoleções,
+que o TTL não apagaria nem no Blaze. Prazos, ressalvas e o registro de
+quem rodou em [`POLITICA-DE-DADOS.md`](POLITICA-DE-DADOS.md).
 
 ## 4. Subir os arquivos
 

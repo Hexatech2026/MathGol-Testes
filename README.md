@@ -271,10 +271,10 @@ confere que o jogo abre em 3D, com bandeiras e com as fontes aplicadas.
    domínio do deploy (ex.: `seu-usuario.github.io`, `mathgol.vercel.app`).
 3. **Firestore → Regras**: cole `Config/firestore.rules` e publique
    (ou `npx firebase deploy --only firestore:rules`).
-4. **Firestore → Time-to-live (TTL)** (uma vez, HU-20): política em
-   `salas.expiraEm`, `partidas.expiraEm` e `jogadores.expiraEm` — nunca
-   sobre `ultimoAcessoEm`, que está sempre no passado e faria o TTL apagar
-   todo perfil em 24 h.
+4. **Retenção de dados (HU-20):** nada no Console. O TTL do Firestore
+   exige o plano Blaze; no Spark a limpeza é feita por `npm run limpar`
+   (simula) e `npm run limpar -- --apagar`, uma vez por mês. Ver
+   [`Docs/POLITICA-DE-DADOS.md`](Docs/POLITICA-DE-DADOS.md).
    Prazos e ressalvas em [`Docs/POLITICA-DE-DADOS.md`](Docs/POLITICA-DE-DADOS.md).
 5. **Seed das configurações** (uma vez):
    ```bash

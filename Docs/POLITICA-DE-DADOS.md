@@ -54,33 +54,63 @@ O raciocínio de cada prazo:
 - **30 dias** para a sala cobre com folga o uso dela, que é de uma aula.
 - **24 horas** para o duelo online: a partida acaba em minutos.
 
-## 3. Como ligar os prazos no Firebase (CA-20.3)
+## 3. Como os prazos são cumpridos (CA-20.3)
 
-Os campos já são gravados pelo jogo. Falta criar as políticas de TTL no
-Console, uma vez:
+A limpeza é feita por um script da equipe, `JS/limpar-expirados.js`, e
+**não** pelo TTL do Firestore. Dois motivos:
 
-1. Console do Firebase → **Firestore Database → Time-to-live (TTL)**.
-2. Criar política: coleção `salas`, campo `expiraEm`.
-3. Criar política: coleção `partidas`, campo `expiraEm`.
-4. Criar política: coleção `jogadores`, campo `expiraEm`.
+1. **O TTL exige o plano Blaze.** O projeto está no Spark (gratuito) e
+   tentar criar a política devolve `403: Project math-gol has billing
+   disabled`.
+2. **O TTL não apaga subcoleções.** Mesmo no Blaze, ele deixaria
+   `salas/{codigo}/alunos` e `jogadores/{uid}/resultados` órfãos para
+   sempre. O script apaga os dois.
+
+### Como rodar
+
+```bash
+npm install
+cp .env.example .env      # credenciais do Admin SDK (Contas de serviço)
+npm run limpar            # só MOSTRA o que venceu
+npm run limpar -- --apagar
+```
+
+O padrão é **não apagar nada**: numa rotina sobre dados de criança, o
+custo de um engano é alto demais para o padrão ser destrutivo. Para
+ensaiar sem encostar no banco de verdade, rode contra o emulador:
+
+```bash
+npx firebase emulators:exec --only firestore --project demo-mathgol "npm run limpar"
+```
+
+Documento **sem** o campo `expiraEm` nunca é tocado — a consulta não o
+encontra. Perfis criados antes da HU-20 só ganham a data quando a criança
+entrar de novo, e até lá ficam guardados. É o lado seguro.
+
+### Com que frequência
+
+Uma vez por mês cobre com folga os três prazos (o mais curto é o duelo
+online, de 24 h, e um punhado de partidas a mais no banco não é um
+problema de privacidade). Quem roda é a equipe; fica registrado aqui
+quem rodou e quando:
+
+| Data | Quem rodou | O que saiu |
+|---|---|---|
+| | | |
+
+### Se um dia o projeto for para o Blaze
+
+O TTL passa a ser possível e cobre a maior parte do trabalho. As três
+políticas seriam sobre o campo **`expiraEm`** (`salas`, `partidas` e
+`jogadores`), com deslocamento 0.
 
 > ⚠️ **Nunca crie a política sobre `ultimoAcessoEm`.** O TTL apaga o
 > documento quando o campo aponta para um instante **já passado**, e
-> `ultimoAcessoEm` guarda a hora da última entrada — ou seja, está sempre
-> no passado. Uma política ali apagaria **todos os perfis das crianças em
-> até 24 horas**. O campo certo é `expiraEm`, que guarda a data de
-> validade (entrada + 12 meses). A diferença está travada por teste em
-> `tests/unit/ttl-validade.test.js`.
->
-> Pelo mesmo motivo o prazo não é configurado na política: o console só
-> aceita deslocamento em dias, horas, minutos e segundos, e quem calcula
-> os 12 meses é o próprio jogo, ao gravar `expiraEm`.
+> `ultimoAcessoEm` guarda a hora da última entrada. Uma política ali
+> apagaria **todos os perfis das crianças em até 24 horas**. A diferença
+> está travada por teste em `tests/unit/ttl-validade.test.js`.
 
-> O TTL do Firestore apaga o documento, **não** as subcoleções dele. Os
-> documentos em `salas/{codigo}/alunos` e `partidas/{codigo}/jogadores`
-> precisam de uma limpeza própria: uma rotina agendada (Cloud Scheduler +
-> Admin SDK) ou uma limpeza manual periódica pela equipe. Enquanto essa
-> rotina não existir, o item fica em aberto nesta política.
+Mesmo no Blaze o script continua necessário, pelas subcoleções.
 
 ## 4. Pedido de exclusão (CA-20.4)
 
